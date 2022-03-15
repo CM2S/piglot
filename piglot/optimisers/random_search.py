@@ -15,7 +15,7 @@ class PureRandomSearch(Optimiser):
     Three sampling methods for generating random numbers are available:
     - Uniform distribution.
     - Normal distribution, centered around the best value, and with decreasing standard
-      deviation throughout the iterative process.
+    deviation throughout the iterative process.
     - Sampling based on the Sobol sequence (requires scipy >= 1.7).
 
     Methods

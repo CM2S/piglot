@@ -170,21 +170,21 @@ class PSO(Optimiser):
     """
     PSO optimiser.
     Documentation:
-        https://pyswarms.readthedocs.io/en/latest/_modules/pyswarms/single/global_best.html#GlobalBestPSO
+    https://pyswarms.readthedocs.io/en/latest/_modules/pyswarms/single/global_best.html#GlobalBestPSO
 
     Attributes
     ----------
     n_part : int
         number of particles in the swarm.
     options : dict with keys :code:`{'c1', 'c2', 'w'}`
-         a dictionary containing the parameters for the specific
-        optimization technique.
-            * c1 : float
-                cognitive parameter
-            * c2 : float
-                social parameter
-            * w : float
-                inertia parameter
+    a dictionary containing the parameters for the specific
+    optimization technique.
+        * c1 : float
+            cognitive parameter
+        * c2 : float
+            social parameter
+        * w : float
+            inertia parameter
     oh_strategy : dict, optional, default=None(constant options)
         a dict of update strategies for each option.
     bh_strategy : str
