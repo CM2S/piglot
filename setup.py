@@ -76,7 +76,7 @@ setup(
         'numpy',
         'tqdm',
         'pandas',
-        'scipy<1.8'
+        'scipy>=1.6,<1.8'
     ],
 
     extras_require={'lipo': ['lipo'],
