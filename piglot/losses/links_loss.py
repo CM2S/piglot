@@ -180,6 +180,24 @@ class OutputField(ABC):
             Path to the input file.
         """
 
+    @classmethod
+    def read(cls, input_file: str, *args, **kwargs):
+        """Direct reading of the results of the given input file.
+
+        Parameters
+        ----------
+        input_file : str
+            Input file path.
+
+        Returns
+        -------
+        array
+            2D array with the requested fields.
+        """
+        reader = cls(*args, **kwargs)
+        reader.check(input_file)
+        return reader.get(input_file)
+
 
 class Reaction(OutputField):
     """Reaction outputs reader."""
