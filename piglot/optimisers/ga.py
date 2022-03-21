@@ -12,7 +12,7 @@ from piglot.optimiser import Optimiser
 
 class geneticalgorithmMod(geneticalgorithm):
 
-    def run(self, optimiser):
+    def run(self, optimiser, init_shot):
         # Initial Population
         self.integers=np.where(self.var_type=='int')
         self.reals=np.where(self.var_type=='real')
@@ -28,6 +28,10 @@ class geneticalgorithmMod(geneticalgorithm):
                 var[i]=self.var_bound[i][0]+np.random.random()*\
                 (self.var_bound[i][1]-self.var_bound[i][0])
                 solo[i]=var[i].copy()
+            # Use initial shot
+            if p==0:
+                var = init_shot
+                solo[0:self.dim] = var.copy()
             obj=self.sim(var)
             solo[self.dim]=obj
             pop[p]=solo.copy()
@@ -281,5 +285,5 @@ class GA(Optimiser):
                                     self.variable_type_mixed,
                                     self.function_timeout, self.algorithm_parameters,
                                     self.convergence_curve, self.progress_bar)
-        model.run(self)
+        model.run(self, init_shot)
         return model.output_dict.get('variable'), model.output_dict.get('function')
