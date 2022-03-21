@@ -4,9 +4,9 @@ try:
     from bask import Optimizer
 except ImportError:
     # Show a nice exception when this package is used
-    from piglot.optimiser import missing_method
+    from piglot.optimisers.optimiser import missing_method
     Optimizer = missing_method("SK Bayesian optimisation", "bask")
-from piglot.optimiser import Optimiser
+from piglot.optimisers.optimiser import Optimiser
 
 
 class OptimizerMod(Optimizer):

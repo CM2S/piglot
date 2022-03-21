@@ -5,9 +5,9 @@ try:
     from bayes_opt.event import Events
 except ImportError:
     # Show a nice exception when this package is used
-    from piglot.optimiser import missing_method
+    from piglot.optimisers.optimiser import missing_method
     BayesianOptimization = missing_method("Bayesian optimisation", "bayes_opt")
-from piglot.optimiser import Optimiser
+from piglot.optimisers.optimiser import Optimiser
 
 
 class BayesianOptimizationMod(BayesianOptimization):

@@ -1,6 +1,6 @@
 """AOA optimiser module."""
 import numpy as np
-from piglot.optimiser import Optimiser
+from piglot.optimisers.optimiser import Optimiser
 
 
 class AOA(Optimiser):

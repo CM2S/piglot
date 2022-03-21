@@ -39,7 +39,7 @@ class Range(Filter):
         """
         self.lbound = -np.inf if lbound is None else lbound
         self.ubound = np.inf if ubound is None else ubound
-    
+
     def extract(self, x, reference, prediction):
         """Extract filtered response from both reference and prediction fields.
 

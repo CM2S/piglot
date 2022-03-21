@@ -1,6 +1,6 @@
 """Hybrid PRS-SPSA optimiser module."""
 import numpy as np
-from piglot.optimiser import Optimiser, StoppingCriteria
+from piglot.optimisers.optimiser import Optimiser, StoppingCriteria
 from piglot.optimisers.spsa_adam import SPSA_Adam
 
 

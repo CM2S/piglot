@@ -1,6 +1,6 @@
 """SPSA optimiser module."""
 from scipy.stats import bernoulli
-from piglot.optimiser import Optimiser, boundary_check
+from piglot.optimisers.optimiser import Optimiser, boundary_check
 
 
 class SPSA(Optimiser):

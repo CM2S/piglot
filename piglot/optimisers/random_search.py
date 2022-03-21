@@ -5,7 +5,7 @@ try:
     from scipy.stats import qmc
 except ImportError:
     qmc = None
-from piglot.optimiser import Optimiser
+from piglot.optimisers.optimiser import Optimiser
 
 
 class PureRandomSearch(Optimiser):

@@ -165,7 +165,7 @@ class OutputField(ABC):
     @abstractmethod
     def check(self, input_file: str):
         """Checks for validity in the input file before reading.
-     
+
         This needs to be called prior to any reading on the file.
 
         Parameters
@@ -392,7 +392,7 @@ class OutFile(OutputField):
         return df.iloc[:,int_columns].to_numpy()
 
 
-class Links_Case:
+class LinksCase:
     """Container with the required fields for each case to be run with Links."""
 
     def __init__(self, filename, fields: dict, loss):
@@ -414,7 +414,7 @@ class Links_Case:
             field.check(filename)
 
 
-class Links_Loss:
+class LinksLoss:
     """Main loss class for Links problems."""
 
     def __init__(self, cases, parameters, links_bin, n_concurrent=1, tmp_dir='tmp'):
@@ -441,7 +441,7 @@ class Links_Loss:
         self.func_calls = 0
 
 
-    def _run_case(self, case: Links_Case):
+    def _run_case(self, case: LinksCase):
         """Run a single case wth Links.
 
         Parameters
