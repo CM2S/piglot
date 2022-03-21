@@ -27,7 +27,11 @@ def write_parameters(param_value, source, dest):
             for line in fin:
                 out = line
                 for parameter, value in param_value.items():
-                    regex = r'\<' + parameter + '.*?\>'
+                    # Replace full expression
+                    regex = r'\<' + parameter + '\(.*?\>'
+                    out = re.sub(regex, str(value), out)
+                    # Replace short expression
+                    regex = r'\<' + parameter + '\>'
                     out = re.sub(regex, str(value), out)
                 fout.write(out)
 
