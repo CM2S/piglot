@@ -316,6 +316,23 @@ class Loss(ABC):
         # Compute the derived loss
         return self._compute(x, ref, pred)
 
+    def max_value(self, x_ref, y_ref):
+        """Returns the possible max value for this loss.
+
+        Parameters
+        ----------
+        x_ref : array
+            Reference time coordinates
+        y_ref : array
+            Reference response
+
+        Returns
+        -------
+        float
+            Maximum loss value.
+        """
+        return self._compute(x_ref, y_ref, 0.0 * y_ref)
+
 
 class BaseLoss(Loss):
     """Base class for generic losses based on the difference of responses."""

@@ -454,7 +454,6 @@ class LinksLoss:
         float
             Loss value for this case.
         """
-        FAILED_CASE = 1.0
         # Copy input file replacing parameters by passed value
         filename = os.path.basename(case.filename)
         input_file = os.path.join(self.tmp_dir, filename)
@@ -464,23 +463,26 @@ class LinksLoss:
         subprocess.run([self.links_bin, input_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # Check if simulation completed
         screen_file = os.path.join(os.path.splitext(input_file)[0], '{0}.screen'.format(case_name))
-        if not has_keyword(screen_file, "Program L I N K S successfully completed."):
-            return FAILED_CASE
+        failed_case = not has_keyword(screen_file, "Program L I N K S successfully completed.")
         # Post-process results
         case_loss = 0.0
         for field, reference in case.fields.items():
-            field_data = field.get(input_file)
-            field_x = field_data[:,0]
-            field_y = field_data[:,1:]
             ref_x = reference[:,0]
-            ref_y = reference[:,1:]
-            # Compute loss for this case: check if single or multiple dimensions on y
-            if len(ref_y.shape) == 1:
-                case_loss += case.loss(ref_x, field_x, ref_y, field_y)
+            ref_y = np.squeeze(reference[:,1:])
+            # If the case failed, return the maximum possible loss value
+            if failed_case:
+                case_loss += case.loss.max_value(ref_x, ref_y)
             else:
-                for i in range(0, ref_y.shape[1]):
-                    case_loss += case.loss(ref_x, field_x, ref_y[:,i], field_y[:,i])
-        return case_loss
+                # Compute loss for this case: check if single or multiple dimensions on y
+                field_data = field.get(input_file)
+                field_x = field_data[:,0]
+                field_y = np.squeeze(field_data[:,1:])
+                if len(ref_y.shape) == 1:
+                    case_loss += case.loss(ref_x, field_x, ref_y, field_y)
+                else:
+                    for i in range(0, ref_y.shape[1]):
+                        case_loss += case.loss(ref_x, field_x, ref_y[:,i], field_y[:,i])
+        return case_loss / len(case.fields)
 
 
     def loss(self, X):
