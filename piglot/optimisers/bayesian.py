@@ -62,6 +62,12 @@ class BayesianOptimizationMod(BayesianOptimization):
                 x_probe = self.suggest(util)
                 iteration += 1
 
+            if iteration == 0 and self._queue.empty:
+                best_value = self.max["target"]
+                best_solution = list(self.max["params"].values())
+                if optimiser._progress_check(iteration, -best_value, best_solution):
+                    break
+
             if (iteration != 0 and iteration <= len(self.res)):
                 solution = self.res[iteration]
                 current_value = solution.get('params').values()
@@ -125,7 +131,7 @@ class Bayesian(Optimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, random_state=None, verbose=2, bounds_transformer=None,
+    def __init__(self, random_state=None, verbose=0, bounds_transformer=None,
                  init_points=5, acq='ucb', kappa=2.576, kappa_decay=1,
                  kappa_decay_delay=0, xi=0.0, **gp_params):
         """
