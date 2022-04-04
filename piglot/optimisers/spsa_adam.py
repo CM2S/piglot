@@ -95,7 +95,7 @@ class SPSA_Adam(Optimiser):
         for i in range(0, n_iter):
             c_k = self.c / (i + 1) ** self.gamma
             # [-1,1] Bernoulli distribution 
-            delta = 2 * bernoulli.rvs(self.prob, size=n_dim, random_state=self.seed) - 1
+            delta = 2 * bernoulli.rvs(self.prob, size=n_dim, random_state=self.seed + i) - 1
             # Bound check
             up = boundary_check(x + c_k * delta, bound)
             low = boundary_check(x - c_k * delta, bound)
