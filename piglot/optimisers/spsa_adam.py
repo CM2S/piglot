@@ -19,7 +19,7 @@ class SPSA_Adam(Optimiser):
     """
 
     def __init__(self, alpha=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8, gamma=0.101,
-                 prob=0.5, c=None):
+                 prob=0.5, c=None, seed=1):
         """Constructs all necessary attributes for the SPSA-Adam optimiser.
 
         Parameters
@@ -47,6 +47,7 @@ class SPSA_Adam(Optimiser):
         self.gamma = gamma
         self.prob = prob
         self.c = 1e-6 if c is None else c
+        self.seed = seed
         self.name = 'AdamSPSA'
 
 
@@ -94,7 +95,7 @@ class SPSA_Adam(Optimiser):
         for i in range(0, n_iter):
             c_k = self.c / (i + 1) ** self.gamma
             # [-1,1] Bernoulli distribution 
-            delta = 2 * bernoulli.rvs(self.prob, size=n_dim) - 1
+            delta = 2 * bernoulli.rvs(self.prob, size=n_dim, random_state=self.seed) - 1
             # Bound check
             up = boundary_check(x + c_k * delta, bound)
             low = boundary_check(x - c_k * delta, bound)
