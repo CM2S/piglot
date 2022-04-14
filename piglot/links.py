@@ -4,7 +4,7 @@ import re
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
-from multiprocessing import Pool
+from multiprocessing.pool import ThreadPool as Pool
 import numpy as np
 import pandas as pd
 from piglot.parameter import ParameterSet
