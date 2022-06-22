@@ -36,12 +36,12 @@ def write_parameters(param_value, source, dest):
                 fout.write(out)
 
 
-def extract_parameters(input_file):
-    """Extract a ParameterSet from an input file.
+def extract_parameters(input_files):
+    """Extract a ParameterSet from an input or set of input files.
 
     Parameters
     ----------
-    input_file : str
+    input_file : str or list[str]
         Input file path.
 
     Returns
@@ -59,14 +59,16 @@ def extract_parameters(input_file):
     parameters = ParameterSet()
     full_parameters = []
     short_parameters = []
-    with open(input_file, 'r') as file:
-        for line in file:
-            full_expression = re.findall(r"\<.*?\(.*?\>", line)
-            short_expression = re.findall(r"\<\w+\>", line)
-            for a in full_expression:
-                full_parameters.append(a)
-            for a in short_expression:
-                short_parameters.append(a)
+    input_files = [input_files] if isinstance(input_files, str) else input_files
+    for input_file in input_files:
+        with open(input_file, 'r') as file:
+            for line in file:
+                full_expression = re.findall(r"\<.*?\(.*?\>", line)
+                short_expression = re.findall(r"\<\w+\>", line)
+                for a in full_expression:
+                    full_parameters.append(a)
+                for a in short_expression:
+                    short_parameters.append(a)
 
     for value in full_parameters:
         pattern = value[value.find("<")+1:value.find("(")]
@@ -308,6 +310,7 @@ class OutFile(OutputField):
             self.i_gauss = i_gauss
         self.x_field = x_field
         self.separator = 16
+        self.coupled = False
 
     def check(self, input_file: str):
         """Sanity checks on the input file.
@@ -356,6 +359,8 @@ class OutFile(OutputField):
                                     .format(self.i_elem, self.i_gauss))
         # Check if single or double precision output
         self.separator = 24 if has_keyword(input_file, "DOUBLE_PRECISION_OUTPUT") else 16
+        # Check if simulation is single-scale or coupled
+        self.coupled = has_keyword(input_file, 'NUMBER_OF_RVE')
 
     def get(self, input_file: str):
         """Get a parameter from the .out file.
@@ -373,7 +378,7 @@ class OutFile(OutputField):
         casename = get_case_name(input_file)
         output_dir = os.path.splitext(input_file)[0]
         reac_filename = os.path.join(output_dir, '{0}{1}.out'.format(casename, self.suffix))
-        from_gp = self.suffix != ''
+        from_gp = self.suffix != '' and not self.coupled
         # Read the first line of the file to find the total number of columns
         with open(reac_filename, 'r') as file:
             # Consume the first line if from a GP output (contains GP coordinates)
@@ -395,7 +400,7 @@ class OutFile(OutputField):
 class LinksCase:
     """Container with the required fields for each case to be run with Links."""
 
-    def __init__(self, filename, fields: dict, loss):
+    def __init__(self, filename, fields: dict, loss, dependencies=None, command_prefix=None):
         """Constructor for the container.
 
         Parameters
@@ -406,10 +411,16 @@ class LinksCase:
             Pairs of fields to read from results and their reference solutions.
         loss : Loss
             Loss function to use when comparing predictions and references.
+        dependencies: list[str]
+            List of dependency files for the given input file, by default None
+        command_prefix: str
+            Prefix to use during Links call, by default None
         """
         self.filename = filename
         self.fields = fields
         self.loss = loss
+        self.dependencies = [] if dependencies is None else dependencies
+        self.command_prefix = [] if command_prefix is None else str(command_prefix).split()
         for field in self.fields.keys():
             field.check(filename)
 
@@ -459,8 +470,14 @@ class LinksLoss:
         input_file = os.path.join(self.tmp_dir, filename)
         case_name = get_case_name(input_file)
         write_parameters(self.parameters.to_dict(self.X), case.filename, input_file)
+        # Copy dependency files replacing parameters by passed value
+        for dep in case.dependencies:
+            dep_filename = os.path.basename(dep)
+            dep_file = os.path.join(self.tmp_dir, dep_filename)
+            write_parameters(self.parameters.to_dict(self.X), dep, dep_file)
         # Run LINKS
-        subprocess.run([self.links_bin, input_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(case.command_prefix + [self.links_bin, input_file],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # Check if simulation completed
         screen_file = os.path.join(os.path.splitext(input_file)[0], '{0}.screen'.format(case_name))
         failed_case = not has_keyword(screen_file, "Program L I N K S successfully completed.")
