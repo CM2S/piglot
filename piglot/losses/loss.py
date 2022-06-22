@@ -454,6 +454,33 @@ class NMSE(BaseLoss):
                          n_points=True, reshaper='none', *args, **kwargs)
 
 
+class LogNMSE(NMSE):
+    """Logarithmic normalised mean squared error Loss."""
+
+    def __init__(self, reduction='sum', *args, **kwargs):
+        """Constructor for this Loss.
+
+        Parameters
+        ----------
+        reduction : str, optional
+            Reduction function to apply, by default 'sum'. Refer to BaseLoss.
+        """
+        super().__init__(reduction, *args, **kwargs)
+    
+    def _compute(self, x, reference, prediction):
+        """Main method for loss computation.
+
+        Parameters
+        ----------
+        x : array
+            Time coordinate
+        reference : array
+            Reference response
+        prediction : array
+            Predicted response
+        """
+        return np.log(super()._compute(x, reference, prediction))
+
 class RMSE(BaseLoss):
     """Root mean squared error Loss."""
 

@@ -75,6 +75,8 @@ def loss(name, *args, **kwargs):
     """
     if name == 'mse':
         return piglot.losses.MSE(*args, **kwargs)
+    if name == 'lognmse':
+        return piglot.losses.LogNMSE(*args, **kwargs)
     if name == 'nmse':
         return piglot.losses.NMSE(*args, **kwargs)
     if name == 'rmse':
