@@ -1,8 +1,11 @@
 """Bayesian optimiser module."""
+import warnings
+import numpy as np
 try:
     from bayes_opt import BayesianOptimization
     from bayes_opt.util import UtilityFunction
     from bayes_opt.event import Events
+    from lipo import GlobalOptimizer
 except ImportError:
     # Show a nice exception when this package is used
     from piglot.optimisers.optimiser import missing_method
@@ -12,37 +15,16 @@ from piglot.optimisers.optimiser import Optimiser
 
 class BayesianOptimizationMod(BayesianOptimization):
 
-    def maximize(self, optimiser, init_points=5, n_iter=25, acq='ucb', kappa=2.576,
-                 kappa_decay=1, kappa_decay_delay=0, xi=0.0, **gp_params):
-        """
-        Probes the target space to find the parameters that yield the maximum
-        value for the given function.
-        Parameters
-        ----------
-        init_points : int, optional(default=5)
-            Number of iterations before the explorations starts the exploration
-            for the maximum.
-        n_iter: int, optional(default=25)
-            Number of iterations where the method attempts to find the maximum
-            value.
-        acq: {'ucb', 'ei', 'poi'}
-            The acquisition method used.
-                * 'ucb' stands for the Upper Confidence Bounds method
-                * 'ei' is the Expected Improvement method
-                * 'poi' is the Probability Of Improvement criterion.
-        kappa: float, optional(default=2.576)
-            Parameter to indicate how closed are the next parameters sampled.
-                Higher value = favors spaces that are least explored.
-                Lower value = favors spaces where the regression function is the
-                highest.
-        kappa_decay: float, optional(default=1)
-            `kappa` is multiplied by this factor every iteration.
-        kappa_decay_delay: int, optional(default=0)
-            Number of iterations that must have passed before applying the decay
-            to `kappa`.
-        xi: float, optional(default=0.0)
-            [unused]
-        """
+    def maximize(self, optimiser,
+                init_points=5,
+                n_iter=25,
+                acq='ucb',
+                kappa=2.576,
+                kappa_decay=1,
+                kappa_decay_delay=0,
+                xi=0.0,
+                **gp_params):
+        """Mazimize your function"""
         self._prime_subscriptions()
         self.dispatch(Events.OPTIMIZATION_START)
         self._prime_queue(init_points)
@@ -53,6 +35,13 @@ class BayesianOptimizationMod(BayesianOptimization):
                                xi=xi,
                                kappa_decay=kappa_decay,
                                kappa_decay_delay=kappa_decay_delay)
+
+        best_value = self.max["target"]
+        best_solution = list(self.max["params"].values())
+        if optimiser._progress_check(0, -best_value, best_solution):
+            self.dispatch(Events.OPTIMIZATION_END)
+            return
+
         iteration = 0
         while not self._queue.empty or iteration < n_iter:
             try:
@@ -62,19 +51,11 @@ class BayesianOptimizationMod(BayesianOptimization):
                 x_probe = self.suggest(util)
                 iteration += 1
 
-            if iteration == 0 and self._queue.empty:
-                best_value = self.max["target"]
-                best_solution = list(self.max["params"].values())
-                if optimiser._progress_check(iteration, -best_value, best_solution):
-                    break
-
-            if (iteration != 0 and iteration <= len(self.res)):
-                solution = self.res[iteration]
-                current_value = solution.get('params').values()
-                if optimiser._progress_check(iteration, -solution.get('target'),
-                                             list(current_value)):
-                    break
             self.probe(x_probe, lazy=False)
+            if iteration != 0:
+                val = self.res[-1].get('target')
+                if optimiser._progress_check(iteration, -val, list(x_probe.values())):
+                    break
 
             if self._bounds_transformer:
                 self.set_bounds(
@@ -82,6 +63,99 @@ class BayesianOptimizationMod(BayesianOptimization):
 
         self.dispatch(Events.OPTIMIZATION_END)
 
+    # def maximize(self, optimiser, init_points=5, n_iter=25, acq='ucb', kappa=2.576,
+    #              kappa_decay=1, kappa_decay_delay=0, xi=0.0, **gp_params):
+    #     """
+    #     Probes the target space to find the parameters that yield the maximum
+    #     value for the given function.
+    #     Parameters
+    #     ----------
+    #     init_points : int, optional(default=5)
+    #         Number of iterations before the explorations starts the exploration
+    #         for the maximum.
+    #     n_iter: int, optional(default=25)
+    #         Number of iterations where the method attempts to find the maximum
+    #         value.
+    #     acq: {'ucb', 'ei', 'poi'}
+    #         The acquisition method used.
+    #             * 'ucb' stands for the Upper Confidence Bounds method
+    #             * 'ei' is the Expected Improvement method
+    #             * 'poi' is the Probability Of Improvement criterion.
+    #     kappa: float, optional(default=2.576)
+    #         Parameter to indicate how closed are the next parameters sampled.
+    #             Higher value = favors spaces that are least explored.
+    #             Lower value = favors spaces where the regression function is the
+    #             highest.
+    #     kappa_decay: float, optional(default=1)
+    #         `kappa` is multiplied by this factor every iteration.
+    #     kappa_decay_delay: int, optional(default=0)
+    #         Number of iterations that must have passed before applying the decay
+    #         to `kappa`.
+    #     xi: float, optional(default=0.0)
+    #         [unused]
+    #     """
+    #     self._prime_subscriptions()
+    #     self.dispatch(Events.OPTIMIZATION_START)
+    #     self._prime_queue(init_points)
+    #     self.set_gp_params(**gp_params)
+
+    #     util = UtilityFunction(kind=acq,
+    #                            kappa=kappa,
+    #                            xi=xi,
+    #                            kappa_decay=kappa_decay,
+    #                            kappa_decay_delay=kappa_decay_delay)
+    #     iteration = 0
+    #     while not self._queue.empty or iteration < n_iter:
+    #         try:
+    #             x_probe = next(self._queue)
+    #         except StopIteration:
+    #             util.update_params()
+    #             x_probe = self.suggest(util)
+    #             iteration += 1
+
+    #         if iteration == 0 and self._queue.empty:
+    #             best_value = self.max["target"]
+    #             best_solution = list(self.max["params"].values())
+    #             if optimiser._progress_check(iteration, -best_value, best_solution):
+    #                 break
+
+    #         if (iteration != 0 and iteration < len(self.res)):
+    #             solution = self.res[iteration]
+    #             current_value = solution.get('params').values()
+    #             if optimiser._progress_check(iteration, -solution.get('target'),
+    #                                          list(current_value)):
+    #                 break
+    #         self.probe(x_probe, lazy=False)
+
+    #         if self._bounds_transformer:
+    #             self.set_bounds(
+    #                 self._bounds_transformer.transform(self._space))
+
+    #     self.dispatch(Events.OPTIMIZATION_END)
+
+
+    def suggest(self, utility_function):
+        """Most promissing point to probe next"""
+        if len(self._space) == 0:
+            return self._space.array_to_params(self._space.random_sample())
+
+        # Sklearn's GP throws a large number of warnings at times, but
+        # we don't really need to see them here.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self._gp.fit(self._space.params, self._space.target)
+
+        def func(**kwargs):
+            p = np.array(list(kwargs.values())).reshape(1, -1)
+            return utility_function.utility(p, gp=self._gp, y_max=self._space.target.max())
+        # Finding argmax of the acquisition function.
+        lower_bounds = {str(i): self._space.bounds[i,0] for i in range(len(self._space.random_sample()))}
+        upper_bounds = {str(i): self._space.bounds[i,1] for i in range(len(self._space.random_sample()))}
+        model = GlobalOptimizer(func, lower_bounds=lower_bounds, upper_bounds=upper_bounds)
+        model.run(250)
+        suggestion = model.optimum[0].values()
+
+        return self._space.array_to_params(suggestion)
 
 class Bayesian(Optimiser):
     """
@@ -222,7 +296,7 @@ class Bayesian(Optimiser):
         # Run optimization problem
         model = BayesianOptimizationMod(negate, pbounds, self.random_state,
                                         self.verbose, self.bounds_transformer)
-        model.probe(init_shot)
+        model.probe(init_shot, lazy=False)
         model.maximize(self, self.init_points, n_iter, self.acq, self.kappa,
                        self.kappa_decay, self.kappa_decay_delay, self.xi,
                        **self.gp_params)
