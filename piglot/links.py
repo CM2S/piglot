@@ -1,9 +1,12 @@
 """Module for losses associated with LINKS calls."""
+from asyncore import poll
 import os
 import re
+import time
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
+from threading import Lock
 from multiprocessing.pool import ThreadPool as Pool
 import numpy as np
 import pandas as pd
@@ -513,3 +516,167 @@ class LinksLoss:
             losses = map(self._run_case, self.cases)
         # Compute and return total loss
         return sum(losses) / len(self.cases)
+
+
+class PrunedLinksLoss:
+    """Main loss class for Links problems, with lower bound pruning."""
+
+    def __init__(self, cases, parameters, links_bin, tmp_dir='tmp', n_concurrent=1,
+                 polling_interval=1.0, pruning_threshold=10.0):
+        """Constructor for the Links_Loss class.
+
+        Parameters
+        ----------
+        cases : list
+            List of Links_Case's to be run.
+        parameters : ParameterSet
+            Parameter set for this problem.
+        links_bin : str
+            Path to the Links binary
+        tmp_dir : str, optional
+            Path to temporary directory to run the analyses, by default 'tmp'.
+        tmp_dir : str, optional
+            Path to temporary directory to run the analyses, by default 'tmp'.
+        """
+        self.cases = cases
+        self.parameters = parameters
+        self.links_bin = links_bin
+        self.tmp_dir = tmp_dir
+        self.n_concurrent = n_concurrent
+        self.polling_interval = polling_interval
+        self.pruning_threshold = pruning_threshold
+        self.func_calls = 0
+        self.best_loss = np.inf
+        self.mutex = Lock()
+
+
+    def _monitor_loss(self, input_file, case: LinksCase):
+        # Check if simulation failed
+        screen_file = os.path.join(os.path.splitext(input_file)[0], '{0}.screen'.format(get_case_name(input_file)))
+        if has_keyword(screen_file, "Program LINKS aborted."):
+            return np.inf
+        # Loop over all fields
+        case_loss = 0.0
+        for field, reference in case.fields.items():
+            ref_x = reference[:, 0]
+            ref_y = reference[:, 1:]
+            field_data = field.get(input_file)
+            field_x = field_data[:, 0]
+            field_y = field_data[:, 1:]
+            # Modify the predicted response: in the best case scenario, the reference and
+            # predicted responses are exactly equal for ranges outside the `field_x` range.
+            # Thus, a lower bound can be established by appending the reference response
+            # to the uncompleted prediction response
+            mask_left = ref_x < np.min(field_x)
+            mask_right = ref_x > np.max(field_x)
+            field_x = np.concatenate((ref_x[mask_left], field_x, ref_x[mask_right]))
+            field_y = np.concatenate((ref_y[mask_left, :], field_y, ref_y[mask_right, :]))
+            # Squeeze unneeded dimensions
+            ref_y = np.squeeze(ref_y)
+            field_y = np.squeeze(field_y)
+            # Compute loss for this case: check if single or multiple dimensions on y
+            if len(ref_y.shape) == 1:
+                case_loss += case.loss(ref_x, field_x, ref_y, field_y)
+            else:
+                for i in range(0, ref_y.shape[1]):
+                    case_loss += case.loss(ref_x, field_x, ref_y[:, i], field_y[:, i])
+        return case_loss / len(case.fields)
+
+
+    def _run_case(self, case: LinksCase):
+        """Run a single case wth Links.
+
+        Parameters
+        ----------
+        case : Links_Case
+            Case to run.
+
+        Returns
+        -------
+        float
+            Loss value for this case.
+        """
+        # Update case number and loss storage: atomicity is ensured with the mutex
+        case_number = 0
+        self.mutex.acquire()
+        try:
+            case_number = self.case_number
+            self.case_number += 1
+            self.loss_lb.append(-np.inf)
+        finally:
+            self.mutex.release()
+        # Copy input file replacing parameters by passed value
+        filename = os.path.basename(case.filename)
+        input_file = os.path.join(self.tmp_dir, filename)
+        case_name = get_case_name(input_file)
+        write_parameters(self.parameters.to_dict(self.X), case.filename, input_file)
+        # Run LINKS
+        links = subprocess.Popen([self.links_bin, input_file], stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        # Poll loss files for changes
+        while links.poll() is None:
+            time.sleep(self.polling_interval)
+            # Update current loss lower bound
+            self.loss_lb[case_number] = self._monitor_loss(input_file, case)
+            # Compute the total loss lower bound: we need the information from all cases
+            total_loss_lb = sum(self.loss_lb) / len(self.cases)
+            # Pruning: if the total loss lower bound exceeds a threshold, abort analysis
+            if total_loss_lb > self.pruning_threshold * self.best_loss:
+                links.terminate()
+                break
+        # Check if simulation completed
+        screen_file = os.path.join(os.path.splitext(input_file)[0], '{0}.screen'.format(case_name))
+        failed_case = has_keyword(screen_file, "Program LINKS aborted.")
+        # Post-process results
+        case_loss = 0.0
+        for field, reference in case.fields.items():
+            ref_x = reference[:, 0]
+            ref_y = np.squeeze(reference[:, 1:])
+            # If the case failed, return the maximum possible loss value
+            if failed_case:
+                case_loss += case.loss.max_value(ref_x, ref_y)
+            else:
+                # Compute loss for this case: check if single or multiple dimensions on y
+                field_data = field.get(input_file)
+                field_x = field_data[:, 0]
+                field_y = np.squeeze(field_data[:, 1:])
+                if len(ref_y.shape) == 1:
+                    case_loss += case.loss(ref_x, field_x, ref_y, field_y)
+                else:
+                    for i in range(0, ref_y.shape[1]):
+                        case_loss += case.loss(ref_x, field_x, ref_y[:, i], field_y[:, i])
+        return case_loss / len(case.fields)
+
+
+    def loss(self, X):
+        """Public loss function for a problem with Links.
+
+        Parameters
+        ----------
+        X : array
+            Current parameters to evaluate the loss.
+
+        Returns
+        -------
+        float
+            Loss value for this set of parameters.
+        """
+        # Ensure tmp directory is clean
+        if os.path.isdir(self.tmp_dir):
+            shutil.rmtree(self.tmp_dir)
+        os.mkdir(self.tmp_dir)
+        self.func_calls += 1
+        # Set current attribute vector
+        self.X = X
+        self.case_number = 0
+        self.loss_lb = []
+        # Run cases (in parallel if specified)
+        if self.n_concurrent > 1:
+            with Pool(self.n_concurrent) as pool:
+                losses = pool.map(self._run_case, self.cases)
+        else:
+            losses = map(self._run_case, self.cases)
+        # Compute and return total loss
+        loss = sum(losses) / len(self.cases)
+        self.best_loss = min(self.best_loss, loss)
+        return loss
