@@ -441,7 +441,7 @@ class LinksLoss:
         self.func_calls = 0
 
 
-    def _run_case(self, case: LinksCase):
+    def _run_case(self, X, case: LinksCase, tmp_dir: str):
         """Run a single case wth Links.
 
         Parameters
@@ -456,9 +456,9 @@ class LinksLoss:
         """
         # Copy input file replacing parameters by passed value
         filename = os.path.basename(case.filename)
-        input_file = os.path.join(self.tmp_dir, filename)
+        input_file = os.path.join(tmp_dir, filename)
         case_name = get_case_name(input_file)
-        write_parameters(self.parameters.to_dict(self.X), case.filename, input_file)
+        write_parameters(self.parameters.to_dict(X), case.filename, input_file)
         # Run LINKS
         subprocess.run([self.links_bin, input_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # Check if simulation completed
@@ -485,7 +485,7 @@ class LinksLoss:
         return case_loss / len(case.fields)
 
 
-    def loss(self, X):
+    def loss(self, X, unique=False):
         """Public loss function for a problem with Links.
 
         Parameters
@@ -499,17 +499,17 @@ class LinksLoss:
             Loss value for this set of parameters.
         """
         # Ensure tmp directory is clean
-        if os.path.isdir(self.tmp_dir):
-            shutil.rmtree(self.tmp_dir)
-        os.mkdir(self.tmp_dir)
+        tmp_dir = f'{self.tmp_dir}_{hash(X.data.tobytes())}' if unique else self.tmp_dir
+        if os.path.isdir(tmp_dir):
+            shutil.rmtree(tmp_dir)
+        os.mkdir(tmp_dir)
         self.func_calls += 1
-        # Set current attribute vector
-        self.X = X
         # Run cases (in parallel if specified)
+        run_case = lambda case: self._run_case(X, case, tmp_dir)
         if self.n_concurrent > 1:
             with Pool(self.n_concurrent) as pool:
-                losses = pool.map(self._run_case, self.cases)
+                losses = pool.map(run_case, self.cases)
         else:
-            losses = map(self._run_case, self.cases)
+            losses = map(run_case, self.cases)
         # Compute and return total loss
         return sum(losses) / len(self.cases)

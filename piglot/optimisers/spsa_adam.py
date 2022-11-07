@@ -1,6 +1,7 @@
 """Hybrid SPSA-Adam optimiser module."""
 import numpy as np
 from scipy.stats import bernoulli
+from multiprocessing.pool import ThreadPool as Pool
 from piglot.optimisers.optimiser import Optimiser, boundary_check
 
 
@@ -19,7 +20,7 @@ class SPSA_Adam(Optimiser):
     """
 
     def __init__(self, alpha=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8, gamma=0.101,
-                 prob=0.5, c=None, seed=1):
+                 prob=0.5, c=None, seed=1, parallel=False):
         """Constructs all necessary attributes for the SPSA-Adam optimiser.
 
         Parameters
@@ -39,15 +40,18 @@ class SPSA_Adam(Optimiser):
         c : float, optional
             Model parameter, refer to documentation, by default None
             If None, this parameter is defined according to internal heuristics.
+        parallel : bool, optional
+            Whether to run perturbed steps in parallel, by default False
         """
-        self.alpha = alpha
+        self.alpha = float(alpha)
         self.beta1 = beta1
         self.beta2 = beta2
         self.epsilon = epsilon
         self.gamma = gamma
         self.prob = prob
-        self.c = 1e-6 if c is None else c
+        self.c = 1e-6 if c is None else float(c)
         self.seed = seed
+        self.parallel = parallel
         self.name = 'AdamSPSA'
 
 
@@ -85,6 +89,8 @@ class SPSA_Adam(Optimiser):
 
         x = init_shot
         new_value = func(x)
+        best_value = new_value
+        best_sol = x
         if self._progress_check(0, new_value, x):
             return x, new_value
 
@@ -92,6 +98,7 @@ class SPSA_Adam(Optimiser):
         m = np.zeros(n_dim)
         v = np.zeros(n_dim)
 
+        parallel_func = lambda x: func(x, self.parallel)
         for i in range(0, n_iter):
             c_k = self.c / (i + 1) ** self.gamma
             # [-1,1] Bernoulli distribution 
@@ -99,8 +106,11 @@ class SPSA_Adam(Optimiser):
             # Bound check
             up = boundary_check(x + c_k * delta, bound)
             low = boundary_check(x - c_k * delta, bound)
-            pos_loss = func(up)
-            neg_loss = func(low)
+            if self.parallel:
+                with Pool(2) as pool:
+                    pos_loss, neg_loss = pool.map(parallel_func, [up, low])
+            else:
+                pos_loss, neg_loss = map(parallel_func, [up, low])
             gradient = (pos_loss - neg_loss) / (up - low)
             # Update solution with Adam
             m = self.beta1 * m + (1 - self.beta1) * gradient
@@ -111,6 +121,13 @@ class SPSA_Adam(Optimiser):
             # Bound check
             x = boundary_check(x, bound)
             new_value = func(x)
+            # Select best value
+            if pos_loss < new_value:
+                new_value = pos_loss
+                x = up
+            elif neg_loss < new_value:
+                new_value = neg_loss
+                x = low
             # Update progress and check convergence
             if self._progress_check(i+1, new_value, x):
                 break
