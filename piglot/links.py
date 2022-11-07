@@ -611,8 +611,8 @@ class PrunedLinksLoss:
         case_name = get_case_name(input_file)
         write_parameters(self.parameters.to_dict(self.X), case.filename, input_file)
         # Run LINKS
-        links = subprocess.Popen([self.links_bin, input_file], stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
+        links = subprocess.Popen([self.links_bin, input_file], stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
         # Poll loss files for changes
         while links.poll() is None:
             time.sleep(self.polling_interval)
