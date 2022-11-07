@@ -629,7 +629,7 @@ class PrunedLinksLoss:
                 break
         # Check if simulation completed
         screen_file = os.path.join(os.path.splitext(input_file)[0], '{0}.screen'.format(case_name))
-        failed_case = has_keyword(screen_file, "Program LINKS aborted.")
+        failed_case = has_keyword(screen_file, "Program L I N K S aborted.")
         # Post-process results
         case_loss = 0.0
         for field, reference in case.fields.items():
