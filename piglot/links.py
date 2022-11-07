@@ -617,7 +617,10 @@ class PrunedLinksLoss:
         while links.poll() is None:
             time.sleep(self.polling_interval)
             # Update current loss lower bound
-            self.loss_lb[case_number] = self._monitor_loss(input_file, case)
+            try:
+                self.loss_lb[case_number] = self._monitor_loss(input_file, case)
+            except FileNotFoundError:
+                self.loss_lb[case_number] = -np.inf
             # Compute the total loss lower bound: we need the information from all cases
             total_loss_lb = sum(self.loss_lb) / len(self.cases)
             # Pruning: if the total loss lower bound exceeds a threshold, abort analysis
