@@ -1,4 +1,5 @@
 """SPSA optimiser module."""
+from unittest import skip
 import numpy as np
 from scipy.stats import bernoulli
 from multiprocessing.pool import ThreadPool as Pool
@@ -19,7 +20,7 @@ class SPSA(Optimiser):
     """
 
     def __init__(self, alpha=0.602, gamma=0.101, prob=0.5, seed=1, A=None, a=None, c=None,
-                 parallel=False):
+                 parallel=False, skip_call=False):
         """Constructs all necessary attributes for the SPSA optimiser.
 
         Parameters
@@ -43,6 +44,8 @@ class SPSA(Optimiser):
             If None, this parameter is defined according to internal heuristics.
         parallel : bool, optional
             Whether to run perturbed steps in parallel, by default False
+        skip_call : bool, optional
+            Whether to skip the 3rd function call per iteration, by default False
         """
         self.alpha = float(alpha)
         self.gamma = gamma
@@ -52,6 +55,7 @@ class SPSA(Optimiser):
         self.a = a
         self.c = 1e-6 if c is None else float(c)
         self.parallel = parallel
+        self.skip_call = skip_call
         self.name = 'SPSA'
 
 
@@ -119,17 +123,21 @@ class SPSA(Optimiser):
                 self.a /= np.linalg.norm(gradient)
             # Update solution
             a_k = self.a / (self.A + i + 1) ** self.alpha
-            x = x - a_k * gradient
-            # Bound check
-            x = boundary_check(x, bound)
-            new_value = func(x)
-            # Select best of the three points
-            if pos_loss < new_value:
-                new_value = pos_loss
-                x = up
-            elif neg_loss < new_value:
-                new_value = neg_loss
-                x = low
+            x = boundary_check(x - a_k * gradient, bound)
+            # If requested, skip the last function evaluation
+            if self.skip_call:
+                new_value = min(pos_loss, neg_loss)
+                curr_x = up if pos_loss < neg_loss else low
+            else:
+                new_value = func(x)
+                # Select best of the three points
+                if pos_loss < new_value:
+                    new_value = pos_loss
+                    x = up
+                elif neg_loss < new_value:
+                    new_value = neg_loss
+                    x = low
+                curr_x = x
 
             if new_value < best_value:
                 best_value = new_value
@@ -139,7 +147,7 @@ class SPSA(Optimiser):
                 x = best_x
 
             # Update progress and check convergence
-            if self._progress_check(i+1, new_value, x):
+            if self._progress_check(i+1, new_value, curr_x):
                 break
 
         return x, new_value

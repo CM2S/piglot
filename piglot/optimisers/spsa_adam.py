@@ -20,7 +20,7 @@ class SPSA_Adam(Optimiser):
     """
 
     def __init__(self, alpha=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8, gamma=0.101,
-                 prob=0.5, c=None, seed=1, parallel=False):
+                 prob=0.5, c=None, seed=1, parallel=False, skip_call=False):
         """Constructs all necessary attributes for the SPSA-Adam optimiser.
 
         Parameters
@@ -42,6 +42,8 @@ class SPSA_Adam(Optimiser):
             If None, this parameter is defined according to internal heuristics.
         parallel : bool, optional
             Whether to run perturbed steps in parallel, by default False
+        skip_call : bool, optional
+            Whether to skip the 3rd function call per iteration, by default False
         """
         self.alpha = float(alpha)
         self.beta1 = beta1
@@ -52,6 +54,7 @@ class SPSA_Adam(Optimiser):
         self.c = 1e-6 if c is None else float(c)
         self.seed = seed
         self.parallel = parallel
+        self.skip_call = skip_call
         self.name = 'AdamSPSA'
 
 
@@ -117,19 +120,23 @@ class SPSA_Adam(Optimiser):
             v = self.beta2 * v + (1 - self.beta2) * np.square(gradient)
             mhat = m / (1 - self.beta1**(i+1))
             vhat = v / (1 - self.beta2**(i+1))
-            x = x - self.alpha * mhat / (np.sqrt(vhat) + self.epsilon)
-            # Bound check
-            x = boundary_check(x, bound)
-            new_value = func(x)
-            # Select best value
-            if pos_loss < new_value:
-                new_value = pos_loss
-                x = up
-            elif neg_loss < new_value:
-                new_value = neg_loss
-                x = low
+            x = boundary_check(x - self.alpha * mhat / (np.sqrt(vhat) + self.epsilon), bound)
+            # If requested, skip the last function evaluation
+            if self.skip_call:
+                new_value = min(pos_loss, neg_loss)
+                curr_x = up if pos_loss < neg_loss else low
+            else:
+                new_value = func(x)
+                # Select best of the three points
+                if pos_loss < new_value:
+                    new_value = pos_loss
+                    x = up
+                elif neg_loss < new_value:
+                    new_value = neg_loss
+                    x = low
+                curr_x = x
             # Update progress and check convergence
-            if self._progress_check(i+1, new_value, x):
+            if self._progress_check(i+1, new_value, curr_x):
                 break
 
         return x, new_value
