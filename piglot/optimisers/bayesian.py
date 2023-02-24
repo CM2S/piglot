@@ -167,7 +167,7 @@ class Bayesian(Optimiser):
         kappa_decay_delay : int
             Number of iterations that must have passed before applying the decay
             to `kappa` (default = 0).
-        xi : flaot
+        xi : float
             [unused] (default = 0.0)
         **gp_params : arbitrary keyword arguments
             Set parameters to the internal Gaussian Process Regressor.

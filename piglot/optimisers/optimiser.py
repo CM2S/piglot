@@ -1,7 +1,39 @@
 """Main optimizer module."""
+import os
+import time 
 from abc import ABC, abstractmethod
 import numpy as np
 from tqdm import tqdm
+
+
+def pretty_time(elapsed_sec):
+    """Return a human-readable representation of a given elapsed time.
+
+    Parameters
+    ----------
+    elapsed_sec : float
+        Elapsed time, in seconds.
+
+    Returns
+    -------
+    str
+        Pretty elapsed time string.
+    """
+    mults = {
+        'y': 60*60*24*365,
+        'd': 60*60*24,
+        'h': 60*60,
+        'm': 60,
+        's': 1,
+    }
+    time_str = ''
+    for suffix, factor in mults.items():
+        count = elapsed_sec // factor
+        if count > 0:
+            time_str += str(int(elapsed_sec / factor)) + suffix
+        elapsed_sec %= factor
+    return time_str
+
 
 
 def boundary_check(arg, bounds):
@@ -137,7 +169,7 @@ class Optimiser(ABC):
     _progress_check(self, iiter, curr_value, curr_solution):
         evaluates the optimizer progress
     """
-    def _init_optimiser(self, n_iter, parameters, pbar, loss, stop_criteria, output):
+    def _init_optimiser(self, n_iter, parameters, pbar, loss, stop_criteria, output, verbose):
         """
         Constructs the attributes for the optimizer
 
@@ -171,9 +203,10 @@ class Optimiser(ABC):
         self.loss = loss
         self.stop_criteria = stop_criteria
         self.output = output
+        self._verbose = verbose
 
 
-    def optimise(self, loss, n_iter, parameters, stop_criteria=StoppingCriteria(), output=False):
+    def optimise(self, loss, n_iter, parameters, stop_criteria=StoppingCriteria(), output=None, verbose=True):
         """
         Initiates optimizer
 
@@ -198,8 +231,8 @@ class Optimiser(ABC):
             best parameter solution
         """
         # Initialise optimiser
-        pbar = tqdm(total=n_iter, desc=self.name)
-        self._init_optimiser(n_iter, parameters, pbar, loss, stop_criteria, output)
+        pbar = tqdm(total=n_iter, desc=self.name) if verbose else None
+        self._init_optimiser(n_iter, parameters, pbar, loss, stop_criteria, output, verbose)
         # Build initial shot and bounds
         n_dim = len(self.parameters)
         init_shot = [par.normalise(par.inital_value) for par in self.parameters]
@@ -208,12 +241,28 @@ class Optimiser(ABC):
         # Build best solution
         self.best_value = np.inf
         self.best_solution = None
+        # Prepare history output files
+        if output:
+            with open(os.path.join(self.output, "history"), 'w') as file:
+                file.write(f'{"Iteration":>10}\t{"Time /s":>15}\t{"Best Loss":>15}\t{"Current Loss":>15}')
+                for par in self.parameters:
+                    file.write(f'\t{par.name:>15}')
+                file.write('\n')
         # Optimise
-        x, new_value = self._optimise(self.loss.loss, n_dim, n_iter, new_bound, init_shot)
-        self.pbar.close()
+        self.begin = time.perf_counter()
+        self._optimise(self.loss.loss, n_dim, n_iter, new_bound, init_shot)
+        elapsed = time.perf_counter() - self.begin
         # Denormalise best solution
         new_solution = [par.denormalise(self.best_solution[j])
                         for j, par in enumerate(self.parameters)]
+        if verbose:
+            self.pbar.close()
+            print(f'Completed {self.iiter} iterations in {pretty_time(elapsed)}')
+            print(f'Best loss: {self.best_value:15.8e}')
+            print(f'Best parameters')
+            largest = max([len(par.name) for par in self.parameters])
+            for i, par in enumerate(self.parameters):
+                print(f'- {par.name.rjust(largest)}: {new_solution[i]:>12.6f}')
         # Return the best value
         return self.best_value, new_solution
 
@@ -244,6 +293,26 @@ class Optimiser(ABC):
             best parameter solution
         """
 
+    def __update_progress_files(self, iiter, curr_solution, curr_value):
+        elapsed = time.perf_counter() - self.begin
+        denorm_best = [par.denormalise(self.best_solution[i]) for i, par in enumerate(self.parameters)]
+        denorm_curr = [par.denormalise(curr_solution[i]) for i, par in enumerate(self.parameters)]
+        # Update progress file
+        with open(os.path.join(self.output, "progress"), 'w') as file:
+            file.write(f'Iteration: {iiter}\n')
+            file.write(f'Best loss: {self.best_value}\n')
+            file.write(f'Best parameters:\n')
+            for i, par in enumerate(self.parameters):
+                file.write(f'\t{par.name}: {denorm_best[i]}\n')
+            file.write(f'\nElapsed time: {pretty_time(elapsed)}\n')
+        # Update history file
+        with open(os.path.join(self.output, "history"), 'a') as file:
+            file.write(f'{iiter:>10}\t{elapsed:>15.8e}\t{self.best_value:>15.8e}\t{curr_value:>15.8e}')
+            for i, par in enumerate(self.parameters):
+                file.write(f'\t{denorm_curr[i]:>15.8f}')
+            file.write('\n')
+
+
     def _progress_check(self, iiter, curr_value, curr_solution):
         """
         Check the optimizer progress
@@ -259,7 +328,7 @@ class Optimiser(ABC):
 
         Returns
         -------
-        True if any of the stoppign criteria are satisfied
+        True if any of the stopping criteria are satisfied
         """
         # Update new value to best value
         self.iiter = iiter
@@ -267,8 +336,9 @@ class Optimiser(ABC):
             self.best_value = curr_value
             self.best_solution = curr_solution
         if iiter > 0:
-            self.pbar.set_postfix_str('Loss: {0:6.4e}'.format(self.best_value))
-            self.pbar.update()
+            if self._verbose:
+                self.pbar.set_postfix_str('Loss: {0:6.4e}'.format(self.best_value))
+                self.pbar.update()
             # CHANGE TO BEST_HISTORY
             if curr_value < self.value_history[iiter-1]:
                 self.iters_no_improv = 0
@@ -282,11 +352,7 @@ class Optimiser(ABC):
         self.solution_history[iiter,:] = self.best_solution
         # Output progress
         if self.output:
-            with open('progress.{0}'.format(self.name), 'w') as file:
-                best_solution = [par.denormalise(self.best_solution[i]) 
-                                 for i, par in enumerate(self.parameters)]
-                file.write('Iteration: {0}\t Best Loss: {1}\t Best Parameters: {2}\n'\
-                        .format(iiter, self.best_value, best_solution))
+            self.__update_progress_files(iiter, curr_solution, curr_value)
         # Convergence criterion
         iter = False if self.n_iter is None else iiter > self.n_iter
         return iter or self.stop_criteria.check_criteria(curr_value, self.iters_no_improv,

@@ -72,6 +72,9 @@ setup(
     # Packages provided
     packages=find_packages(),
 
+    # Scripts provided
+    scripts=['bin/piglot'],
+
     install_requires=[
         'numpy',
         'tqdm',

@@ -27,6 +27,8 @@ def optimiser(name, *args, **kwargs):
     Optimiser
         Optimiser instance.
     """
+    if name not in piglot.optimisers.names():
+        raise NameError(f"Method {name} unknown! Check available methods.")
     if name == 'aoa':
         return piglot.optimisers.AOA(*args, **kwargs)
     if name == 'bayesian':
@@ -49,7 +51,7 @@ def optimiser(name, *args, **kwargs):
         return piglot.optimisers.SPSA_Adam(*args, **kwargs)
     if name == 'spsa':
         return piglot.optimisers.SPSA(*args, **kwargs)
-    raise NameError(f"Method {name} unknown! Check available methods.")
+    raise NameError(f"Internal error: loss function not implemented!")
 
 
 def loss(name, *args, **kwargs):
@@ -73,6 +75,8 @@ def loss(name, *args, **kwargs):
     Loss
         Loss instance.
     """
+    if name not in piglot.losses.names():
+        raise NameError(f"Loss {name} unknown! Check available losses.")
     if name == 'mse':
         return piglot.losses.MSE(*args, **kwargs)
     if name == 'lognmse':
@@ -91,4 +95,4 @@ def loss(name, *args, **kwargs):
         return piglot.losses.RMAE(*args, **kwargs)
     if name in ('rnmae', 'nrmae'):
         return piglot.losses.RNMAE(*args, **kwargs)
-    raise NameError(f"Loss {name} unknown! Check available losses.")
+    raise NameError(f"Internal error: loss function not implemented!")

@@ -83,7 +83,7 @@ class PRS_SPSA(Optimiser):
             # Exploitation phase
             self.local_optimiser._init_optimiser(n_iter_exploitation, self.parameters,
                                                  self.pbar, self.loss, local_stop_criteria,
-                                                 self.output)
+                                                 self.output, self._verbose)
             # Local optimisation
             self.local_optimiser.best_value = best_value
             self.local_optimiser.best_solution = best_solution

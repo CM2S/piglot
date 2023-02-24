@@ -1,0 +1,269 @@
+"""Driver script for piglot."""
+import os
+import time
+import argparse
+from yaml import safe_load, safe_dump
+from yaml.parser import ParserError
+import piglot.losses
+import piglot.optimisers
+from piglot.optimisers.optimiser import StoppingCriteria
+from piglot.links import LinksLoss
+from piglot.yaml_parser import parse_parameters, parse_case, parse_optimiser, str_to_numeric
+
+
+
+def default_output_dir():
+    """Return the default output directory name.
+
+    Returns
+    -------
+    str
+        Directory name
+    """
+    return time.strftime("piglot-%Y-%m-%d-%Hh%M")
+
+
+
+def parse_args():
+    """Parse command line arguments of the script.
+
+    Returns
+    -------
+    argparse.Namespace
+        Parsed arguments
+    """
+    # Global argument parser settings
+    parser = argparse.ArgumentParser(
+        prog='piglot',
+        description='Parameter identification toolbox',
+    )
+
+    # Argument groups
+    config_group = parser.add_argument_group(
+        title='Configuration file',
+        description='When using a configuration file, the following options are available'
+    )
+    command_group = parser.add_argument_group(
+        title='Command line arguments',
+        description='When using a commmand line arguments, the following options are available'
+    )
+
+    # Add arguments: configuration file group
+    config_group.add_argument(
+        'config',
+        default=None,
+        nargs='?',
+        type=argparse.FileType('r'),
+        help='Configuration file to use',
+    )
+
+    # Add arguments: command line group
+    command_group.add_argument(
+        '--input',
+        type=str,
+        help='Input file path for LINKS',
+    )
+    command_group.add_argument(
+        '--field',
+        nargs=2,
+        type=str,
+        help=("Output field to use for comparison. SOURCE must be either Reaction or OutFile. "
+              "For reactions, FIELD must be x, y or z. "
+              "For out files, FIELD must be the column name to use."
+              "For both cases, the load factor will be used as time."),
+        metavar=('SOURCE', 'FIELD')
+    )
+    command_group.add_argument(
+        '--reference',
+        type=str,
+        help=("Reference file. Must be a two-column file where the first is the load factor "
+              "and the second is the specified output field."),
+    )
+    command_group.add_argument(
+        '--optimiser',
+        choices=piglot.optimisers.names(),
+        help='Name of the optimiser to use',
+    )
+    command_group.add_argument(
+        '--iters', '--iter',
+        type=int,
+        help='Maximum number of iterations',
+    )
+    command_group.add_argument(
+        '--loss',
+        choices=piglot.losses.names(),
+        help='Name of the loss to use',
+    )
+    command_group.add_argument(
+        '--links',
+        default="LINKS",
+        type=str,
+        help='Path for LINKS binary',
+    )
+    command_group.add_argument(
+        '--conv_tol',
+        default=None,
+        type=float,
+        help='Loss convergence tolerance',
+    )
+    command_group.add_argument(
+        '--max_func_calls',
+        default=None,
+        type=int,
+        help='Maximum number of function calls',
+    )
+    command_group.add_argument(
+        '--max_iters_no_improv',
+        default=None,
+        type=int,
+        help='Maximum iterations without improvement',
+    )
+    command_group.add_argument(
+        '--output',
+        default=default_output_dir(),
+        type=str,
+        help='Directory to place output files',
+    )
+    command_group.add_argument(
+        '--tmp_dir',
+        default=None,
+        type=str,
+        help='Temporary directory to run analyses',
+    )
+    command_group.add_argument(
+        '--quiet',
+        action='store_true',
+        help='If given, no terminal output is produced',
+    )
+
+    return parser.parse_args()
+
+
+
+def parse_config_file(file):
+    """Parses the YAML configuration file.
+
+    Parameters
+    ----------
+    file : TextIOWrapper
+        Configuration file object.
+
+    Returns
+    -------
+    dict
+        Dictionary with the YAML data.
+
+    Raises
+    ------
+    Exception
+        When the YAML parsing fails.
+    """
+    try:
+        return safe_load(file)
+    except ParserError:
+        raise Exception("Failed to parse the configuration file: YAML syntax seems invalid.")
+
+
+
+def get_config_dict(args):
+    if args.config:
+        config = parse_config_file(args.config)
+        # Add missing optional items
+        if 'conv_tol' not in config:
+            config["conv_tol"] = None
+        if 'max_func_calls' not in config:
+            config["max_func_calls"] = None
+        if 'max_iters_no_improv' not in config:
+            config["max_iters_no_improv"] = None
+        if 'output' not in config:
+            config["output"] = default_output_dir()
+        if 'tmp_dir' not in config:
+            config["tmp_dir"] = None
+        if 'quiet' not in config:
+            config["quiet"] = False
+        if 'links' not in config:
+            config["links"] = "LINKS"
+        elif config['quiet']:
+            config["quiet"] = True
+    else:
+        # Check that required arguments have been passed
+        if args.loss is None:
+            raise Exception("Loss has not been passed")
+        if args.iters is None:
+            raise Exception("Number of iterations has not been passed")
+        if args.input is None:
+            raise Exception("Input file has not been passed")
+        if args.field is None:
+            raise Exception("Output fields have not been passed")
+        if args.reference is None:
+            raise Exception("Reference file has not been passed")
+        if args.optimiser is None:
+            raise Exception("Optimiser has not been passed")
+        # Build configuration dict
+        config = {
+            "links": args.links,
+            "iters": args.iters,
+            "conv_tol": args.conv_tol,
+            "max_func_calls": args.max_func_calls,
+            "max_iters_no_improv": args.max_iters_no_improv,
+            "optimiser": args.optimiser,
+            "output": args.output,
+            "tmp_dir": args.tmp_dir,
+            "quiet": args.quiet,
+            "cases": {
+                args.input: {
+                    "loss": args.loss,
+                    "fields": [
+                        {
+                            "type": args.field[0],
+                            "field": args.field[1],
+                            "reference": args.reference
+                        }
+                    ]
+                }
+            }
+        }
+    # Sanitise remaining fields
+    if config["tmp_dir"] is None:
+        config["tmp_dir"] = os.path.join(config["output"], "tmp")
+    if "parallel" not in config:
+        config["parallel"] = 1
+    if config["conv_tol"] is not None:
+        config["conv_tol"] = float(config["conv_tol"])
+    if config["max_func_calls"] is not None:
+        config["max_func_calls"] = int(config["max_func_calls"])
+    if config["max_iters_no_improv"] is not None:
+        config["max_iters_no_improv"] = int(config["max_iters_no_improv"])
+    return config
+
+
+
+def main():
+    args = parse_args()
+    config = get_config_dict(args)
+    # Build piglot problem
+    cases = [parse_case(file, case) for file, case in config["cases"].items()]
+    parameters = parse_parameters(config)
+    optimiser = parse_optimiser(config["optimiser"])
+    stop = StoppingCriteria(conv_tol=config["conv_tol"],
+                            max_func_calls=config["max_func_calls"],
+                            max_iters_no_improv=config["max_iters_no_improv"])
+    loss = LinksLoss(cases, parameters, config["links"],
+                     n_concurrent=int(config["parallel"]),
+                     tmp_dir=config["tmp_dir"])
+    # Final touches before starting
+    os.makedirs(config["output"], exist_ok=True)
+    with open(os.path.join(config["output"], "config"), 'w') as file:
+        safe_dump(config, file)
+    # Run the optimisation
+    _, best_params = optimiser.optimise(loss, config["iters"], parameters,
+                                        output=config["output"],
+                                        verbose=not config["quiet"],
+                                        stop_criteria=stop)
+    # Re-run the best case
+    loss.loss(parameters.normalise(best_params))
+
+
+
+if __name__ == '__main__':
+    main()
