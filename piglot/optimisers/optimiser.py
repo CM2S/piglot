@@ -300,6 +300,7 @@ class Optimiser(ABC):
         # Update progress file
         with open(os.path.join(self.output, "progress"), 'w') as file:
             file.write(f'Iteration: {iiter}\n')
+            file.write(f'Function calls: {self.loss.func_calls}\n')
             file.write(f'Best loss: {self.best_value}\n')
             file.write(f'Best parameters:\n')
             for i, par in enumerate(self.parameters):
