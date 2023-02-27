@@ -84,7 +84,7 @@ class SPSA(Optimiser):
         if self.A is None:
             self.A = n_iter / 20
         if self.a is None:
-            self.a = (self.A + 1)**self.alpha * 1e-2
+            self.a = 2 * (self.A + 1)**self.alpha
 
         x = init_shot
         new_value = func(x)
