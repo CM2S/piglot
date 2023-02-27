@@ -32,6 +32,8 @@ def pretty_time(elapsed_sec):
         if count > 0:
             time_str += str(int(elapsed_sec / factor)) + suffix
         elapsed_sec %= factor
+    if time_str == '':
+        time_str = f'{elapsed_sec:.5f}s'
     return time_str
 
 

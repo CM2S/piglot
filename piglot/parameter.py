@@ -1,4 +1,6 @@
 """Optimisation parameter module."""
+from hashlib import sha256
+import numpy as np
 
 
 class Parameter:
@@ -192,6 +194,26 @@ class ParameterSet:
         """
         vals = self.denormalise(values) if input_normalised else values
         return dict(zip([p.name for p in self.parameters], vals))
+
+    @staticmethod
+    def hash(values):
+        """Build the hash for the current parameter values.
+
+        Parameters
+        ----------
+        values : array
+            Parameters to hash
+
+        Returns
+        -------
+        str
+            Hex digest of the hash
+        """
+        hasher = sha256()
+        values = np.array(values)
+        for value in values:
+            hasher.update(value)
+        return hasher.hexdigest()
 
 
 class DualParameterSet(ParameterSet):

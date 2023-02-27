@@ -1,13 +1,16 @@
 """Module for losses associated with LINKS calls."""
 import os
 import re
+import time
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from multiprocessing.pool import ThreadPool as Pool
 import numpy as np
 import pandas as pd
+from yaml import safe_dump_all
 from piglot.parameter import ParameterSet
+from piglot.optimisers.optimiser import pretty_time
 
 
 def write_parameters(param_value, source, dest):
@@ -184,6 +187,21 @@ class OutputField(ABC):
             Path to the input file.
         """
 
+    @abstractmethod
+    def name(self, field_idx: int = None):
+        """Return the name of the current field.
+
+        Parameters
+        ----------
+        field_idx : int, optional
+            Index of the field to output, by default None
+
+        Returns
+        -------
+        str
+            Field name
+        """
+
     @classmethod
     def read(cls, input_file: str, *args, **kwargs):
         """Direct reading of the results of the given input file.
@@ -218,6 +236,7 @@ class Reaction(OutputField):
         """
         dim_dict = {'x': 1, 'y': 2, 'z': 3}
         self.dim = dim_dict[dim]
+        self.dim_name = dim
         self.group = group
 
     def check(self, input_file: str):
@@ -265,6 +284,21 @@ class Reaction(OutputField):
         reac_filename = os.path.join(output_dir, '{0}.reac'.format(casename))
         data = np.genfromtxt(reac_filename)
         return (data[data[:,0] == self.group, 1:])[:,[0, self.dim]]
+
+    def name(self, field_idx: int = None):
+        """Return the name of the current field.
+
+        Parameters
+        ----------
+        field_idx : int, optional
+            Index of the field to output, by default None
+
+        Returns
+        -------
+        str
+            Field name
+        """
+        return f"Reaction: {self.dim_name}"
 
 
 class OutFile(OutputField):
@@ -391,6 +425,24 @@ class OutFile(OutputField):
         # Return the given quantity as the x-variable
         return df.iloc[:,int_columns].to_numpy()
 
+    def name(self, field_idx: int = None):
+        """Return the name of the current field.
+
+        Parameters
+        ----------
+        field_idx : int, optional
+            Index of the field to output, by default None
+
+        Returns
+        -------
+        str
+            Field name
+        """
+        field = self.fields[field_idx if field_idx else 0]
+        if isinstance(field, str):
+            return f"OutFile: {field}"
+        return f"OutFile: column {field + 1}"
+
 
 class LinksCase:
     """Container with the required fields for each case to be run with Links."""
@@ -417,7 +469,7 @@ class LinksCase:
 class LinksLoss:
     """Main loss class for Links problems."""
 
-    def __init__(self, cases, parameters, links_bin, n_concurrent=1, tmp_dir='tmp'):
+    def __init__(self, cases, parameters, links_bin, n_concurrent=1, tmp_dir='tmp', output_dir=None):
         """Constructor for the Links_Loss class.
 
         Parameters
@@ -432,6 +484,8 @@ class LinksLoss:
             Number of concurrent calls to Links in the multi-objective case, by default 1.
         tmp_dir : str, optional
             Path to temporary directory to run the analyses, by default 'tmp'.
+        output_dir : str, optional
+            Path to the output directory, if not passed history storing is disabled.
         """
         self.cases = cases
         self.parameters = parameters
@@ -439,6 +493,29 @@ class LinksLoss:
         self.n_concurrent = n_concurrent
         self.tmp_dir = tmp_dir
         self.func_calls = 0
+        self.begin_time = time.time()
+        self.output_dir = output_dir
+        self.cases_dir = os.path.join(output_dir, "cases") if output_dir else None
+        self.cases_hist = os.path.join(output_dir, "cases_hist") if output_dir else None
+        self.func_calls_file = os.path.join(output_dir, "func_calls") if output_dir else None
+        if output_dir:
+            os.makedirs(self.cases_dir, exist_ok=True)
+            if os.path.isdir(self.cases_hist):
+                shutil.rmtree(self.cases_hist)
+            os.mkdir(self.cases_hist)
+            # Build headers for case files
+            for case in self.cases:
+                with open(os.path.join(self.cases_dir, case.filename), 'w') as file:
+                    file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}\t{"Loss":>15}\t{"Success":>10}')
+                    for param in self.parameters:
+                        file.write(f"\t{param.name:>15}")
+                    file.write(f'\t{"Hash":>64}\n')
+            # Build header for function calls file
+            with open(os.path.join(self.func_calls_file), 'w') as file:
+                file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}\t{"Loss":>15}')
+                for param in self.parameters:
+                    file.write(f"\t{param.name:>15}")
+                file.write(f'\t{"Hash":>64}\n')
 
 
     def _run_case(self, case: LinksCase):
@@ -460,11 +537,14 @@ class LinksLoss:
         case_name = get_case_name(input_file)
         write_parameters(self.parameters.to_dict(self.X), case.filename, input_file)
         # Run LINKS
-        subprocess.run([self.links_bin, input_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        begin_time = time.time()
+        subprocess.run([self.links_bin, input_file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        end_time = time.time()
         # Check if simulation completed
         screen_file = os.path.join(os.path.splitext(input_file)[0], '{0}.screen'.format(case_name))
         failed_case = not has_keyword(screen_file, "Program L I N K S successfully completed.")
         # Post-process results
+        responses = {}
         case_loss = 0.0
         for field, reference in case.fields.items():
             ref_x = reference[:,0]
@@ -479,10 +559,35 @@ class LinksLoss:
                 field_y = np.squeeze(field_data[:,1:])
                 if len(ref_y.shape) == 1:
                     case_loss += case.loss(ref_x, field_x, ref_y, field_y)
+                    responses[field.name()] = list(zip([float(a) for a  in field_x],
+                                                       [float(a) for a  in field_y]))
                 else:
                     for i in range(0, ref_y.shape[1]):
                         case_loss += case.loss(ref_x, field_x, ref_y[:,i], field_y[:,i])
-        return case_loss / len(case.fields)
+                        responses[field.name(i)] = list(zip([float(a) for a  in field_x],
+                                                            [float(a) for a  in field_y[:,i]]))
+        final_loss = case_loss / len(case.fields)
+        # Final touches on case history and file writing
+        if self.cases_hist:
+            cases_hist = {
+                "filename": case.filename,
+                "parameters": {p: float(v) for p, v in self.parameters.to_dict(self.X).items()},
+                "loss": float(final_loss),
+                "success": not failed_case,
+                "start_time": time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(begin_time)),
+                "run_time": pretty_time(end_time - begin_time),
+            }
+            with open(os.path.join(self.cases_hist, f'{case.filename}-{self.param_hash}'), 'w') as file:
+                safe_dump_all((cases_hist, responses), file)
+            with open(os.path.join(self.cases_dir, case.filename), 'a') as file:
+                file.write(f'{begin_time - self.begin_time:>15.8e}\t')
+                file.write(f'{end_time - begin_time:>15.8e}\t')
+                file.write(f'{final_loss:>15.8e}\t')
+                file.write(f'{not failed_case:>10}')
+                for i, param in enumerate(self.parameters):
+                    file.write(f"\t{param.denormalise(self.X[i]):>15.6f}")
+                file.write(f'\t{self.param_hash}\n')
+        return final_loss
 
 
     def loss(self, X):
@@ -505,11 +610,24 @@ class LinksLoss:
         self.func_calls += 1
         # Set current attribute vector
         self.X = X
+        self.param_hash = self.parameters.hash(self.X)
         # Run cases (in parallel if specified)
+        begin_time = time.time()
         if self.n_concurrent > 1:
             with Pool(self.n_concurrent) as pool:
                 losses = pool.map(self._run_case, self.cases)
         else:
             losses = map(self._run_case, self.cases)
-        # Compute and return total loss
-        return sum(losses) / len(self.cases)
+        end_time = time.time()
+        # Compute total loss
+        final_loss = sum(losses) / len(self.cases)
+        # Update function call history file
+        if self.output_dir:
+            with open(os.path.join(self.func_calls_file), 'a') as file:
+                file.write(f'{begin_time - self.begin_time:>15.8e}\t')
+                file.write(f'{end_time - begin_time:>15.8e}\t')
+                file.write(f'{final_loss:>15.8e}')
+                for i, param in enumerate(self.parameters):
+                    file.write(f"\t{param.denormalise(self.X[i]):>15.6f}")
+                file.write(f'\t{self.param_hash}\n')
+        return final_loss

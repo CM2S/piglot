@@ -250,7 +250,8 @@ def main():
                             max_iters_no_improv=config["max_iters_no_improv"])
     loss = LinksLoss(cases, parameters, config["links"],
                      n_concurrent=int(config["parallel"]),
-                     tmp_dir=config["tmp_dir"])
+                     tmp_dir=config["tmp_dir"],
+                     output_dir=config["output"])
     # Final touches before starting
     os.makedirs(config["output"], exist_ok=True)
     with open(os.path.join(config["output"], "config"), 'w') as file:
