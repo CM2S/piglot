@@ -630,4 +630,14 @@ class LinksLoss:
                 for i, param in enumerate(self.parameters):
                     file.write(f"\t{param.denormalise(self.X[i]):>15.6f}")
                 file.write(f'\t{self.param_hash}\n')
-        return final_loss
+        # Sanitise output: ensure loss is finite
+        if np.isfinite(final_loss):
+            return final_loss
+        # Otherwise, return the maximum (signed) loss value
+        max_loss = 0
+        for case in self.cases:
+            for reference in case.fields.values():
+                ref_x = reference[:,0]
+                ref_y = np.squeeze(reference[:,1:])
+                max_loss += case.loss.max_value(ref_x, ref_y)
+        return -max_loss if np.isneginf(final_loss) else max_loss
