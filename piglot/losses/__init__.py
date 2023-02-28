@@ -15,6 +15,7 @@ def names():
     """
     return [
         'mse',
+        'lognmse',
         'nmse',
         'rmse',
         'rnmse',
