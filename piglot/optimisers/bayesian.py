@@ -1,4 +1,5 @@
 """Bayesian optimiser module."""
+import numpy as np
 try:
     from bayes_opt import BayesianOptimization
     from bayes_opt.util import UtilityFunction
@@ -13,7 +14,7 @@ from piglot.optimisers.optimiser import Optimiser
 class BayesianOptimizationMod(BayesianOptimization):
 
     def maximize(self, optimiser, init_points=5, n_iter=25, acq='ucb', kappa=2.576,
-                 kappa_decay=1, kappa_decay_delay=0, xi=0.0, **gp_params):
+                 kappa_decay=1, kappa_decay_delay=0, xi=0.0, log_space=False, **gp_params):
         """
         Probes the target space to find the parameters that yield the maximum
         value for the given function.
@@ -42,11 +43,15 @@ class BayesianOptimizationMod(BayesianOptimization):
             to `kappa`.
         xi: float, optional(default=0.0)
             [unused]
+        log_space : bool
+            Whether to optimise the loss in a log space (requires non-negative losses)
         """
         self._prime_subscriptions()
         self.dispatch(Events.OPTIMIZATION_START)
         self._prime_queue(init_points)
         self.set_gp_params(**gp_params)
+
+        loss_transformer = lambda loss: np.exp(-loss) if log_space else -loss
 
         util = UtilityFunction(kind=acq,
                                kappa=kappa,
@@ -63,15 +68,15 @@ class BayesianOptimizationMod(BayesianOptimization):
                 iteration += 1
 
             if iteration == 0 and self._queue.empty:
-                best_value = self.max["target"]
+                best_value = loss_transformer(self.max["target"])
                 best_solution = list(self.max["params"].values())
-                if optimiser._progress_check(iteration, -best_value, best_solution):
+                if optimiser._progress_check(iteration, best_value, best_solution):
                     break
 
             if (iteration != 0 and iteration <= len(self.res)):
                 solution = self.res[iteration]
                 current_value = solution.get('params').values()
-                if optimiser._progress_check(iteration, -solution.get('target'),
+                if optimiser._progress_check(iteration, loss_transformer(solution.get('target')),
                                              list(current_value)):
                     break
             self.probe(x_probe, lazy=False)
@@ -133,7 +138,7 @@ class Bayesian(Optimiser):
 
     def __init__(self, random_state=None, verbose=0, bounds_transformer=None,
                  init_points=5, acq='ucb', kappa=2.576, kappa_decay=1,
-                 kappa_decay_delay=0, xi=0.0, **gp_params):
+                 kappa_decay_delay=0, xi=0.0, log_space=False, **gp_params):
         """
         Constructs all the necessary attributes for the Bayesian optimiser
 
@@ -169,6 +174,8 @@ class Bayesian(Optimiser):
             to `kappa` (default = 0).
         xi : float
             [unused] (default = 0.0)
+        log_space : bool
+            Whether to optimise the loss in a log space (requires non-negative losses)
         **gp_params : arbitrary keyword arguments
             Set parameters to the internal Gaussian Process Regressor.
 
@@ -185,6 +192,7 @@ class Bayesian(Optimiser):
         self.kappa_decay_delay = kappa_decay_delay
         self.xi = xi
         self.gp_params = gp_params
+        self.log_space = log_space
         self.name = 'BO'
 
     def _optimise(self, func, n_dim, n_iter, bound, init_shot):
@@ -212,8 +220,9 @@ class Bayesian(Optimiser):
         """
         # Convert the optimization problem to a minimization problem by negating the
         # optimization function
+        loss_transformer = lambda loss: np.log(loss) if self.log_space else loss
         def negate(**kwargs):
-            return -func(list(kwargs.values()))
+            return -loss_transformer(func(list(kwargs.values())))
         # Convert the bounds in array type to dicitionary type, as required in the
         # BayesianOptimization documentation
         bound = tuple(map(tuple, bound))
@@ -224,7 +233,7 @@ class Bayesian(Optimiser):
                                         self.verbose, self.bounds_transformer)
         model.probe(init_shot)
         model.maximize(self, self.init_points, n_iter, self.acq, self.kappa,
-                       self.kappa_decay, self.kappa_decay_delay, self.xi,
+                       self.kappa_decay, self.kappa_decay_delay, self.xi, self.log_space,
                        **self.gp_params)
         # Best solution
         x = model.max.get('params').values()
