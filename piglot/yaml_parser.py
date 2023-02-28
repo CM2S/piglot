@@ -129,7 +129,7 @@ def parse_parameters(config):
         params_conf = config["parameters"]
         parameters = ParameterSet()
         for name, spec in params_conf.items():
-            int_spec = [int(s) for s in spec]
+            int_spec = [float(s) for s in spec]
             parameters.add(name, *int_spec)
     else:
         if len(config["cases"]) != 1:
