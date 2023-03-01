@@ -13,6 +13,8 @@ def optional_dict(d, field, default, conv):
 
 
 def str_to_numeric(data):
+    if isinstance(data, list):
+        return [str_to_numeric(a) for a in data]
     try:
         data = float(data)
     except ValueError:

@@ -1,91 +1,16 @@
 """Bayesian optimiser module."""
 import numpy as np
+import warnings
+from multiprocessing.pool import ThreadPool as Pool
 try:
     from bayes_opt import BayesianOptimization
     from bayes_opt.util import UtilityFunction
-    from bayes_opt.event import Events
 except ImportError:
     # Show a nice exception when this package is used
     from piglot.optimisers.optimiser import missing_method
     BayesianOptimization = missing_method("Bayesian optimisation", "bayes_opt")
 from piglot.optimisers.optimiser import Optimiser
 
-
-class BayesianOptimizationMod(BayesianOptimization):
-
-    def maximize(self, optimiser, init_points=5, n_iter=25, acq='ucb', kappa=2.576,
-                 kappa_decay=1, kappa_decay_delay=0, xi=0.0, log_space=False, **gp_params):
-        """
-        Probes the target space to find the parameters that yield the maximum
-        value for the given function.
-        Parameters
-        ----------
-        init_points : int, optional(default=5)
-            Number of iterations before the explorations starts the exploration
-            for the maximum.
-        n_iter: int, optional(default=25)
-            Number of iterations where the method attempts to find the maximum
-            value.
-        acq: {'ucb', 'ei', 'poi'}
-            The acquisition method used.
-                * 'ucb' stands for the Upper Confidence Bounds method
-                * 'ei' is the Expected Improvement method
-                * 'poi' is the Probability Of Improvement criterion.
-        kappa: float, optional(default=2.576)
-            Parameter to indicate how closed are the next parameters sampled.
-                Higher value = favors spaces that are least explored.
-                Lower value = favors spaces where the regression function is the
-                highest.
-        kappa_decay: float, optional(default=1)
-            `kappa` is multiplied by this factor every iteration.
-        kappa_decay_delay: int, optional(default=0)
-            Number of iterations that must have passed before applying the decay
-            to `kappa`.
-        xi: float, optional(default=0.0)
-            [unused]
-        log_space : bool
-            Whether to optimise the loss in a log space (requires non-negative losses)
-        """
-        self._prime_subscriptions()
-        self.dispatch(Events.OPTIMIZATION_START)
-        self._prime_queue(init_points)
-        self.set_gp_params(**gp_params)
-
-        loss_transformer = lambda loss: np.exp(-loss) if log_space else -loss
-
-        util = UtilityFunction(kind=acq,
-                               kappa=kappa,
-                               xi=xi,
-                               kappa_decay=kappa_decay,
-                               kappa_decay_delay=kappa_decay_delay)
-        iteration = 0
-        while not self._queue.empty or iteration < n_iter:
-            try:
-                x_probe = next(self._queue)
-            except StopIteration:
-                util.update_params()
-                x_probe = self.suggest(util)
-                iteration += 1
-
-            if iteration == 0 and self._queue.empty:
-                best_value = loss_transformer(self.max["target"])
-                best_solution = list(self.max["params"].values())
-                if optimiser._progress_check(iteration, best_value, best_solution):
-                    break
-
-            if (iteration != 0 and iteration <= len(self.res)):
-                solution = self.res[iteration]
-                current_value = solution.get('params').values()
-                if optimiser._progress_check(iteration, loss_transformer(solution.get('target')),
-                                             list(current_value)):
-                    break
-            self.probe(x_probe, lazy=False)
-
-            if self._bounds_transformer:
-                self.set_bounds(
-                    self._bounds_transformer.transform(self._space))
-
-        self.dispatch(Events.OPTIMIZATION_END)
 
 
 class Bayesian(Optimiser):
@@ -136,8 +61,8 @@ class Bayesian(Optimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, random_state=None, verbose=0, bounds_transformer=None,
-                 init_points=5, acq='ucb', kappa=2.576, kappa_decay=1,
+    def __init__(self, random_state=1, verbose=0, bounds_transformer=None,
+                 init_points=5, acq='ucb', kappas=[2.576], kappa_decay=1,
                  kappa_decay_delay=0, xi=0.0, log_space=False, **gp_params):
         """
         Constructs all the necessary attributes for the Bayesian optimiser
@@ -187,7 +112,7 @@ class Bayesian(Optimiser):
         self.bounds_transformer = bounds_transformer
         self.init_points = init_points
         self.acq = acq
-        self.kappa = kappa
+        self.kappas = kappas
         self.kappa_decay = kappa_decay
         self.kappa_decay_delay = kappa_decay_delay
         self.xi = xi
@@ -220,21 +145,37 @@ class Bayesian(Optimiser):
         """
         # Convert the optimization problem to a minimization problem by negating the
         # optimization function
-        loss_transformer = lambda loss: np.log(loss) if self.log_space else loss
-        def negate(**kwargs):
-            return -loss_transformer(func(list(kwargs.values())))
+        loss_transformer = lambda loss: -np.log(-loss) if self.log_space else loss
+        def negate(x):
+            return -func(x, unique=True)
         # Convert the bounds in array type to dicitionary type, as required in the
         # BayesianOptimization documentation
         bound = tuple(map(tuple, bound))
         patterns = [par.name for par in self.parameters]
         pbounds = dict(zip(patterns, bound))
         # Run optimization problem
-        model = BayesianOptimizationMod(negate, pbounds, self.random_state,
-                                        self.verbose, self.bounds_transformer)
-        model.probe(init_shot)
-        model.maximize(self, self.init_points, n_iter, self.acq, self.kappa,
-                       self.kappa_decay, self.kappa_decay_delay, self.xi, self.log_space,
-                       **self.gp_params)
+        optimiser = BayesianOptimization(None, pbounds, self.random_state,
+                                         self.verbose, self.bounds_transformer)
+        utilities = [UtilityFunction(kind=self.acq, kappa=kappa, xi=self.xi, kappa_decay_delay=self.kappa_decay_delay) for kappa in self.kappas]
+        optimiser.set_gp_params(**self.gp_params)
+        optimiser.probe(init_shot)
+        pool = Pool(len(utilities))
+        for iiter in range(n_iter):
+            # utility = utilities[iiter % len(utilities)]
+            # utility.update_params()
+            # next_points = [optimiser.suggest(utility)]
+            for utility in utilities:
+                utility.update_params()
+            next_points = [optimiser.suggest(utility) for utility in utilities]
+            x = [list(next_point.values()) for next_point in next_points]
+            targets = pool.map(negate, x)
+            min_target = 0
+            for i, next_point in enumerate(next_points):
+                optimiser.register(next_point, loss_transformer(targets[i]))
+                if targets[i] == min(targets):
+                    min_target = i
+            if self._progress_check(iiter, -targets[min_target], x[min_target]):
+                break
         # Best solution
-        x = model.max.get('params').values()
-        return list(x), model.max.get('target')
+        x = optimiser.max.get('params').values()
+        return list(x), -optimiser.max.get('target')
