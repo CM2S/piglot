@@ -175,8 +175,6 @@ def get_config_dict(args):
             config["max_func_calls"] = None
         if 'max_iters_no_improv' not in config:
             config["max_iters_no_improv"] = None
-        if 'output' not in config:
-            config["output"] = default_output_dir()
         if 'tmp_dir' not in config:
             config["tmp_dir"] = None
         if 'quiet' not in config:

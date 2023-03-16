@@ -1,0 +1,167 @@
+"""Driving script for piglot's plotting utilities."""
+import os
+import time
+import argparse
+from yaml import safe_load
+from yaml.parser import ParserError
+import pandas as pd
+import matplotlib.pyplot as plt
+from piglot.yaml_parser import parse_case
+from piglot.plotter import CaseData, plot_case_data, plot_reference_data, CurrentPlot
+
+
+def parse_config_file(file):
+    """Parses the YAML configuration file.
+
+    Parameters
+    ----------
+    file : TextIOWrapper
+        Configuration file object.
+
+    Returns
+    -------
+    dict
+        Dictionary with the YAML data.
+
+    Raises
+    ------
+    Exception
+        When the YAML parsing fails.
+    """
+    try:
+        return safe_load(file)
+    except ParserError:
+        raise Exception("Failed to parse the configuration file: YAML syntax seems invalid.")
+
+
+def plot_case(args):
+    """Driver for single-case plotting.
+
+    Parameters
+    ----------
+    args : dict
+        Passed arguments.
+    """
+    case = CaseData(args.case_file)
+    fig, axes_dict = plot_case_data(case)
+    if args.config:
+        plot_reference_data(case, parse_config_file(args.config), fig, axes_dict)
+    plt.show()
+
+
+def plot_current(args):
+    """Driver for plotting the currently running case.
+
+    Parameters
+    ----------
+    args : dict
+        Passed arguments.
+    """
+    plt.ion()
+    config = parse_config_file(args.config)
+    plots = [CurrentPlot(parse_case(name, case), config) for name, case in config["cases"].items()]
+    while True:
+        for plot in plots:
+            plot.update()
+        time.sleep(args.rate)
+
+
+def plot_best(args):
+    """Driver for plotting the best function call so far.
+
+    Parameters
+    ----------
+    args : dict
+        Passed arguments.
+    """
+    config = parse_config_file(args.config)
+    func_calls_file = os.path.join(config["output"], "func_calls")
+    df = pd.read_table(func_calls_file)
+    df.columns = df.columns.str.strip()
+    min_series = df.iloc[df["Loss"].idxmin()]
+    call_hash = min_series["Hash"]
+    print("Best run:")
+    print(min_series)
+    for case in config["cases"].keys():
+        case_file = os.path.join(config["output"], "cases_hist", f"{case}-{call_hash}")
+        case_data = CaseData(case_file)
+        fig, axes_dict = plot_case_data(case_data, case)
+        plot_reference_data(case_data, config, fig, axes_dict)
+    plt.show()
+
+
+
+
+def main():
+    """Entry point for this script."""
+    # Global argument parser settings
+    parser = argparse.ArgumentParser(
+        prog='piglot-plot',
+        description='Plotting utility for piglot',
+    )
+    subparsers = parser.add_subparsers(
+        title='Available modes',
+        description=("To get additional information for a given command and available "
+                     "options, run piglot-plot command --help"),
+    )
+
+    # Standard plotting methods
+    sp_case = subparsers.add_parser(
+        'case',
+        help='plot a single case file',
+        description='Plot a single case file.',
+    )
+    sp_case.add_argument(
+        'case_file',
+        type=str,
+        help="Path for the case file to plot.",
+    )
+    sp_case.add_argument(
+        '--config',
+        default=None,
+        type=argparse.FileType('r'),
+        help=("Path for the used or generated configuration file. "
+              "Useful for plotting the references for each field alongside the response."),
+    )
+    sp_case.set_defaults(func=plot_case)
+
+    # Plotting current run
+    sp_current = subparsers.add_parser(
+        'current',
+        help='plot the currently running function call',
+        description=("Plot the currently running function call. This must be executed in "
+                     "the same path as the running piglot instance."),
+    )
+    sp_current.add_argument(
+        'config',
+        type=argparse.FileType('r'),
+        help="Path for the used or generated configuration file.",
+    )
+    sp_current.add_argument(
+        '--rate',
+        default=1.0,
+        type=float,
+        help='Plot update rate, in seconds (defaults to 1.0).',
+    )
+    sp_current.set_defaults(func=plot_current)
+
+    # Plotting best run so far
+    sp_best = subparsers.add_parser(
+        'best',
+        help='plot the best response so far',
+        description=("Plot the best response so far. This must be executed in "
+                     "the same path as the running piglot instance."),
+    )
+    sp_best.add_argument(
+        'config',
+        type=argparse.FileType('r'),
+        help="Path for the used or generated configuration file.",
+    )
+    sp_best.set_defaults(func=plot_best)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == '__main__':
+    main()

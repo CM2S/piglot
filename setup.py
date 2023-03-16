@@ -73,7 +73,10 @@ setup(
     packages=find_packages(),
 
     # Scripts provided
-    scripts=['bin/piglot'],
+    scripts=[
+        'bin/piglot',
+        'bin/piglot-plot',
+    ],
 
     install_requires=[
         'numpy',
