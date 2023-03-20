@@ -35,6 +35,8 @@ def optimiser(name, *args, **kwargs):
         return piglot.optimisers.Bayesian(*args, **kwargs)
     if name == 'bayes_skopt':
         return piglot.optimisers.BayesSkopt(*args, **kwargs)
+    if name == 'botorch':
+        return piglot.optimisers.BayesianBoTorch(*args, **kwargs)
     if name == 'direct':
         return piglot.optimisers.DIRECT(*args, **kwargs)
     if name == 'ga':

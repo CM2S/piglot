@@ -88,7 +88,8 @@ setup(
     extras_require={'lipo': ['lipo'],
                     'bayesian': ['bayes_opt'],
                     'bayes_sk': ['bask'],
+                    'botorch' : ['botorch'],
                     'genetic': ['geneticalgorithm'],
                     'pso': ['pyswarms'],
-                    'full': ['lipo', 'bask', 'geneticalgorithm', 'pyswarms']},
+                    'full': ['lipo', 'bask', 'geneticalgorithm', 'pyswarms', 'botorch']},
     )
