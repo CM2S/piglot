@@ -4,9 +4,10 @@ import time
 import argparse
 from yaml import safe_load
 from yaml.parser import ParserError
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from piglot.yaml_parser import parse_case
+from piglot.yaml_parser import parse_case, parse_parameters
 from piglot.plotter import CaseData, plot_case_data, plot_reference_data, CurrentPlot
 
 
@@ -90,6 +91,26 @@ def plot_best(args):
     plt.show()
 
 
+def dump_run(args):
+    """Dump the normalised parameter history to a file.
+
+    Parameters
+    ----------
+    args : dict
+        Passed arguments.
+    """
+    config = parse_config_file(args.config)
+    parameters = parse_parameters(config)
+    func_calls_file = os.path.join(config["output"], "func_calls")
+    df = pd.read_table(func_calls_file)
+    df.columns = df.columns.str.strip()
+    out_df = df.iloc[:,3:-1]
+    out_df = out_df.apply(lambda x: parameters.normalise(x), axis=1, result_type='expand')
+    out_df["Loss"] = df["Loss"]
+    np.savetxt(args.name, out_df.to_numpy())
+    if not args.quiet:
+        print(f"Saved parameter history to {args.name}")
+
 
 
 def main():
@@ -158,6 +179,30 @@ def main():
         help="Path for the used or generated configuration file.",
     )
     sp_best.set_defaults(func=plot_best)
+
+    # Dumping the parameter history
+    sp_dump = subparsers.add_parser(
+        'dump',
+        help='dump the internal parameter history to a file',
+        description=("Dump the internal parameter history to a file. This must be "
+                     "executed in the same path as the running piglot instance."),
+    )
+    sp_dump.add_argument(
+        'config',
+        type=argparse.FileType('r'),
+        help="Path for the used or generated configuration file.",
+    )
+    sp_dump.add_argument(
+        'name',
+        type=str,
+        help="Output file.",
+    )
+    sp_dump.add_argument(
+        '--quiet',
+        action='store_true',
+        help="Output file.",
+    )
+    sp_dump.set_defaults(func=dump_run)
 
     args = parser.parse_args()
     args.func(args)
