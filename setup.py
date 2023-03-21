@@ -82,6 +82,7 @@ setup(
         'numpy',
         'tqdm',
         'pandas',
+        'sympy',
         'scipy>=1.6,<1.8'
     ],
 

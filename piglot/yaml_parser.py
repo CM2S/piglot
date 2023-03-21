@@ -1,8 +1,9 @@
 import os
 import numpy as np
+import sympy
 import piglot
 from piglot.losses import MixedLoss
-from piglot.parameter import ParameterSet
+from piglot.parameter import ParameterSet, DualParameterSet
 from piglot.links import LinksCase, Reaction, OutFile, extract_parameters
 
 
@@ -127,10 +128,14 @@ def parse_case(file, case):
 def parse_parameters(config):
     if "parameters" in config:
         params_conf = config["parameters"]
-        parameters = ParameterSet()
+        parameters = DualParameterSet() if "output_parameters" in config else ParameterSet()
         for name, spec in params_conf.items():
             int_spec = [float(s) for s in spec]
             parameters.add(name, *int_spec)
+        if "output_parameters" in config:
+            symbs = sympy.symbols(list(params_conf.keys()))
+            for name, spec in config["output_parameters"].items():
+                parameters.add_output(name, sympy.lambdify(symbs, spec))
     else:
         if len(config["cases"]) != 1:
             raise Exception("Cannot find a suitable input file to extract parameters from!")
