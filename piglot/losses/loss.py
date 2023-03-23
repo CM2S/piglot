@@ -147,24 +147,6 @@ class Weightings(Modifier):
 class Slope(Modifier):
     """Compute the slope of the reference and prediction fields."""
 
-    def __init__(self, n_points=50, interp_kind='linear', fill_value=0.0):
-        """Constructor for Slope class.
-
-        Parameters
-        ----------
-        n_points : int, optional
-            Number of points for slope computation, by default 50
-        interp_kind : str, optional
-            Interpolation to use for slope computation, by default 'linear'.
-            Refer to `scipy.interpolate.interp1d` documentation for details.
-        fill_value : float, optional
-            Value to use outside the bounds, by default 0.0.
-            Refer to `scipy.interpolate.interp1d` documentation for details.
-        """
-        self.n_points = n_points
-        self.interp_kind = interp_kind
-        self.fill_value = fill_value
-
     def modify(self, x, reference, prediction):
         """Modify both reference and prediction fields.
 
@@ -177,22 +159,17 @@ class Slope(Modifier):
         prediction : array
             Predicted response
         """
-        func_ref = interp1d(x, reference, kind=self.interp_kind, bounds_error=False, fill_value=self.fill_value)
-        func_pre = interp1d(x, prediction, kind=self.interp_kind, bounds_error=False, fill_value=self.fill_value)
-        num_points = min(len(reference), self.n_points)
-        new_x = np.linspace(np.min(x), np.max(x), num_points)
-        vals_ref = func_ref(new_x)
-        vals_pred = func_pre(new_x)
-        delta_x = new_x[1:] - new_x[:-1]
-        slope_ref = (vals_ref[1:]-vals_ref[:-1]) / delta_x
-        slope_pred = (vals_pred[1:]-vals_pred[:-1]) / delta_x
+        delta_x = x[1:] - x[:-1]
+        new_x = (x[1:] + x[:-1]) / 2
+        slope_ref = (reference[1:] - reference[:-1]) / delta_x
+        slope_pred = (prediction[1:] - prediction[:-1]) / delta_x
         return new_x, slope_ref, slope_pred
 
 
 class Loss(ABC):
     """Abstract generic loss function."""
 
-    def __init__(self, modifiers=[], filters=[], fill_value=0.0, interp_kind='linear'):
+    def __init__(self, modifiers=[], filters=[], interp_kind='linear'):
         """Constructor for Loss class.
 
         Parameters
@@ -201,16 +178,12 @@ class Loss(ABC):
             List of loss modifiers, by default []
         filters : list[Filter], optional
             List of loss filters, by default []
-        fill_value : float, optional
-            Fill value for interpolation, by default 0.0.
-            Refer to `scipy.interpolate.interp1d` documentation for details.
         interp_kind : str, optional
             Interpolation to use for slope computation, by default 'linear'.
             Refer to `scipy.interpolate.interp1d` documentation for details.
         """
         self.modifiers = modifiers
         self.filters = filters
-        self.fill_value = fill_value
         self.interp_kind = interp_kind
 
     @abstractmethod
@@ -309,12 +282,20 @@ class Loss(ABC):
         # Interpolate prediction grid on the reference grid
         x = x_ref
         ref = y_ref
-        func = interp1d(x_pred, y_pred, kind=self.interp_kind, bounds_error=False, fill_value=self.fill_value)
+        func = interp1d(x_pred, y_pred, kind=self.interp_kind, bounds_error=False,
+                        fill_value='extrapolate')
         pred = func(x_ref)
         # Filters and modifiers
         x, ref, pred = self._apply_filters_modifiers(x, ref, pred)
         # Compute the derived loss
-        return self._compute(x, ref, pred)
+        loss = self._compute(x, ref, pred)
+        # Penalty if the predicted response is shorter than the reference one
+        len_ref = np.max(x) - np.min(x)
+        len_pred = np.max(x_pred) - np.min(x_pred)
+        if len_pred < len_ref:
+            factor = float(len_ref - len_pred) / len_ref
+            loss += factor * self.max_value(x_ref, y_ref)
+        return loss
 
     def max_value(self, x_ref, y_ref):
         """Returns the possible max value for this loss.
