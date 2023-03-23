@@ -4,6 +4,7 @@ import time
 import argparse
 from yaml import safe_load, safe_dump
 from yaml.parser import ParserError
+from yaml.scanner import ScannerError
 import piglot.losses
 import piglot.optimisers
 from piglot.optimisers.optimiser import StoppingCriteria
@@ -160,7 +161,7 @@ def parse_config_file(file):
     """
     try:
         return safe_load(file)
-    except ParserError:
+    except (ParserError, ScannerError):
         raise Exception("Failed to parse the configuration file: YAML syntax seems invalid.")
 
 

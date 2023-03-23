@@ -2,7 +2,7 @@ import os
 import numpy as np
 import sympy
 import piglot
-from piglot.losses import MixedLoss
+from piglot.losses import MixedLoss, Range, Minimum, Maximum, Slope, Weightings
 from piglot.parameter import ParameterSet, DualParameterSet
 from piglot.links import LinksCase, Reaction, OutFile, extract_parameters
 
@@ -24,6 +24,49 @@ def str_to_numeric(data):
 
 
 
+def parse_loss_filter(file, filt_data):
+    # Parse the simple specification
+    if isinstance(filt_data, str):
+        name = filt_data
+        kwargs = {}
+    else:
+        # Normal specification
+        if not isinstance(filt_data, dict):
+            raise Exception(f"Failed to parse the loss filter for case {file}")
+        if not 'name' in filt_data:
+            raise Exception(f"Loss filter name not found for file {file}")
+        name = filt_data.pop("name")
+        kwargs = {args: str_to_numeric(data) for args, data in filt_data.items()}
+    # Known filters
+    filters = {"range": Range, "minimum": Minimum, "maximum": Maximum}
+    if name not in filters:
+        raise Exception(f"Unknown loss filter name for file {file}")
+    return filters[name](**kwargs)
+        
+
+
+def parse_loss_modifier(file, mod_data):
+    # Parse the simple specification
+    if isinstance(mod_data, str):
+        name = mod_data
+        kwargs = {}
+    else:
+        # Normal specification
+        if not isinstance(mod_data, dict):
+            raise Exception(f"Failed to parse the loss modifier for case {file}")
+        if not 'name' in mod_data:
+            raise Exception(f"Loss modifier name not found for file {file}")
+        name = mod_data.pop("name")
+        kwargs = {args: str_to_numeric(data) for args, data in mod_data.items()}
+    # Known modifiers
+    modifiers = {"slope": Slope}
+    # TODO: weightings require more work
+    if name not in modifiers:
+        raise Exception(f"Unknown loss modifier name for file {file}")
+    return modifiers[name](**kwargs)
+
+
+
 def parse_loss(file, loss_data):
     # Parse the simple specification: only the loss name is given
     if isinstance(loss_data, str):
@@ -37,17 +80,33 @@ def parse_loss(file, loss_data):
     name = loss_data.pop("name")
     # Particular case for mixed losses
     if name == "mixed":
-        loss = MixedLoss()
-        # TODO: build the mixed loss
-        return loss
+        mixed_loss = MixedLoss()
+        if "losses" not in loss_data:
+            raise Exception(f"Missing losses field in mixed loss of file {file}")
+        # Recursively parse nested losses
+        losses = loss_data.pop("losses")
+        for loss in losses:
+            # Extract mixture ratio
+            ratio = 1.0 / len(losses)
+            if isinstance(loss, dict) and "ratio" in loss:
+                ratio = float(loss.pop("ratio"))
+            mixed_loss.add_loss(parse_loss(file, loss), ratio)
+        return mixed_loss
     # Extract filters and modifiers from the fields
     filters = []
+    modifiers = []
     if "filters" in loss_data:
         filt_data = loss_data.pop("filters")
-    modifiers = []
+        if isinstance(filt_data, str):
+            filters = [parse_loss_filter(file, filt_data)]
+        else:
+            filters = [parse_loss_filter(file, data) for data in filt_data]
     if "modifiers" in loss_data:
         mod_data = loss_data.pop("modifiers")
-    # TODO: manually parse filters and modifiers
+        if isinstance(mod_data, str):
+            modifiers = [parse_loss_modifier(file, mod_data)]
+        else:
+            modifiers = [parse_loss_modifier(file, data) for data in mod_data]
     return piglot.loss(name, filters=filters, modifiers=modifiers, **loss_data)
 
 
