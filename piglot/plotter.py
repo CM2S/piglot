@@ -49,7 +49,7 @@ class CaseData:
         self.parameters = info["parameters"]
         self.run_time = info["run_time"]
         self.start_time = info["start_time"]
-        self.success = info["success"] == "true"
+        self.success = int(info["success"]) > 0
         self.fields = {name: Response(data) for name, data in fields.items()}
 
 
@@ -74,6 +74,8 @@ def plot_case_data(case: CaseData, title=None):
         If there are no fields to load
     """
     n_fields = len(case.fields)
+    if not case.success:
+        raise Exception("This case failed, there are no fields to plot.")
     if n_fields == 0:
         raise Exception("No fields to output have been found. Check if simulation completed.")
     n_cols = min(max(1, n_fields), 2)
