@@ -11,6 +11,7 @@ import pandas as pd
 from yaml import safe_dump_all
 from piglot.parameter import ParameterSet
 from piglot.optimisers.optimiser import pretty_time
+from piglot.losses.loss import Loss, ScalarLoss, VectorLoss
 
 
 def write_parameters(param_value, source, dest):
@@ -447,7 +448,7 @@ class OutFile(OutputField):
 class LinksCase:
     """Container with the required fields for each case to be run with Links."""
 
-    def __init__(self, filename, fields: dict, loss):
+    def __init__(self, filename, fields: dict, loss: Loss):
         """Constructor for the container.
 
         Parameters
@@ -498,6 +499,8 @@ class LinksLoss:
         self.cases_dir = os.path.join(output_dir, "cases") if output_dir else None
         self.cases_hist = os.path.join(output_dir, "cases_hist") if output_dir else None
         self.func_calls_file = os.path.join(output_dir, "func_calls") if output_dir else None
+        # Sanitise loss types
+        self.base_loss = VectorLoss() if any([isinstance(case.loss, VectorLoss) for case in cases]) else ScalarLoss()
         if output_dir:
             os.makedirs(self.cases_dir, exist_ok=True)
             if os.path.isdir(self.cases_hist):
@@ -545,34 +548,34 @@ class LinksLoss:
         failed_case = not has_keyword(screen_file, "Program L I N K S successfully completed.")
         # Post-process results
         responses = {}
-        case_loss = 0.0
+        case_loss = case.loss.zero()
         for field, reference in case.fields.items():
             ref_x = reference[:,0]
             ref_y = np.squeeze(reference[:,1:])
             # If the case failed, return the maximum possible loss value
             if failed_case:
-                case_loss += case.loss.max_value(ref_x, ref_y)
+                case_loss = case.loss.sum(case.loss.max_value(ref_x, ref_y), case_loss)
             else:
                 # Compute loss for this case: check if single or multiple dimensions on y
                 field_data = field.get(input_file)
                 field_x = field_data[:,0]
                 field_y = np.squeeze(field_data[:,1:])
                 if len(ref_y.shape) == 1:
-                    case_loss += case.loss(ref_x, field_x, ref_y, field_y)
+                    case_loss = case.loss.sum(case.loss(ref_x, field_x, ref_y, field_y), case_loss)
                     responses[field.name()] = list(zip([float(a) for a  in field_x],
                                                        [float(a) for a  in field_y]))
                 else:
                     for i in range(0, ref_y.shape[1]):
-                        case_loss += case.loss(ref_x, field_x, ref_y[:,i], field_y[:,i])
+                        case_loss = case.loss.sum(case.loss(ref_x, field_x, ref_y[:,i], field_y[:,i]), case_loss)
                         responses[field.name(i)] = list(zip([float(a) for a  in field_x],
                                                             [float(a) for a  in field_y[:,i]]))
-        final_loss = case_loss / len(case.fields)
+        final_loss = case.loss.scale(case_loss, 1.0 / len(case.fields))
         # Final touches on case history and file writing
         if self.cases_hist:
             cases_hist = {
                 "filename": case.filename,
                 "parameters": {p: float(v) for p, v in self.parameters.to_dict(self.X).items()},
-                "loss": float(final_loss),
+                "loss": float(case.loss.reduce(final_loss)),
                 "success": not failed_case,
                 "start_time": time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(begin_time)),
                 "run_time": pretty_time(end_time - begin_time),
@@ -582,7 +585,7 @@ class LinksLoss:
             with open(os.path.join(self.cases_dir, case.filename), 'a') as file:
                 file.write(f'{begin_time - self.begin_time:>15.8e}\t')
                 file.write(f'{end_time - begin_time:>15.8e}\t')
-                file.write(f'{final_loss:>15.8e}\t')
+                file.write(f'{case.loss.reduce(final_loss):>15.8e}\t')
                 file.write(f'{not failed_case:>10}')
                 for i, param in enumerate(self.parameters):
                     file.write(f"\t{param.denormalise(self.X[i]):>15.6f}")
@@ -620,24 +623,14 @@ class LinksLoss:
             losses = map(self._run_case, self.cases)
         end_time = time.time()
         # Compute total loss
-        final_loss = sum(losses) / len(self.cases)
+        final_loss = self.base_loss.average(list(losses))
         # Update function call history file
         if self.output_dir:
             with open(os.path.join(self.func_calls_file), 'a') as file:
                 file.write(f'{begin_time - self.begin_time:>15.8e}\t')
                 file.write(f'{end_time - begin_time:>15.8e}\t')
-                file.write(f'{final_loss:>15.8e}')
+                file.write(f'{self.base_loss.reduce(final_loss):>15.8e}')
                 for i, param in enumerate(self.parameters):
                     file.write(f"\t{param.denormalise(self.X[i]):>15.6f}")
                 file.write(f'\t{self.param_hash}\n')
-        # Sanitise output: ensure loss is finite
-        if np.isfinite(final_loss):
-            return final_loss
-        # Otherwise, return the maximum (signed) loss value
-        max_loss = 0
-        for case in self.cases:
-            for reference in case.fields.values():
-                ref_x = reference[:,0]
-                ref_y = np.squeeze(reference[:,1:])
-                max_loss += case.loss.max_value(ref_x, ref_y)
-        return -max_loss if np.isneginf(final_loss) else max_loss
+        return final_loss

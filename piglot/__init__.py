@@ -37,6 +37,8 @@ def optimiser(name, *args, **kwargs):
         return piglot.optimisers.BayesSkopt(*args, **kwargs)
     if name == 'botorch':
         return piglot.optimisers.BayesianBoTorch(*args, **kwargs)
+    if name == 'botorch_cf':
+        return piglot.optimisers.BayesianBoTorchComposite(*args, **kwargs)
     if name == 'direct':
         return piglot.optimisers.DIRECT(*args, **kwargs)
     if name == 'ga':
@@ -97,4 +99,6 @@ def loss(name, *args, **kwargs):
         return piglot.losses.RMAE(*args, **kwargs)
     if name in ('rnmae', 'nrmae'):
         return piglot.losses.RNMAE(*args, **kwargs)
+    if name == 'vector':
+        return piglot.losses.VectorLoss(*args, **kwargs)
     raise NameError(f"Internal error: loss function not implemented!")
