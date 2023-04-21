@@ -47,7 +47,10 @@ def plot_case(args):
     fig, axes_dict = plot_case_data(case)
     if args.config:
         plot_reference_data(case, parse_config_file(args.config), fig, axes_dict)
-    plt.show()
+    if args.save_fig:
+        fig.savefig(args.save_fig)
+    else:
+        plt.show()
 
 
 def plot_current(args):
@@ -141,6 +144,13 @@ def main():
         '--config',
         default=None,
         type=argparse.FileType('r'),
+        help=("Path for the used or generated configuration file. "
+              "Useful for plotting the references for each field alongside the response."),
+    )
+    sp_case.add_argument(
+        '--save_fig',
+        default=None,
+        type=str,
         help=("Path for the used or generated configuration file. "
               "Useful for plotting the references for each field alongside the response."),
     )
