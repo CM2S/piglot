@@ -10,6 +10,8 @@ try:
     from botorch.fit import fit_gpytorch_mll
     from gpytorch.mlls import ExactMarginalLogLikelihood
     from botorch.acquisition import qUpperConfidenceBound
+    from botorch.acquisition import qExpectedImprovement, qProbabilityOfImprovement
+    from botorch.acquisition.knowledge_gradient import qKnowledgeGradient
     from botorch.acquisition.objective import GenericMCObjective
     from botorch.optim import optimize_acqf
     from piglot.optimisers.optimiser import Optimiser
@@ -44,15 +46,18 @@ class BayesDataset:
 
 class BayesianBoTorchComposite(Optimiser):
 
-    def __init__(self, n_initial=5, log_space=False, def_variance=0, beta=0.5,
-                 beta_final=None, load_file=None):
+    def __init__(self, n_initial=5, acquisition='ucb', log_space=False, def_variance=0,
+                 beta=0.5, beta_final=None, load_file=None):
         self.n_initial = n_initial
+        self.acquisition = acquisition
         self.log_space = log_space
         self.def_variance = def_variance
         self.beta = beta
         self.beta_final = beta if beta_final is None else beta_final
         self.load_file = load_file
         self.name = 'BoTorch'
+        if self.acquisition not in ('ucb', 'ei', 'pi', 'kg'):
+            raise Exception(f"Unkown acquisition function {self.acquisition}")
         torch.set_num_threads(1)
 
     @staticmethod
@@ -86,16 +91,39 @@ class BayesianBoTorchComposite(Optimiser):
         # Clamp variances to prevent warnings from GPyTorch
         var_standard = torch.clamp_min(var_standard, 1e-6)
 
+        # Find best point in the unit-cube and standardised dataset
+        loss_func = lambda x: self.loss_func_torch(x * y_std + y_avg)
+        losses = [loss_func(y) for y in y_std]
+        y_best = np.max(losses)
+
         # Build and fit the GP
         gp = FixedNoiseGP(X_cube, y_standard, var_standard)
         mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
         fit_gpytorch_mll(mll)
 
+        # Build the acquisition function with the composite objective
+        num_restarts = 12
+        raw_samples = 128
+        objective = GenericMCObjective(loss_func)
+        if self.acquisition == 'ucb':
+            acq = qUpperConfidenceBound(gp, beta, objective=objective)
+        elif self.acquisition == 'ei':
+            acq = qExpectedImprovement(gp, y_best, objective=objective)
+        elif self.acquisition == 'pi':
+            acq = qProbabilityOfImprovement(gp, y_best, objective=objective)
+        elif self.acquisition == 'kg':
+            num_restarts = 6
+            raw_samples = 64
+            acq = qKnowledgeGradient(gp, num_fantasies=32, objective=objective)
+
         # Find next candidate
-        objective = GenericMCObjective(lambda x: self.loss_func_torch(x * y_std + y_avg))
-        acq = qUpperConfidenceBound(gp, beta, objective=objective)
-        bounds = torch.stack((torch.zeros(n_dim), torch.ones(n_dim)))
-        candidate, acq_value = optimize_acqf(acq, bounds=bounds, q=1, num_restarts=12, raw_samples=128)
+        bounds = torch.stack((torch.zeros(n_dim, dtype=dataset.dtype),
+                              torch.ones(n_dim, dtype=dataset.dtype)))
+        candidate, acq_value = optimize_acqf(acq,
+                                             bounds=bounds,
+                                             q=1,
+                                             num_restarts=num_restarts,
+                                             raw_samples=raw_samples)
 
         # Re-map to original space
         candidate = dataset.lbounds + candidate * X_delta
