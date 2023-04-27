@@ -106,8 +106,8 @@ class BayesianBoTorchComposite(Optimiser):
 
         # Build the acquisition function with the composite objective
         effort = self.effort / self.q
-        raw_samples = int(128 / effort)
-        num_restarts = int(12 / effort)
+        raw_samples = int(128 * effort)
+        num_restarts = int(12 * effort)
         objective = GenericMCObjective(loss_func)
         if self.acquisition == 'ucb':
             acq = qUpperConfidenceBound(gp, beta, objective=objective)
@@ -116,9 +116,9 @@ class BayesianBoTorchComposite(Optimiser):
         elif self.acquisition == 'pi':
             acq = qProbabilityOfImprovement(gp, y_best, objective=objective)
         elif self.acquisition == 'kg':
-            raw_samples = int(64 / effort)
-            num_restarts = int(6 / effort)
-            num_fantasies = int(32 / effort)
+            raw_samples = int(64 * effort)
+            num_restarts = int(6 * effort)
+            num_fantasies = int(32 * effort)
             acq = qKnowledgeGradient(gp, num_fantasies=num_fantasies, objective=objective)
 
         # Find next candidate
