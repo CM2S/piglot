@@ -1,5 +1,6 @@
 """Bayesian optimiser module under composite optimisation (using BoTorch)."""
 import numpy as np
+from multiprocessing.pool import ThreadPool as Pool
 try:
     from scipy.stats import qmc
 except ImportError:
@@ -47,12 +48,14 @@ class BayesDataset:
 class BayesianBoTorchComposite(Optimiser):
 
     def __init__(self, n_initial=5, acquisition='ucb', log_space=False, def_variance=0,
-                 beta=0.5, beta_final=None, load_file=None):
+                 beta=0.5, q=1, effort=1.0, beta_final=None, load_file=None):
         self.n_initial = n_initial
         self.acquisition = acquisition
         self.log_space = log_space
         self.def_variance = def_variance
         self.beta = beta
+        self.q = q
+        self.effort = effort
         self.beta_final = beta if beta_final is None else beta_final
         self.load_file = load_file
         self.name = 'BoTorch'
@@ -102,8 +105,9 @@ class BayesianBoTorchComposite(Optimiser):
         fit_gpytorch_mll(mll)
 
         # Build the acquisition function with the composite objective
-        num_restarts = 12
-        raw_samples = 128
+        effort = self.effort / self.q
+        raw_samples = int(128 / effort)
+        num_restarts = int(12 / effort)
         objective = GenericMCObjective(loss_func)
         if self.acquisition == 'ucb':
             acq = qUpperConfidenceBound(gp, beta, objective=objective)
@@ -112,23 +116,38 @@ class BayesianBoTorchComposite(Optimiser):
         elif self.acquisition == 'pi':
             acq = qProbabilityOfImprovement(gp, y_best, objective=objective)
         elif self.acquisition == 'kg':
-            num_restarts = 6
-            raw_samples = 64
-            acq = qKnowledgeGradient(gp, num_fantasies=32, objective=objective)
+            raw_samples = int(64 / effort)
+            num_restarts = int(6 / effort)
+            num_fantasies = int(32 / effort)
+            acq = qKnowledgeGradient(gp, num_fantasies=num_fantasies, objective=objective)
 
         # Find next candidate
         bounds = torch.stack((torch.zeros(n_dim, dtype=dataset.dtype),
                               torch.ones(n_dim, dtype=dataset.dtype)))
-        candidate, acq_value = optimize_acqf(acq,
-                                             bounds=bounds,
-                                             q=1,
-                                             num_restarts=num_restarts,
-                                             raw_samples=raw_samples)
+        candidates, acq_value = optimize_acqf(acq,
+                                              bounds=bounds,
+                                              q=self.q,
+                                              num_restarts=num_restarts,
+                                              raw_samples=raw_samples)
 
         # Re-map to original space
-        candidate = dataset.lbounds + candidate * X_delta
+        for i in range(self.q):
+            candidates[i, :] = dataset.lbounds + candidates[i, :] * X_delta
         acq_value = y_avg + acq_value * y_std
-        return candidate.cpu().numpy().squeeze(), acq_value.cpu().numpy().squeeze()
+        return [candidates[i, :].cpu().numpy() for i in range(self.q)], \
+               [acq_value[i].cpu().numpy() for i in range(self.q)]
+    
+
+    def _eval_candidates(self, func, candidates):
+        # Single candidate case
+        if self.q == 1:
+            return [func(candidates[0])]
+        
+        # Multi-candidate: run cases in parallel
+        pool = Pool(self.q)
+        parallel_func = lambda x: func(x, unique=True)
+        return pool.map(parallel_func, [candidates[i] for i in range(self.q)])
+        
 
     def _optimise(self, func, n_dim, n_iter, bound, init_shot):
         """
@@ -169,10 +188,15 @@ class BayesianBoTorchComposite(Optimiser):
 
         # If requested, sample some random points before starting
         rng = np.random.default_rng(seed=42) if qmc is None else qmc.Sobol(n_dim, seed=42)
+        points = []
         for _ in range(self.n_initial):
             random = rng.random([n_dim]) if qmc is None else rng.random().squeeze()
-            point = random * (bound[:, 1] - bound[:, 0]) + bound[:, 0]
-            dataset.push(point, loss_transformer(func(point)), def_variance)
+            points.append(random * (bound[:, 1] - bound[:, 0]) + bound[:, 0])
+
+        # Run the initial set of points (in parallel if possible)
+        values = self._eval_candidates(func, points)
+        for i, value in enumerate(values):
+            dataset.push(points[i], loss_transformer(value), def_variance)
 
         # If specified, load data from the input file
         if self.load_file:
@@ -184,10 +208,17 @@ class BayesianBoTorchComposite(Optimiser):
         # Optimisation loop
         for i in range(n_iter):
             beta = (self.beta * (n_iter - i - 1) + self.beta_final * i) / n_iter
-            candidate, _ = self.get_candidate(n_dim, dataset, beta)
-            value = func(candidate)
-            dataset.push(candidate, loss_transformer(value), def_variance)
-            if self._progress_check(i + 1, self.loss_func_numpy(value), candidate):
+            candidates, _ = self.get_candidate(n_dim, dataset, beta)
+            values = self._eval_candidates(func, candidates)
+            # Add to dataset and find best point of this batch
+            batch_best, batch_best_candidate = np.inf, None
+            for j in range(self.q):
+                value = values[j]
+                dataset.push(candidates[j], loss_transformer(value), def_variance)
+                if self.loss_func_numpy(value) < batch_best:
+                    batch_best = self.loss_func_numpy(value)
+                    batch_best_candidate = candidates[j]
+            if self._progress_check(i + 1, batch_best, batch_best_candidate):
                 break
 
         # Return optimisation result

@@ -521,7 +521,7 @@ class LinksLoss:
                 file.write(f'\t{"Hash":>64}\n')
 
 
-    def _run_case(self, case: LinksCase):
+    def _run_case(self, X, case: LinksCase, tmp_dir: str):
         """Run a single case wth Links.
 
         Parameters
@@ -536,9 +536,10 @@ class LinksLoss:
         """
         # Copy input file replacing parameters by passed value
         filename = os.path.basename(case.filename)
-        input_file = os.path.join(self.tmp_dir, filename)
+        input_file = os.path.join(tmp_dir, filename)
         case_name = get_case_name(input_file)
-        write_parameters(self.parameters.to_dict(self.X), case.filename, input_file)
+        write_parameters(self.parameters.to_dict(X), case.filename, input_file)
+        param_hash = self.parameters.hash(X)
         # Run LINKS
         begin_time = time.time()
         subprocess.run([self.links_bin, input_file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -574,13 +575,13 @@ class LinksLoss:
         if self.cases_hist:
             cases_hist = {
                 "filename": case.filename,
-                "parameters": {p: float(v) for p, v in self.parameters.to_dict(self.X).items()},
+                "parameters": {p: float(v) for p, v in self.parameters.to_dict(X).items()},
                 "loss": float(case.loss.reduce(final_loss)),
                 "success": not failed_case,
                 "start_time": time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(begin_time)),
                 "run_time": pretty_time(end_time - begin_time),
             }
-            with open(os.path.join(self.cases_hist, f'{case.filename}-{self.param_hash}'), 'w') as file:
+            with open(os.path.join(self.cases_hist, f'{case.filename}-{param_hash}'), 'w') as file:
                 safe_dump_all((cases_hist, responses), file)
             with open(os.path.join(self.cases_dir, case.filename), 'a') as file:
                 file.write(f'{begin_time - self.begin_time:>15.8e}\t')
@@ -588,12 +589,12 @@ class LinksLoss:
                 file.write(f'{case.loss.reduce(final_loss):>15.8e}\t')
                 file.write(f'{not failed_case:>10}')
                 for i, param in enumerate(self.parameters):
-                    file.write(f"\t{param.denormalise(self.X[i]):>15.6f}")
-                file.write(f'\t{self.param_hash}\n')
+                    file.write(f"\t{param.denormalise(X[i]):>15.6f}")
+                file.write(f'\t{param_hash}\n')
         return final_loss
 
 
-    def loss(self, X):
+    def loss(self, X, unique=False):
         """Public loss function for a problem with Links.
 
         Parameters
@@ -607,20 +608,20 @@ class LinksLoss:
             Loss value for this set of parameters.
         """
         # Ensure tmp directory is clean
-        if os.path.isdir(self.tmp_dir):
-            shutil.rmtree(self.tmp_dir)
-        os.mkdir(self.tmp_dir)
+        param_hash = self.parameters.hash(X)
+        tmp_dir = f'{self.tmp_dir}_{param_hash}' if unique else self.tmp_dir
+        if os.path.isdir(tmp_dir):
+            shutil.rmtree(tmp_dir)
+        os.mkdir(tmp_dir)
         self.func_calls += 1
-        # Set current attribute vector
-        self.X = X
-        self.param_hash = self.parameters.hash(self.X)
         # Run cases (in parallel if specified)
         begin_time = time.time()
+        run_case = lambda case: self._run_case(X, case, tmp_dir)
         if self.n_concurrent > 1:
             with Pool(self.n_concurrent) as pool:
-                losses = pool.map(self._run_case, self.cases)
+                losses = pool.map(run_case, self.cases)
         else:
-            losses = map(self._run_case, self.cases)
+            losses = map(run_case, self.cases)
         end_time = time.time()
         # Compute total loss
         final_loss = self.base_loss.average(list(losses))
@@ -631,6 +632,9 @@ class LinksLoss:
                 file.write(f'{end_time - begin_time:>15.8e}\t')
                 file.write(f'{self.base_loss.reduce(final_loss):>15.8e}')
                 for i, param in enumerate(self.parameters):
-                    file.write(f"\t{param.denormalise(self.X[i]):>15.6f}")
-                file.write(f'\t{self.param_hash}\n')
+                    file.write(f"\t{param.denormalise(X[i]):>15.6f}")
+                file.write(f'\t{param_hash}\n')
+        # Cleanup temporary directories
+        if unique:
+            shutil.rmtree(tmp_dir)
         return final_loss
