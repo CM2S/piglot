@@ -8,8 +8,8 @@ from yaml.scanner import ScannerError
 import piglot.losses
 import piglot.optimisers
 from piglot.optimisers.optimiser import StoppingCriteria
-from piglot.links import LinksLoss
-from piglot.yaml_parser import parse_parameters, parse_case, parse_optimiser, str_to_numeric
+from piglot.links import LinksLoss, MultiFidelityLinksLoss
+from piglot.yaml_parser import parse_parameters, parse_case, parse_optimiser, parse_mf_case
 
 
 
@@ -241,16 +241,23 @@ def main():
     args = parse_args()
     config = get_config_dict(args)
     # Build piglot problem
-    cases = [parse_case(file, case) for file, case in config["cases"].items()]
+    if "cases" in config:
+        cases = [parse_case(file, case) for file, case in config["cases"].items()]
+        Loss = LinksLoss
+    elif "cases_mf" in config:
+        cases = [parse_mf_case(file, case) for file, case in config["cases_mf"].items()]
+        Loss = MultiFidelityLinksLoss
+    else:
+        raise RuntimeError("Missing cases from the configuration!")
     parameters = parse_parameters(config)
     optimiser = parse_optimiser(config["optimiser"])
     stop = StoppingCriteria(conv_tol=config["conv_tol"],
                             max_func_calls=config["max_func_calls"],
                             max_iters_no_improv=config["max_iters_no_improv"])
-    loss = LinksLoss(cases, parameters, config["links"],
-                     n_concurrent=int(config["parallel"]),
-                     tmp_dir=config["tmp_dir"],
-                     output_dir=config["output"])
+    loss = Loss(cases, parameters, config["links"],
+                n_concurrent=int(config["parallel"]),
+                tmp_dir=config["tmp_dir"],
+                output_dir=config["output"])
     # Final touches before starting
     os.makedirs(config["output"], exist_ok=True)
     with open(os.path.join(config["output"], "config"), 'w') as file:

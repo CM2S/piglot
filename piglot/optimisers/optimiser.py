@@ -156,6 +156,18 @@ class StoppingCriteria:
         return conv or impr or func
 
 
+class MultiFidelityLoss(ABC):
+    """Dummy class to indicate this is a multi-fidelity loss."""
+
+    @abstractmethod
+    def get_fidelities(self):
+        """Build and return the list of supported fidelities."""
+
+
+class MultiFidelityOptimiser(ABC):
+    """Dummy class to indicate this is a multi-fidelity optimiser."""
+
+
 class Optimiser(ABC):
     """
     Interface for implementing different optimization algorithms
@@ -232,6 +244,9 @@ class Optimiser(ABC):
         best_solution : list
             best parameter solution
         """
+        # Sanity check
+        if isinstance(loss, MultiFidelityLoss) != isinstance(self, MultiFidelityOptimiser):
+            raise Exception("Multi-fidelity models can only use multi-fidelity optimisers!")
         # Initialise optimiser
         pbar = tqdm(total=n_iter, desc=self.name) if verbose else None
         self._init_optimiser(n_iter, parameters, pbar, loss, stop_criteria, output, verbose)

@@ -1,17 +1,19 @@
 """Module for losses associated with LINKS calls."""
 import os
 import re
+import copy
 import time
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
+from typing import List
 from multiprocessing.pool import ThreadPool as Pool
 import numpy as np
 import pandas as pd
 from yaml import safe_dump_all
-from piglot.parameter import ParameterSet
-from piglot.optimisers.optimiser import pretty_time
+from piglot.parameter import Parameter, ParameterSet
 from piglot.losses.loss import Loss, ScalarLoss, VectorLoss
+from piglot.optimisers.optimiser import pretty_time, MultiFidelityLoss
 
 
 def write_parameters(param_value, source, dest):
@@ -621,9 +623,9 @@ class LinksLoss:
                 losses = pool.map(self._run_case, self.cases)
         else:
             losses = map(self._run_case, self.cases)
-        end_time = time.time()
         # Compute total loss
         final_loss = self.base_loss.average(list(losses))
+        end_time = time.time()
         # Update function call history file
         if self.output_dir:
             with open(os.path.join(self.func_calls_file), 'a') as file:
@@ -634,3 +636,87 @@ class LinksLoss:
                     file.write(f"\t{param.denormalise(self.X[i]):>15.6f}")
                 file.write(f'\t{self.param_hash}\n')
         return final_loss
+
+
+class MultiFidelityLinksCase:
+    """Container with the required fields for each case to be run with Links under MF."""
+
+    def __init__(self, files_fidelities: dict, fields: dict, loss):
+        """Constructor for the container.
+
+        Parameters
+        ----------
+        files_fidelities : Dict[str: float]
+            Pairs of filenames and associated fidelity.
+        fields : dict
+            Pairs of fields to read from results and their reference solutions.
+        loss : Loss
+            Loss function to use when comparing predictions and references.
+        """
+        self.files_fidelities = files_fidelities
+        self.mf_cases = {fidelity: LinksCase(filename, fields, loss)
+                         for filename, fidelity in files_fidelities.items()}
+        for field in fields.keys():
+            for filename in files_fidelities.keys():
+                field.check(filename)
+
+    def get_case(self, fidelity):
+        return self.mf_cases[fidelity]
+    
+    def get_fidelities(self):
+        return tuple(sorted(set(self.files_fidelities.values())))
+
+
+
+class MultiFidelityLinksLoss(MultiFidelityLoss):
+    """Main loss class for multi-fidelity Links problems."""
+
+    def __init__(self, mf_cases: List[MultiFidelityLinksCase], parameters: ParameterSet, links_bin, **kwargs):
+        """Constructor for the LinksLoss class.
+
+        Parameters
+        ----------
+        mf_cases : List[MultiFidelityLinksCase]
+            List of MultiFidelityLinksCases to be run.
+        parameters : ParameterSet
+            Parameter set for this problem.
+        links_bin : str
+            Path to the Links binary
+        """
+        self.func_calls = 0
+        # Build list of fidelities and ensure they are equal for all cases
+        case_fidelities = [case.get_fidelities() for case in mf_cases]
+        if len(set(case_fidelities)) != 1:
+            raise RuntimeError("Different fidelities for different LinksCases!")
+        self.fidelities = case_fidelities[0]
+        # Build a LinksLoss for each fidelity
+        self.links_losses = {}
+        for fidelity in self.fidelities:
+            cases = [case.get_case(fidelity) for case in mf_cases]
+            self.links_losses[fidelity] = LinksLoss(cases, parameters, links_bin, **kwargs)
+
+
+    def get_fidelities(self):
+        return self.fidelities
+
+
+    def loss(self, params, fidelity):
+        """Public loss function for a problem with Links.
+
+        Parameters
+        ----------
+        X : array
+            Current parameters to evaluate the loss.
+
+        Returns
+        -------
+        float
+            Loss value for this set of parameters.
+        """
+        # Fidelities are floating point values that may have round-off errors, so we need
+        # to choose the closest fidelity to the one given by the optimiser
+        idx = np.argmin([np.abs(fidelity - fid) for fid in self.fidelities])
+        fidelity_exact = self.fidelities[idx]
+        # Find and run the appropriate LinksLoss
+        self.func_calls += 1
+        return self.links_losses[fidelity_exact].loss(params)

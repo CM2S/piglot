@@ -4,7 +4,7 @@ import sympy
 import piglot
 from piglot.losses import MixedLoss, Range, Minimum, Maximum, Slope, Weightings
 from piglot.parameter import ParameterSet, DualParameterSet
-from piglot.links import LinksCase, Reaction, OutFile, extract_parameters
+from piglot.links import LinksCase, Reaction, OutFile, extract_parameters, MultiFidelityLinksCase
 
 
 
@@ -181,6 +181,31 @@ def parse_case(file, case):
         fields[key] = value
     # Build case
     return LinksCase(file, fields, loss)
+
+
+def parse_mf_case(file, case):
+    # Initial sanity checks
+    if not 'files' in case:
+        raise Exception(f"Files keyword not found for case {file}")
+    if not 'loss' in case:
+        raise Exception(f"Loss keyword not found for case {file}")
+    if not 'fields' in case:
+        raise Exception(f"Fields keyword not found for case {file}")
+    if len(case["fields"]) < 1:
+        raise Exception(f"Need at least one field for case {file}")
+    # Parse files and fidelities
+    files = {name: float(fidelity) for name, fidelity in case["files"].items()}
+    for name in files.keys():
+        if not os.path.exists(name):
+            raise Exception(f"Input name {file} not found")
+    # Parse remaining items
+    loss = parse_loss(file, case["loss"])
+    fields = {}
+    for index, field in enumerate(case["fields"]):
+        key, value = parse_field(file, index, field)
+        fields[key] = value
+    # Build case
+    return MultiFidelityLinksCase(files, fields, loss)
 
 
 
