@@ -316,7 +316,7 @@ class Optimiser(ABC):
             file.write('\n')
 
 
-    def _progress_check(self, iiter, curr_value, curr_solution):
+    def _progress_check(self, iiter, curr_value, curr_solution, extra_info=None):
         """
         Check the optimizer progress
 
@@ -340,7 +340,10 @@ class Optimiser(ABC):
             self.best_solution = curr_solution
         if iiter > 0:
             if self._verbose:
-                self.pbar.set_postfix_str('Loss: {0:6.4e}'.format(self.best_value))
+                if extra_info:
+                    self.pbar.set_postfix_str(f'Loss: {self.best_value:6.4e} ({extra_info})')
+                else:
+                    self.pbar.set_postfix_str(f'Loss: {self.best_value:6.4e}')
                 self.pbar.update()
             # CHANGE TO BEST_HISTORY
             if curr_value < self.value_history[iiter-1]:

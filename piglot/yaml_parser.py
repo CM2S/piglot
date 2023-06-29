@@ -2,6 +2,9 @@ import os
 import numpy as np
 import sympy
 import piglot
+import pandas as pd
+from yaml import safe_load
+from yaml.parser import ParserError
 from piglot.losses import MixedLoss, Range, Minimum, Maximum, Slope, Weightings
 from piglot.parameter import ParameterSet, DualParameterSet
 from piglot.links import LinksCase, Reaction, OutFile, extract_parameters
@@ -16,7 +19,7 @@ def optional_dict(d, field, default, conv):
 def str_to_numeric(data):
     try:
         data = float(data)
-    except ValueError:
+    except (TypeError, ValueError):
         return data
     if int(data) == data:
         return int(data)
@@ -199,6 +202,17 @@ def parse_parameters(config):
         if len(config["cases"]) != 1:
             raise Exception("Cannot find a suitable input file to extract parameters from!")
         parameters = extract_parameters(list(config["cases"].keys())[0])
+    # Fetch initial shot from another run
+    if "init_shot_from" in config:
+        with open(config["init_shot_from"], 'r') as f:
+            source = safe_load(f)
+        func_calls_file = os.path.join(source["output"], "func_calls")
+        df = pd.read_table(func_calls_file)
+        df.columns = df.columns.str.strip()
+        min_series = df.iloc[df["Loss"].idxmin()]
+        for param in parameters:
+            if param.name in min_series.index:
+                param.inital_value = min_series[param.name]
     return parameters
 
 
