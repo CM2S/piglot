@@ -730,9 +730,12 @@ class MixedLoss(ScalarLoss):
 class VectorLoss(Loss):
     """Base class for generic vector losses based on the difference of responses."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, reduction=None, **kwargs):
         """Constructor for VectorLoss"""
         super().__init__(*args, **kwargs)
+        if reduction and reduction not in ('trapezoid'):
+            raise RuntimeError(f"Unknown reduction {reduction} for vector loss")
+        self.reduction = reduction
     
     def average(self, losses):
         """Average a set of losses.
@@ -813,7 +816,17 @@ class VectorLoss(Loss):
         # Filters and modifiers
         x, ref, pred = self._apply_filters_modifiers(x, ref, pred)
         # Compute the derived vector loss
-        loss = np.array(pred - ref) / np.mean(np.abs(ref))
+        if self.reduction == 'trapezoid':
+            # Weight each point to get the equivalent of a trapezoid integration
+            weights = np.empty_like(x)
+            weights[0] = (x[1] - x[0]) / 2
+            weights[-1] = (x[-1] - x[-2]) / 2
+            weights[1:-1] = (x[2:] - x[:-2]) / 2
+            # Also compute the normalisation factor with a trapezoidal integration
+            loss = weights * np.array(pred - ref) / trapezoid(np.abs(ref), x=x)
+        else:
+            # No weighting
+            loss = np.array(pred - ref) / np.mean(np.abs(ref))
         # Penalty if the predicted response is shorter than the reference one
         # len_ref = np.max(x) - np.min(x)
         # len_pred = np.max(x_pred) - np.min(x_pred)
