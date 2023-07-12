@@ -10,14 +10,15 @@ try:
     import torch
     from gpytorch.mlls import ExactMarginalLogLikelihood
     import botorch
-    from botorch.models import FixedNoiseGP
-    from botorch.models.gp_regression_fidelity import FixedNoiseMultiFidelityGP
+    from botorch.models import FixedNoiseGP, SingleTaskGP
+    from botorch.models.gp_regression_fidelity import FixedNoiseMultiFidelityGP, SingleTaskMultiFidelityGP
     from botorch.fit import fit_gpytorch_mll
     from botorch.acquisition import qUpperConfidenceBound
     from botorch.acquisition import qExpectedImprovement, qProbabilityOfImprovement
     from botorch.acquisition.knowledge_gradient import qKnowledgeGradient
     from botorch.acquisition.objective import GenericMCObjective
     from botorch.optim import optimize_acqf, optimize_acqf_mixed
+    from botorch.sampling import SobolQMCNormalSampler
     from piglot.optimisers.optimiser import Optimiser
 except ImportError:
     # Show a nice exception when this package is used
@@ -87,19 +88,25 @@ class BayesDataset:
         if self.export:
             self.save(self.export)
 
+    def get_params_value_pairs(self, fidelity=None):
+        mask = self.high_fidelity_mask() if fidelity is None else \
+               torch.isclose(self.fidelities, fidelity * torch.ones(1, dtype=self.dtype))[:,0]
+        return self.params[mask].cpu().numpy(), self.values[mask].cpu().numpy()
+
 
 
 class BayesianBoTorchComposite(Optimiser):
 
     def __init__(self, n_initial=5, acquisition='ucb', log_space=False, def_variance=0,
-                 beta=0.5, beta_final=None, q=1, seed=42, load_file=None, export=None,
-                 fidelities=None, n_test=0):
+                 beta=0.5, beta_final=None, noisy=False, q=1, seed=42, load_file=None,
+                 export=None, fidelities=None, n_test=0):
         self.n_initial = n_initial
         self.acquisition = acquisition
         self.log_space = log_space
         self.def_variance = def_variance
         self.beta = beta
         self.beta_final = beta if beta_final is None else beta_final
+        self.noisy = bool(noisy)
         self.q = q
         self.seed = seed
         self.load_file = load_file
@@ -108,7 +115,7 @@ class BayesianBoTorchComposite(Optimiser):
         self.n_test = n_test
         self.multi_fidelity_run = fidelities is not None
         self.name = 'BoTorch'
-        if self.acquisition not in ('ucb', 'ei', 'pi', 'kg'):
+        if self.acquisition not in ('ucb', 'ei', 'pi', 'kg', 'qucb', 'qei', 'qpi', 'qkg'):
             raise RuntimeError(f"Unkown acquisition function {self.acquisition}")
         torch.set_num_threads(1)
 
@@ -150,11 +157,26 @@ class BayesianBoTorchComposite(Optimiser):
         # Build the GP: append the fidelity to the dataset in multi-fidelity runs
         if self.multi_fidelity_run:
             X_cube_mf = torch.cat([X_cube, dataset.fidelities], dim=1)
-            model = FixedNoiseMultiFidelityGP(X_cube_mf, y_standard, var_standard, data_fidelity=n_dim)
+            if self.noisy:
+                model = SingleTaskMultiFidelityGP(
+                    X_cube_mf,
+                    y_standard,
+                    data_fidelity=n_dim
+                )
+            else:
+                model = FixedNoiseMultiFidelityGP(
+                    X_cube_mf,
+                    y_standard,
+                    var_standard,
+                    data_fidelity=n_dim
+                )
         else:
-            model = FixedNoiseGP(X_cube, y_standard, var_standard)
+            if self.noisy:
+                model = SingleTaskGP(X_cube, y_standard)
+            else:
+                model = FixedNoiseGP(X_cube, y_standard, var_standard)
 
-        # Fit the GP
+        # Fit the GP (in case of trouble, we fall back to an Adam-based optimiser)
         mll = ExactMarginalLogLikelihood(model.likelihood, model)
         try:
             fit_gpytorch_mll(mll)
@@ -181,22 +203,24 @@ class BayesianBoTorchComposite(Optimiser):
         num_restarts = 12
         raw_samples = max(256, 16 * n_dim * n_dim)
         objective = GenericMCObjective(loss_func)
-        if self.acquisition == 'ucb':
-            acq = qUpperConfidenceBound(model, beta, objective=objective)
-        elif self.acquisition == 'ei':
-            acq = qExpectedImprovement(model, y_best, objective=objective)
-        elif self.acquisition == 'pi':
-            acq = qProbabilityOfImprovement(model, y_best, objective=objective)
-        elif self.acquisition == 'kg':
+        sampler = SobolQMCNormalSampler(torch.Size([512]), seed=self.seed)
+        if self.acquisition in ('ucb', 'qucb'):
+            acq = qUpperConfidenceBound(model, beta, sampler=sampler, objective=objective)
+        elif self.acquisition in ('ei', 'qei'):
+            acq = qExpectedImprovement(model, y_best, sampler=sampler, objective=objective)
+        elif self.acquisition in ('pi', 'qpi'):
+            acq = qProbabilityOfImprovement(model, y_best, sampler=sampler, objective=objective)
+        elif self.acquisition in ('kg', 'qkg'):
             num_restarts = 6
             raw_samples = 64
-            acq = qKnowledgeGradient(model, num_fantasies=32, objective=objective)
+            sampler = SobolQMCNormalSampler(torch.Size([64]), seed=self.seed)
+            acq = qKnowledgeGradient(model, sampler=sampler, objective=objective)
 
-        # Find next candidate
+        # Find next candidate(s)
         if self.multi_fidelity_run:
             bounds = torch.stack((torch.zeros(n_dim + 1, dtype=dataset.dtype),
                                   torch.ones(n_dim + 1, dtype=dataset.dtype)))
-            candidates, acq_value = optimize_acqf_mixed(
+            candidates, _ = optimize_acqf_mixed(
                 acq,
                 bounds=bounds,
                 q=self.q,
@@ -208,7 +232,7 @@ class BayesianBoTorchComposite(Optimiser):
         else:
             bounds = torch.stack((torch.zeros(n_dim, dtype=dataset.dtype),
                                   torch.ones(n_dim, dtype=dataset.dtype)))
-            candidates, acq_value = optimize_acqf(
+            candidates, _ = optimize_acqf(
                 acq,
                 bounds=bounds,
                 q=self.q,
@@ -221,8 +245,7 @@ class BayesianBoTorchComposite(Optimiser):
         candidates_map = torch.empty((self.q, n_dim))
         for i in range(self.q):
             candidates_map[i, :] = dataset.lbounds + candidates[i, :n_dim] * X_delta
-        acq_value = y_avg + acq_value * y_std
-        return candidates_map.cpu().numpy(), acq_value.cpu().numpy(), cv_error
+        return candidates_map.cpu().numpy(), cv_error
 
 
     def _eval_candidates(self, func, candidates):
@@ -233,6 +256,19 @@ class BayesianBoTorchComposite(Optimiser):
         # Multi-candidate: run cases in parallel
         pool = Pool(self.q)
         return pool.map(lambda x: func(x, unique=True), candidates)
+    
+    def _get_best_point(self, dataset: BayesDataset):
+        params, values = dataset.get_params_value_pairs()
+        losses = [self.loss_func_numpy(value) for value in values]
+        idx = np.argmax(losses)
+        return params[idx, :], losses[idx]
+
+    def _get_random_points(self, n_points, n_dim, seed, bound):
+        if qmc is None:
+            points = np.random.default_rng(seed=seed).random([n_points, n_dim])
+        else:
+            points = qmc.Sobol(n_dim, seed=seed).random(n_points)
+        return [point * (bound[:, 1] - bound[:, 0]) + bound[:, 0] for point in points]
 
 
     def _optimise(self, func, n_dim, n_iter, bound, init_shot):
@@ -259,37 +295,24 @@ class BayesianBoTorchComposite(Optimiser):
             best parameter solution
         """
 
-        # Negate the loss function to convert problem to a maximisation
-        loss_transformer = lambda x: -np.log(x) if self.log_space else -x
-        inv_loss_transformer = lambda x: np.exp(-x) if self.log_space else -x
-
         # Evaluate initial shot and use it to infer number of dimensions
-        init_value = loss_transformer(func(init_shot))
-        n_outputs = len(init_value)
+        init_response = func(init_shot)
+        n_outputs = len(init_response)
         def_variance = np.ones(n_outputs) * self.def_variance
 
         # Build initial dataset with the initial shot
         dataset = BayesDataset(n_dim, n_outputs, bound, self.export)
-        dataset.push(init_shot, init_value, def_variance)
+        dataset.push(init_shot, init_response, def_variance)
 
-        # If requested, sample some random points before starting
-        points = []
-        rng = qmc.Sobol(n_dim, seed=self.seed) if qmc else np.random.default_rng(seed=self.seed)
-        for _ in range(self.n_initial):
-            random = rng.random([n_dim]) if qmc is None else rng.random().squeeze()
-            points.append(random * (bound[:, 1] - bound[:, 0]) + bound[:, 0])
-
-        # Run initial points (in parallel if possible)
-        init_responses = self._eval_candidates(func, points)
+        # If requested, sample some random points before starting (in parallel if possible)
+        random_points = self._get_random_points(self.n_initial, n_dim, self.seed, bound)
+        init_responses = self._eval_candidates(func, random_points)
         for i, response in enumerate(init_responses):
-            dataset.push(points[i], loss_transformer(response), def_variance)
+            dataset.push(random_points[i], response, def_variance)
 
-        # If specified, load data from the input file
+        # If specified, load data from the input file (at final fidelity)
         if self.load_file:
-            input_data = np.genfromtxt(self.load_file)
-            for row in input_data:
-                params, loss = row[:-n_outputs], row[-n_outputs]
-                dataset.push(params, loss_transformer(loss), def_variance)
+            dataset.load(self.load_file, 1.0)
 
         # Load any multi-fidelity data
         if self.fidelities:
@@ -298,33 +321,35 @@ class BayesianBoTorchComposite(Optimiser):
 
         # Build test dataset
         test_dataset = BayesDataset(n_dim, n_outputs, bound)
-        for _ in range(self.n_test):
-            random = rng.random([n_dim]) if qmc is None else rng.random().squeeze()
-            point = random * (bound[:, 1] - bound[:, 0]) + bound[:, 0]
-            test_dataset.push(point, loss_transformer(func(point)), def_variance)
+        test_points = self._get_random_points(self.n_test, n_dim, self.seed + 1, bound)
+        test_responses = self._eval_candidates(func, test_points)
+        for i, response in enumerate(test_responses):
+            test_dataset.push(test_points[i], response, def_variance)
+
+        # Find current best point to return to the driver
+        best_params, best_loss = self._get_best_point(dataset)
+        self._progress_check(0, best_loss, best_params)
 
         # Optimisation loop
-        for i in range(n_iter):
-            beta = (self.beta * (n_iter - i - 1) + self.beta_final * i) / n_iter
+        for i_iter in range(n_iter):
+            beta = (self.beta * (n_iter - i_iter - 1) + self.beta_final * i_iter) / n_iter
 
             # Generate and evaluate candidates (in parallel if possible)
-            candidates, _, cv_error = self.get_candidates(n_dim, dataset, beta, test_dataset)
+            candidates, cv_error = self.get_candidates(n_dim, dataset, beta, test_dataset)
             responses = self._eval_candidates(func, candidates)
-            values = [self.loss_func_numpy(response) for response in responses]
+            losses = [self.loss_func_numpy(response) for response in responses]
 
             # Find best value for this batch and update dataset
-            best_idx = np.argmin(values)
-            best_value, best_point = values[best_idx], candidates[best_idx, :]
+            best_idx = np.argmin(losses)
+            best_loss, best_params = losses[best_idx], candidates[best_idx, :]
             for i, response in enumerate(responses):
-                dataset.push(candidates[i, :], loss_transformer(response), def_variance)
+                dataset.push(candidates[i, :], response, def_variance)
 
             # Update progress
             extra = f'Val. {cv_error:6.4}' if cv_error else None
-            if self._progress_check(i + 1, best_value, best_point, extra_info=extra):
+            if self._progress_check(i_iter + 1, best_loss, best_params, extra_info=extra):
                 break
 
         # Return optimisation result
-        losses = self.loss_func_torch(dataset.values[dataset.high_fidelity_mask(),:])
-        best_params = dataset.params[torch.argmax(losses),:].cpu().numpy()
-        best_loss = inv_loss_transformer(torch.max(losses)).cpu().numpy()
-        return best_params, self.loss_func_numpy(best_loss)
+        best_params, best_loss = self._get_best_point(dataset)
+        return best_params, best_loss
