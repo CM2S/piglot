@@ -553,10 +553,7 @@ class LinksLoss:
         for field, reference in case.fields.items():
             ref_x = reference[:,0]
             ref_y = np.squeeze(reference[:,1:])
-            # If the case failed, return the maximum possible loss value
-            if failed_case:
-                case_loss = case.loss.sum(case.loss.max_value(ref_x, ref_y), case_loss)
-            else:
+            try:
                 # Compute loss for this case: check if single or multiple dimensions on y
                 field_data = field.get(input_file)
                 field_x = field_data[:,0]
@@ -570,6 +567,8 @@ class LinksLoss:
                         case_loss = case.loss.sum(case.loss(ref_x, field_x, ref_y[:,i], field_y[:,i]), case_loss)
                         responses[field.name(i)] = list(zip([float(a) for a  in field_x],
                                                             [float(a) for a  in field_y[:,i]]))
+            except:
+                case_loss = case.loss.sum(case.loss.max_value(ref_x, ref_y), case_loss)
         final_loss = case.loss.scale(case_loss, 1.0 / len(case.fields))
         # Final touches on case history and file writing
         if self.cases_hist:

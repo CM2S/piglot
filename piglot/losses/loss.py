@@ -480,12 +480,6 @@ class ScalarLoss(Loss):
         x, ref, pred = self._apply_filters_modifiers(x, ref, pred)
         # Compute the derived loss
         loss = self._compute(x, ref, pred)
-        # Penalty if the predicted response is shorter than the reference one
-        len_ref = np.max(x) - np.min(x)
-        len_pred = np.max(x_pred) - np.min(x_pred)
-        if len_pred < len_ref:
-            factor = float(len_ref - len_pred) / len_ref
-            loss += factor * self.max_value(x_ref, y_ref)
         return loss
 
     def max_value(self, x_ref, y_ref):
@@ -505,6 +499,45 @@ class ScalarLoss(Loss):
         """
         x, ref, pred = self._apply_filters_modifiers(x_ref, y_ref, 0 * y_ref)
         return self._compute(x, ref, pred)
+
+
+class ScalarVectorLoss(ScalarLoss):
+    """Scalar loss for comparison with the vector loss in composite optimisation."""
+
+    def __init__(self, *args, reduction='sum', **kwargs):
+        """Constructor for the ScalarVectorLoss
+
+        Parameters
+        ----------
+        reduction : str, optional
+            Type of reduction operation, by default 'sum'
+        """
+        super().__init__(*args, **kwargs)
+        self.reduction = reduction
+
+    def _compute(self, x, reference, prediction):
+        """Main method for loss computation.
+
+        Parameters
+        ----------
+        x : array
+            Time coordinate
+        reference : array
+            Reference response
+        prediction : array
+            Predicted response
+        """
+        if self.reduction == 'sum':
+            vector_loss = np.array(prediction - reference) / np.mean(np.abs(reference))
+        elif self.reduction == 'trapezoid':
+            # Weight each point to get the equivalent of a trapezoid integration
+            weights = np.empty_like(x)
+            weights[0] = (x[1] - x[0]) / 2
+            weights[-1] = (x[-1] - x[-2]) / 2
+            weights[1:-1] = (x[2:] - x[:-2]) / 2
+            # Also compute the normalisation factor with a trapezoidal integration
+            vector_loss = weights * np.array(prediction - reference) / trapezoid(np.abs(reference), x=x)
+        return np.mean(np.square(vector_loss))
 
 
 class MSE(ScalarLoss):
@@ -807,6 +840,9 @@ class VectorLoss(Loss):
         float
             Loss value
         """
+        # Particular case if we have less than two prediction points
+        if len(x_pred) < 2:
+            return self.max_value(x_ref, y_ref)
         # Interpolate prediction grid on the reference grid
         x = x_ref
         ref = y_ref
@@ -827,13 +863,6 @@ class VectorLoss(Loss):
         else:
             # No weighting
             loss = np.array(pred - ref) / np.mean(np.abs(ref))
-        # Penalty if the predicted response is shorter than the reference one
-        # len_ref = np.max(x) - np.min(x)
-        # len_pred = np.max(x_pred) - np.min(x_pred)
-        # if len_pred < len_ref:
-        #     factor = 1 + float(len_ref - len_pred) / len_ref
-        #     loss[x > np.max(x_pred)] *= factor
-        #     loss[x < np.min(x_pred)] *= factor
         return loss
 
     def max_value(self, x_ref, y_ref):

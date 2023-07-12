@@ -103,4 +103,6 @@ def loss(name, *args, **kwargs):
         return piglot.losses.RNMAE(*args, **kwargs)
     if name == 'vector':
         return piglot.losses.VectorLoss(*args, **kwargs)
+    if name == 'scalar_vector':
+        return piglot.losses.ScalarVectorLoss(*args, **kwargs)
     raise NameError(f"Internal error: loss function not implemented!")
