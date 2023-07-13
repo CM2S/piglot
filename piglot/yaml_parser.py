@@ -160,7 +160,7 @@ def parse_field(file, index, fields):
         i_elem = optional_dict(fields, "elem", None, int)
         i_gauss = optional_dict(fields, "gauss", None, int)
         x_field = optional_dict(fields, "x_field", "LoadFactor", str)
-        field = OutFile(fields["field"], i_elem=i_elem, i_gauss=i_gauss, x_field=x_field)
+        field = OutFile(str_to_numeric(fields["field"]), i_elem=i_elem, i_gauss=i_gauss, x_field=str_to_numeric(x_field))
     reference = parse_reference_file(file, index, fields["reference"])
     return field, reference
 
