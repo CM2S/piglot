@@ -91,7 +91,10 @@ def plot_best(args):
         case_data = CaseData(case_file)
         fig, axes_dict = plot_case_data(case_data, case)
         plot_reference_data(case_data, config, fig, axes_dict)
-    plt.show()
+    if args.save_fig:
+        fig.savefig(args.save_fig)
+    else:
+        plt.show()
 
 
 def dump_run(args):
@@ -113,6 +116,45 @@ def dump_run(args):
     np.savetxt(args.name, out_df.to_numpy())
     if not args.quiet:
         print(f"Saved parameter history to {args.name}")
+
+
+def plot_regret(args):
+    """Plot the cummulative regret evolution for a given set of cases.
+
+    Parameters
+    ----------
+    args : dict
+        Passed arguments.
+    """
+    fig, ax = plt.subplots()
+    if args.time:
+        ax.set_xlabel('Elapsed time /s')
+    else:
+        ax.set_xlabel('Function calls')
+    ax.set_ylabel('Cummulative regret')
+
+    for config_file in args.config:
+        with open(config_file, 'r') as file:
+            config = parse_config_file(file)
+        func_calls_file = os.path.join(config["output"], "func_calls")
+        df = pd.read_table(func_calls_file)
+        df.columns = df.columns.str.strip()
+        losses = df["Loss"].to_numpy()
+        best_loss = np.min(losses) - 1e-6
+        regret = np.empty_like(losses)
+        for i in range(len(losses)):
+            regret[i] = np.sum(losses[:i+1]) - (i + 1) * best_loss
+        if args.time:
+            ax.plot(df["Start Time /s"], regret, label=config_file)
+            # ax.set_xlim(xmin=0, xmax=max(df["Start Time /s"]))
+        else:
+            ax.plot(regret, label=config_file)
+            # ax.set_xlim(xmin=0, xmax=len(regret) + 1)
+    ax.legend()
+    if args.save_fig:
+        fig.savefig(args.save_fig)
+    else:
+        plt.show()
 
 
 
@@ -151,8 +193,7 @@ def main():
         '--save_fig',
         default=None,
         type=str,
-        help=("Path for the used or generated configuration file. "
-              "Useful for plotting the references for each field alongside the response."),
+        help=("Path to save the generated figure. If used, graphical output is skipped."),
     )
     sp_case.set_defaults(func=plot_case)
 
@@ -188,6 +229,12 @@ def main():
         type=argparse.FileType('r'),
         help="Path for the used or generated configuration file.",
     )
+    sp_best.add_argument(
+        '--save_fig',
+        default=None,
+        type=str,
+        help=("Path to save the generated figure. If used, graphical output is skipped."),
+    )
     sp_best.set_defaults(func=plot_best)
 
     # Dumping the parameter history
@@ -210,9 +257,34 @@ def main():
     sp_dump.add_argument(
         '--quiet',
         action='store_true',
-        help="Output file.",
     )
     sp_dump.set_defaults(func=dump_run)
+
+    # Plotting cummulative regret measures
+    sp_regret = subparsers.add_parser(
+        'regret',
+        help='plot the cummulative regret of a case',
+        description=("Plot the cummulative regret of a case. This must be "
+                     "executed in the same path as the running piglot instance."),
+    )
+    sp_regret.add_argument(
+        'config',
+        nargs='+',
+        type=str,
+        help="Path for the used or generated configuration file.",
+    )
+    sp_regret.add_argument(
+        '--save_fig',
+        default=None,
+        type=str,
+        help=("Path to save the generated figure. If used, graphical output is skipped."),
+    )
+    sp_regret.add_argument(
+        '--time',
+        action='store_true',
+        help="Plot w.r.t. the elapsed time"
+    )
+    sp_regret.set_defaults(func=plot_regret)
 
     args = parser.parse_args()
     args.func(args)

@@ -261,7 +261,8 @@ def main():
                                         verbose=not config["quiet"],
                                         stop_criteria=stop)
     # Re-run the best case
-    loss.loss(parameters.normalise(best_params))
+    if 'skip_last_run' not in config:
+        loss.loss(parameters.normalise(best_params))
 
 
 
