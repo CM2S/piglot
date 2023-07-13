@@ -89,7 +89,7 @@ class AOA(Optimiser):
             best parameter <solution
         """
         if bound is None:
-            raise Exception('Need to pass bounds for AOA!')
+            raise RuntimeError('Need to pass bounds for AOA!')
 
         # Initiate candidate solutions randomly
         solutions = (bound[:,1] - bound[:,0])* \

@@ -403,7 +403,7 @@ class ScalarLoss(Loss):
 
         Raises
         ------
-        Exception
+        RuntimeError
             If the reduction type is unknown.
         """
         if reduction == "sum":
@@ -413,7 +413,7 @@ class ScalarLoss(Loss):
         elif reduction == 'simpson':
             return lambda x, y: simpson(y, x=x)
         else:
-            raise Exception("Unknown reduction {0}!".format(reduction))
+            raise RuntimeError(f"Unknown reduction {reduction}!")
 
     def _compute(self, x, reference, prediction):
         """Main method for loss computation.

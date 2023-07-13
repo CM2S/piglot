@@ -75,11 +75,11 @@ class SPSA(Optimiser):
 
         Raises
         ------
-        Exception
+        RuntimeError
             If an initial shot is not passed.
         """
         if init_shot is None:
-            raise Exception('Need to pass an initial shot for SPSA!')
+            raise RuntimeError('Need to pass an initial shot for SPSA!')
 
         if self.A is None:
             self.A = n_iter / 20

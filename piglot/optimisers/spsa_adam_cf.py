@@ -82,11 +82,11 @@ class SPSA_Adam_Composite(Optimiser):
 
         Raises
         ------
-        Exception
+        RuntimeError
             If an initial shot is not passed.
         """
         if init_shot is None:
-            raise Exception('Need to pass an initial shot for SPSA!')
+            raise RuntimeError('Need to pass an initial shot for SPSA!')
 
         x = init_shot
         new_vector = func(x)

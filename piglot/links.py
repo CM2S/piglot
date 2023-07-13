@@ -55,9 +55,9 @@ def extract_parameters(input_file):
 
     Raises
     ------
-    Exception
+    RuntimeError
         When a repeated pattern is found.
-    Exception
+    RuntimeError
         When a pattern is referenced but never defined.
     """
     parameters = ParameterSet()
@@ -75,7 +75,7 @@ def extract_parameters(input_file):
     for value in full_parameters:
         pattern = value[value.find("<")+1:value.find("(")]
         if pattern in [a.name for a in parameters]:
-            raise Exception("Repeated pattern {0} in file!".format(pattern))
+            raise RuntimeError(f"Repeated pattern {pattern} in file!")
         init = float(value[value.find("(")+1:value.find(",")])
         low_bound = float(value[value.find(",")+1:value.rfind(",")])
         up_bound = float(value[value.rfind(",")+1:value.rfind(")")])
@@ -84,7 +84,7 @@ def extract_parameters(input_file):
     for value in short_parameters:
         pattern = value[value.find("<")+1:value.find(">")]
         if pattern not in [a.name for a in parameters]:
-            raise Exception("Pattern {0} referenced but not defined!".format(pattern))
+            raise RuntimeError(f"Pattern {pattern} referenced but not defined!")
 
     return parameters
 
@@ -145,13 +145,13 @@ def find_keyword(file, keyword):
 
     Raises
     ------
-    Exception
+    RuntimeError
         If the keyword is not found.
     """
     for line in file:
         if line.lstrip().startswith(keyword):
             return line
-    raise Exception("Keyword {0} not found!".format(keyword))
+    raise RuntimeError(f"Keyword {keyword} not found!")
 
 
 class OutputField(ABC):
@@ -254,17 +254,17 @@ class Reaction(OutputField):
 
         Raises
         ------
-        Exception
+        RuntimeError
             If not reading a macroscopic analysis file.
-        Exception
+        RuntimeError
             If reaction output is not requested in the input file.
         """
         # Is macroscopic file?
         if not input_file.endswith('.dat'):
-            raise Exception("Reactions only available for macroscopic simulations!")
+            raise RuntimeError("Reactions only available for macroscopic simulations!")
         # Has node groups keyword?
         if not has_keyword(input_file, "NODE_GROUPS"):
-            raise Exception("Reactions requested on an input file without NODE_GROUPS!")
+            raise RuntimeError("Reactions requested on an input file without NODE_GROUPS!")
         # TODO: check group number and dimensions
 
     def get(self, input_file: str):
@@ -322,7 +322,7 @@ class OutFile(OutputField):
 
         Raises
         ------
-        Exception
+        RuntimeError
             If element and GP numbers are not consistent.
         """
         # Ensure fields is a list
@@ -337,8 +337,8 @@ class OutFile(OutputField):
         else:
             # GP output: needs both element and GP numbers
             if (i_elem is None) or (i_gauss is None):
-                raise Exception("Need to pass both element and Gauss point numbers!")
-            self.suffix = '_ELEM_{0}_GP_{1}'.format(i_elem, i_gauss)
+                raise RuntimeError("Need to pass both element and Gauss point numbers!")
+            self.suffix = f'_ELEM_{i_elem}_GP_{i_gauss}'
             self.i_elem = i_elem
             self.i_gauss = i_gauss
         self.x_field = x_field
@@ -359,21 +359,21 @@ class OutFile(OutputField):
 
         Raises
         ------
-        Exception
+        RuntimeError
             If requesting homogenised outputs from macroscopic analyses.
-        Exception
+        RuntimeError
             If GP outputs have not been specified in the input file.
-        Exception
+        RuntimeError
             If the requested element and GP has not been specified in the input file.
         """
         # Check if appropriate scale
         extension = os.path.splitext(input_file)[1]
         if extension == ".dat" and self.suffix == '':
-            raise Exception("Cannot extract homogenised .out from macroscopic simulations!")
+            raise RuntimeError("Cannot extract homogenised .out from macroscopic simulations!")
         # For GP outputs, check if the output has been requsted
         if self.suffix != '':
             if not has_keyword(input_file, "GAUSS_POINTS_OUTPUT"):
-                raise Exception("Did not find valid GP output request in the input file!")
+                raise RuntimeError("Did not find valid GP output request in the input file!")
             # Check number of GP outputs and if ours is a valid one
             with open(input_file, 'r') as file:
                 line = find_keyword(file, "GAUSS_POINTS_OUTPUT")
@@ -387,7 +387,7 @@ class OutFile(OutputField):
                         found = True
                         break
                 if not found:
-                    raise Exception("The specified GP output {0} {1} was not found!"\
+                    raise RuntimeError("The specified GP output {0} {1} was not found!"\
                                     .format(self.i_elem, self.i_gauss))
         # Check if single or double precision output
         self.separator = 24 if has_keyword(input_file, "DOUBLE_PRECISION_OUTPUT") else 16
@@ -407,7 +407,7 @@ class OutFile(OutputField):
         """
         casename = get_case_name(input_file)
         output_dir = os.path.splitext(input_file)[0]
-        reac_filename = os.path.join(output_dir, '{0}{1}.out'.format(casename, self.suffix))
+        reac_filename = os.path.join(output_dir, f'{casename}{self.suffix}.out')
         from_gp = self.suffix != ''
         # Read the first line of the file to find the total number of columns
         with open(reac_filename, 'r') as file:
@@ -545,7 +545,7 @@ class LinksLoss:
         subprocess.run([self.links_bin, input_file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         end_time = time.time()
         # Check if simulation completed
-        screen_file = os.path.join(os.path.splitext(input_file)[0], '{0}.screen'.format(case_name))
+        screen_file = os.path.join(os.path.splitext(input_file)[0], f'{case_name}.screen')
         failed_case = not has_keyword(screen_file, "Program L I N K S successfully completed.")
         # Post-process results
         responses = {}

@@ -26,13 +26,13 @@ def parse_config_file(file):
 
     Raises
     ------
-    Exception
+    RuntimeError
         When the YAML parsing fails.
     """
     try:
         return safe_load(file)
-    except ParserError:
-        raise Exception("Failed to parse the configuration file: YAML syntax seems invalid.")
+    except ParserError as exc:
+        raise RuntimeError("Failed to parse the configuration file: invalid YAML.") from exc
 
 
 def plot_case(args):

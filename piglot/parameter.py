@@ -124,12 +124,12 @@ class ParameterSet:
 
         Raises
         ------
-        Exception
+        RuntimeError
             If a repeated parameter is given.
         """
         # Sanity checks
         if name in [p.name for p in self.parameters]:
-            raise Exception("Repeated parameter {0} in set!".format(name))
+            raise RuntimeError(f"Repeated parameter {name} in set!")
         self.parameters.append(Parameter(name, inital_value, lbound, ubound))
 
     def normalise(self, values):
@@ -243,12 +243,12 @@ class DualParameterSet(ParameterSet):
 
         Raises
         ------
-        Exception
+        RuntimeError
             If an output parameter is repeated.
         """
         # Sanity checks
         if name in [p.name for p in self.output_parameters]:
-            raise Exception("Repeated output parameter {0} in set!".format(name))
+            raise RuntimeError(f"Repeated output parameter {name} in set!")
         self.output_parameters.append(OutputParameter(name, mapping))
 
     def clone_output(self, name):

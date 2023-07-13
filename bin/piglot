@@ -156,13 +156,13 @@ def parse_config_file(file):
 
     Raises
     ------
-    Exception
+    RuntimeError
         When the YAML parsing fails.
     """
     try:
         return safe_load(file)
     except (ParserError, ScannerError):
-        raise Exception("Failed to parse the configuration file: YAML syntax seems invalid.")
+        raise RuntimeError("Failed to parse the configuration file: YAML syntax seems invalid.")
 
 
 
@@ -187,17 +187,17 @@ def get_config_dict(args):
     else:
         # Check that required arguments have been passed
         if args.loss is None:
-            raise Exception("Loss has not been passed")
+            raise RuntimeError("Loss has not been passed")
         if args.iters is None:
-            raise Exception("Number of iterations has not been passed")
+            raise RuntimeError("Number of iterations has not been passed")
         if args.input is None:
-            raise Exception("Input file has not been passed")
+            raise RuntimeError("Input file has not been passed")
         if args.field is None:
-            raise Exception("Output fields have not been passed")
+            raise RuntimeError("Output fields have not been passed")
         if args.reference is None:
-            raise Exception("Reference file has not been passed")
+            raise RuntimeError("Reference file has not been passed")
         if args.optimiser is None:
-            raise Exception("Optimiser has not been passed")
+            raise RuntimeError("Optimiser has not been passed")
         # Build configuration dict
         config = {
             "links": args.links,
