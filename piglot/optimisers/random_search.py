@@ -24,7 +24,7 @@ class PureRandomSearch(Optimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, sampling='uniform'):
+    def __init__(self, sampling='uniform', seed=1):
         """
         Constructs all the necessary attributes for the PRS optimiser.
 
@@ -47,6 +47,7 @@ class PureRandomSearch(Optimiser):
         # Store parameters
         self.name = 'PRS'
         self.sampling = sampling
+        self.seed = seed
 
     def _optimise(self, func, n_dim, n_iter, bound, init_shot):
         """
@@ -85,9 +86,9 @@ class PureRandomSearch(Optimiser):
 
         # Prepare random number generators
         if self.sampling == 'uniform':
-            sampler = np.random.default_rng(1)
+            sampler = np.random.default_rng(self.seed)
         elif self.sampling == 'sobol':
-            sampler = qmc.Sobol(n_dim, seed=1)
+            sampler = qmc.Sobol(n_dim, seed=self.seed)
 
         # Optimization problem iterative procedure
         for i in range(n_iter):
