@@ -54,7 +54,7 @@ def parse_args():
         'config',
         default=None,
         nargs='?',
-        type=argparse.FileType('r'),
+        type=str,
         help='Configuration file to use',
     )
 
@@ -168,7 +168,8 @@ def parse_config_file(file):
 
 def get_config_dict(args):
     if args.config:
-        config = parse_config_file(args.config)
+        with open(args.config, 'r') as file:
+            config = parse_config_file(file)
         # Add missing optional items
         if 'conv_tol' not in config:
             config["conv_tol"] = None
@@ -182,6 +183,8 @@ def get_config_dict(args):
             config["quiet"] = False
         if 'links' not in config:
             config["links"] = "LINKS"
+        if 'output' not in config:
+            config['output'] = os.path.splitext(args.config)[0]
         elif config['quiet']:
             config["quiet"] = True
     else:
