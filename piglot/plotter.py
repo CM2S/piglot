@@ -36,14 +36,14 @@ class CaseData:
 
         Raises
         ------
-        Exception
+        RuntimeError
             If the case file fails to parse.
         """
         with open(filename, 'r') as file:
             try:
                 info, fields = safe_load_all(file)
             except ParserError:
-                raise Exception("Failed to parse the case file!")
+                raise RuntimeError("Failed to parse the case file!")
         self.filename = info["filename"]
         self.loss = float(info["loss"])
         self.parameters = info["parameters"]
@@ -70,14 +70,14 @@ def plot_case_data(case: CaseData, title=None):
 
     Raises
     ------
-    Exception
+    RuntimeError
         If there are no fields to load
     """
     n_fields = len(case.fields)
     if not case.success:
-        raise Exception("This case failed, there are no fields to plot.")
+        raise RuntimeError("This case failed, there are no fields to plot.")
     if n_fields == 0:
-        raise Exception("No fields to output have been found. Check if simulation completed.")
+        raise RuntimeError("No fields to output have been found. Check if simulation completed.")
     n_cols = min(max(1, n_fields), 2)
     n_rows = int(np.ceil(n_fields / 2))
     fig, axes = plt.subplots(n_rows, n_cols, squeeze=False)
