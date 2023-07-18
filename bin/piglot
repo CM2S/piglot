@@ -2,14 +2,12 @@
 import os
 import time
 import argparse
-from yaml import safe_load, safe_dump
-from yaml.parser import ParserError
-from yaml.scanner import ScannerError
+from yaml import safe_dump
 import piglot.losses
 import piglot.optimisers
 from piglot.optimisers.optimiser import StoppingCriteria
 from piglot.links import LinksLoss
-from piglot.yaml_parser import parse_parameters, parse_case, parse_optimiser, str_to_numeric
+from piglot.yaml_parser import parse_parameters, parse_case, parse_optimiser, parse_config_file
 
 
 
@@ -141,52 +139,9 @@ def parse_args():
 
 
 
-def parse_config_file(file):
-    """Parses the YAML configuration file.
-
-    Parameters
-    ----------
-    file : TextIOWrapper
-        Configuration file object.
-
-    Returns
-    -------
-    dict
-        Dictionary with the YAML data.
-
-    Raises
-    ------
-    RuntimeError
-        When the YAML parsing fails.
-    """
-    try:
-        return safe_load(file)
-    except (ParserError, ScannerError):
-        raise RuntimeError("Failed to parse the configuration file: YAML syntax seems invalid.")
-
-
-
 def get_config_dict(args):
     if args.config:
-        with open(args.config, 'r') as file:
-            config = parse_config_file(file)
-        # Add missing optional items
-        if 'conv_tol' not in config:
-            config["conv_tol"] = None
-        if 'max_func_calls' not in config:
-            config["max_func_calls"] = None
-        if 'max_iters_no_improv' not in config:
-            config["max_iters_no_improv"] = None
-        if 'tmp_dir' not in config:
-            config["tmp_dir"] = None
-        if 'quiet' not in config:
-            config["quiet"] = False
-        if 'links' not in config:
-            config["links"] = "LINKS"
-        if 'output' not in config:
-            config['output'] = os.path.splitext(args.config)[0]
-        elif config['quiet']:
-            config["quiet"] = True
+        config = parse_config_file(args.config)
     else:
         # Check that required arguments have been passed
         if args.loss is None:

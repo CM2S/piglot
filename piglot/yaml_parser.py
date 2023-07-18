@@ -3,6 +3,8 @@ import numpy as np
 import sympy
 import pandas as pd
 from yaml import safe_load
+from yaml.parser import ParserError
+from yaml.scanner import ScannerError
 import piglot
 from piglot.losses import MixedLoss, Range, Minimum, Maximum, Slope
 from piglot.parameter import ParameterSet, DualParameterSet
@@ -228,3 +230,47 @@ def parse_optimiser(opt_config):
     name = opt_config.pop("name")
     kwargs = {n: str_to_numeric(v) for n, v in opt_config.items()}
     return piglot.optimiser(name, **kwargs)
+
+
+
+def parse_config_file(config_file):
+    """Parses the YAML configuration file.
+
+    Parameters
+    ----------
+    file : TextIOWrapper
+        Configuration file object.
+
+    Returns
+    -------
+    dict
+        Dictionary with the YAML data.
+
+    Raises
+    ------
+    RuntimeError
+        When the YAML parsing fails.
+    """
+    try:
+        with open(config_file, 'r') as file:
+            config = safe_load(file)
+    except (ParserError, ScannerError) as exc:
+        raise RuntimeError("Failed to parse the config file: YAML syntax seems invalid.") from exc
+    # Add missing optional items
+    if 'conv_tol' not in config:
+        config["conv_tol"] = None
+    if 'max_func_calls' not in config:
+        config["max_func_calls"] = None
+    if 'max_iters_no_improv' not in config:
+        config["max_iters_no_improv"] = None
+    if 'output' not in config:
+        config['output'] = os.path.splitext(config_file)[0]
+    if 'tmp_dir' not in config:
+        config["tmp_dir"] = config["tmp_dir"] = os.path.join(config["output"], "tmp")
+    if 'quiet' not in config:
+        config["quiet"] = False
+    if 'links' not in config:
+        config["links"] = "LINKS"
+    elif config['quiet']:
+        config["quiet"] = True
+    return config

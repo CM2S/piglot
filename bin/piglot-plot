@@ -2,37 +2,11 @@
 import os
 import time
 import argparse
-from yaml import safe_load
-from yaml.parser import ParserError
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from piglot.yaml_parser import parse_case, parse_parameters
+from piglot.yaml_parser import parse_case, parse_parameters, parse_config_file
 from piglot.plotter import CaseData, plot_case_data, plot_reference_data, CurrentPlot
-
-
-def parse_config_file(file):
-    """Parses the YAML configuration file.
-
-    Parameters
-    ----------
-    file : TextIOWrapper
-        Configuration file object.
-
-    Returns
-    -------
-    dict
-        Dictionary with the YAML data.
-
-    Raises
-    ------
-    RuntimeError
-        When the YAML parsing fails.
-    """
-    try:
-        return safe_load(file)
-    except ParserError as exc:
-        raise RuntimeError("Failed to parse the configuration file: invalid YAML.") from exc
 
 
 def plot_case(args):
@@ -134,8 +108,7 @@ def plot_regret(args):
     ax.set_ylabel('Cummulative regret')
 
     for config_file in args.config:
-        with open(config_file, 'r') as file:
-            config = parse_config_file(file)
+        config = parse_config_file(config_file)
         func_calls_file = os.path.join(config["output"], "func_calls")
         df = pd.read_table(func_calls_file)
         df.columns = df.columns.str.strip()
@@ -185,7 +158,7 @@ def main():
     sp_case.add_argument(
         '--config',
         default=None,
-        type=argparse.FileType('r'),
+        type=str,
         help=("Path for the used or generated configuration file. "
               "Useful for plotting the references for each field alongside the response."),
     )
@@ -206,7 +179,7 @@ def main():
     )
     sp_current.add_argument(
         'config',
-        type=argparse.FileType('r'),
+        type=str,
         help="Path for the used or generated configuration file.",
     )
     sp_current.add_argument(
@@ -226,7 +199,7 @@ def main():
     )
     sp_best.add_argument(
         'config',
-        type=argparse.FileType('r'),
+        type=str,
         help="Path for the used or generated configuration file.",
     )
     sp_best.add_argument(
@@ -246,7 +219,7 @@ def main():
     )
     sp_dump.add_argument(
         'config',
-        type=argparse.FileType('r'),
+        type=str,
         help="Path for the used or generated configuration file.",
     )
     sp_dump.add_argument(
