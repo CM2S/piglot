@@ -6,11 +6,13 @@ import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from multiprocessing.pool import ThreadPool as Pool
+from typing import Any
 import numpy as np
 import pandas as pd
 from yaml import safe_dump_all
 from piglot.parameter import ParameterSet
 from piglot.optimisers.optimiser import pretty_time
+from piglot.objective import SingleObjective
 from piglot.losses.loss import Loss, ScalarLoss, VectorLoss
 
 
@@ -467,10 +469,10 @@ class LinksCase:
             field.check(filename)
 
 
-class LinksLoss:
+class LinksLoss(SingleObjective):
     """Main loss class for Links problems."""
 
-    def __init__(self, cases, parameters, links_bin, n_concurrent=1, tmp_dir='tmp', output_dir=None):
+    def __init__(self, cases, parameters, links_bin, parallel=1, tmp_dir='tmp', output_dir=None):
         """Constructor for the Links_Loss class.
 
         Parameters
@@ -481,24 +483,20 @@ class LinksLoss:
             Parameter set for this problem.
         links_bin : str
             Path to the Links binary
-        n_concurrent : int, optional
+        parallel : int, optional
             Number of concurrent calls to Links in the multi-objective case, by default 1.
         tmp_dir : str, optional
             Path to temporary directory to run the analyses, by default 'tmp'.
         output_dir : str, optional
             Path to the output directory, if not passed history storing is disabled.
         """
+        super().__init__(parameters, output_dir=output_dir)
         self.cases = cases
-        self.parameters = parameters
         self.links_bin = links_bin
-        self.n_concurrent = n_concurrent
-        self.tmp_dir = tmp_dir
-        self.func_calls = 0
-        self.begin_time = time.time()
-        self.output_dir = output_dir
+        self.parallel = parallel
+        self.tmp_dir = os.path.join(output_dir, tmp_dir)
         self.cases_dir = os.path.join(output_dir, "cases") if output_dir else None
         self.cases_hist = os.path.join(output_dir, "cases_hist") if output_dir else None
-        self.func_calls_file = os.path.join(output_dir, "func_calls") if output_dir else None
         # Sanitise loss types
         self.base_loss = VectorLoss() if any([isinstance(case.loss, VectorLoss) for case in cases]) else ScalarLoss()
         if output_dir:
@@ -508,17 +506,12 @@ class LinksLoss:
             os.mkdir(self.cases_hist)
             # Build headers for case files
             for case in self.cases:
-                with open(os.path.join(self.cases_dir, case.filename), 'w') as file:
+                case_dir = os.path.join(self.cases_dir, case.filename)
+                with open(case_dir, 'w', encoding='utf8') as file:
                     file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}\t{"Loss":>15}\t{"Success":>10}')
                     for param in self.parameters:
                         file.write(f"\t{param.name:>15}")
                     file.write(f'\t{"Hash":>64}\n')
-            # Build header for function calls file
-            with open(os.path.join(self.func_calls_file), 'w') as file:
-                file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}\t{"Loss":>15}')
-                for param in self.parameters:
-                    file.write(f"\t{param.name:>15}")
-                file.write(f'\t{"Hash":>64}\n')
 
 
     def _run_case(self, X, case: LinksCase, tmp_dir: str):
@@ -541,9 +534,9 @@ class LinksLoss:
         write_parameters(self.parameters.to_dict(X), case.filename, input_file)
         param_hash = self.parameters.hash(X)
         # Run LINKS
-        begin_time = time.time()
+        begin_time = time.perf_counter()
         subprocess.run([self.links_bin, input_file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        end_time = time.time()
+        end_time = time.perf_counter()
         # Check if simulation completed
         screen_file = os.path.join(os.path.splitext(input_file)[0], f'{case_name}.screen')
         failed_case = not has_keyword(screen_file, "Program L I N K S successfully completed.")
@@ -588,15 +581,21 @@ class LinksLoss:
                     file.write(f"\t{param.denormalise(X[i]):>15.6f}")
                 file.write(f'\t{param_hash}\n')
         return final_loss
+    
+
+    def scalarise(self, loss_value: Any) -> float:
+        return self.base_loss.reduce(loss_value)
 
 
-    def loss(self, X, unique=False):
+    def loss(self, values, parallel=False):
         """Public loss function for a problem with Links.
 
         Parameters
         ----------
-        X : array
+        values : array
             Current parameters to evaluate the loss.
+        parallel : bool
+            Whether this run may be concurrent to another one (so use unique file names)
 
         Returns
         -------
@@ -604,33 +603,20 @@ class LinksLoss:
             Loss value for this set of parameters.
         """
         # Ensure tmp directory is clean
-        param_hash = self.parameters.hash(X)
-        tmp_dir = f'{self.tmp_dir}_{param_hash}' if unique else self.tmp_dir
+        tmp_dir = f'{self.tmp_dir}_{self.parameters.hash(values)}' if parallel else self.tmp_dir
         if os.path.isdir(tmp_dir):
             shutil.rmtree(tmp_dir)
         os.mkdir(tmp_dir)
-        self.func_calls += 1
         # Run cases (in parallel if specified)
-        begin_time = time.time()
-        run_case = lambda case: self._run_case(X, case, tmp_dir)
-        if self.n_concurrent > 1:
-            with Pool(self.n_concurrent) as pool:
+        run_case = lambda case: self._run_case(values, case, tmp_dir)
+        if self.parallel > 1:
+            with Pool(self.parallel) as pool:
                 losses = pool.map(run_case, self.cases)
         else:
             losses = map(run_case, self.cases)
         # Compute total loss
         final_loss = self.base_loss.average(list(losses))
-        end_time = time.time()
-        # Update function call history file
-        if self.output_dir:
-            with open(os.path.join(self.func_calls_file), 'a') as file:
-                file.write(f'{begin_time - self.begin_time:>15.8e}\t')
-                file.write(f'{end_time - begin_time:>15.8e}\t')
-                file.write(f'{self.base_loss.reduce(final_loss):>15.8e}')
-                for i, param in enumerate(self.parameters):
-                    file.write(f"\t{param.denormalise(X[i]):>15.6f}")
-                file.write(f'\t{param_hash}\n')
         # Cleanup temporary directories
-        if unique:
+        if parallel:
             shutil.rmtree(tmp_dir)
         return final_loss

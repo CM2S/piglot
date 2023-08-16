@@ -8,7 +8,8 @@ from yaml.scanner import ScannerError
 import piglot
 from piglot.losses import MixedLoss, Range, Minimum, Maximum, Slope
 from piglot.parameter import ParameterSet, DualParameterSet
-from piglot.links import LinksCase, Reaction, OutFile, extract_parameters
+from piglot.objective import AnalyticalObjective
+from piglot.links import LinksCase, Reaction, OutFile, LinksLoss, extract_parameters
 
 
 
@@ -189,20 +190,15 @@ def parse_case(file, case):
 
 
 def parse_parameters(config):
-    if "parameters" in config:
-        params_conf = config["parameters"]
-        parameters = DualParameterSet() if "output_parameters" in config else ParameterSet()
-        for name, spec in params_conf.items():
-            int_spec = [float(s) for s in spec]
-            parameters.add(name, *int_spec)
-        if "output_parameters" in config:
-            symbs = sympy.symbols(list(params_conf.keys()))
-            for name, spec in config["output_parameters"].items():
-                parameters.add_output(name, sympy.lambdify(symbs, spec))
-    else:
-        if len(config["cases"]) != 1:
-            raise RuntimeError("Cannot find a suitable input file to extract parameters from!")
-        parameters = extract_parameters(list(config["cases"].keys())[0])
+    params_conf = config["parameters"]
+    parameters = DualParameterSet() if "output_parameters" in config else ParameterSet()
+    for name, spec in params_conf.items():
+        int_spec = [float(s) for s in spec]
+        parameters.add(name, *int_spec)
+    if "output_parameters" in config:
+        symbs = sympy.symbols(list(params_conf.keys()))
+        for name, spec in config["output_parameters"].items():
+            parameters.add_output(name, sympy.lambdify(symbs, spec))
     # Fetch initial shot from another run
     if "init_shot_from" in config:
         with open(config["init_shot_from"], 'r') as f:
@@ -233,6 +229,48 @@ def parse_optimiser(opt_config):
 
 
 
+def parse_analytical_objective(objective_conf, parameters, output_dir):
+    # Check for mandatory arguments
+    if not 'expression' in objective_conf:
+        raise RuntimeError("Missing Links binary location")
+    return AnalyticalObjective(parameters, objective_conf['expression'], output_dir=output_dir)
+
+
+
+def parse_links_objective(objective_conf, parameters, output_dir):
+    # Manually parse cases
+    if not 'cases' in objective_conf:
+        raise RuntimeError("Missing Links cases")
+    cases_conf = objective_conf.pop("cases")
+    cases = [parse_case(file, case) for file, case in cases_conf.items()]
+    # Check for mandatory arguments
+    if not 'links' in objective_conf:
+        raise RuntimeError("Missing Links binary location")
+    links_bin = objective_conf.pop("links")
+    # Sanitise output directory, just in case it is passed
+    if 'output_dir' in objective_conf:
+        objective_conf.pop('output_dir')
+    # Build Links objective instance with remaining arguments
+    kwargs = {n: str_to_numeric(v) for n, v in objective_conf.items()}
+    return LinksLoss(cases, parameters, links_bin, output_dir=output_dir, **kwargs)
+
+
+
+def parse_objective(config, parameters, output_dir):
+    if not 'name' in config:
+        raise RuntimeError("Missing objective name")
+    name = config.pop('name')
+    # Delegate the objective
+    objectives = {
+        'analytical': parse_analytical_objective,
+        'links': parse_links_objective,
+    }
+    if name not in objectives:
+        raise RuntimeError(f"Unknown objective {name}. Must be one of {list(objectives.keys())}")
+    return objectives[name](config, parameters, os.path.join(output_dir, name))
+
+
+
 def parse_config_file(config_file):
     """Parses the YAML configuration file.
 
@@ -252,10 +290,19 @@ def parse_config_file(config_file):
         When the YAML parsing fails.
     """
     try:
-        with open(config_file, 'r') as file:
+        with open(config_file, 'r', encoding='utf8') as file:
             config = safe_load(file)
     except (ParserError, ScannerError) as exc:
         raise RuntimeError("Failed to parse the config file: YAML syntax seems invalid.") from exc
+    # Check required terms
+    if 'iters' not in config:
+        raise RuntimeError("Missing number of iterations from the config file")
+    if 'objective' not in config:
+        raise RuntimeError("Missing objective from the config file")
+    if 'optimiser' not in config:
+        raise RuntimeError("Missing optimiser from the config file")
+    if 'parameters' not in config:
+        raise RuntimeError("Missing parameters from the config file")
     # Add missing optional items
     if 'conv_tol' not in config:
         config["conv_tol"] = None
@@ -265,12 +312,8 @@ def parse_config_file(config_file):
         config["max_iters_no_improv"] = None
     if 'output' not in config:
         config['output'] = os.path.splitext(config_file)[0]
-    if 'tmp_dir' not in config:
-        config["tmp_dir"] = config["tmp_dir"] = os.path.join(config["output"], "tmp")
     if 'quiet' not in config:
         config["quiet"] = False
-    if 'links' not in config:
-        config["links"] = "LINKS"
     elif config['quiet']:
         config["quiet"] = True
     return config

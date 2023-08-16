@@ -252,7 +252,7 @@ class Optimiser(ABC):
                 file.write('\n')
         # Optimise
         self.begin = time.perf_counter()
-        self._optimise(self.loss.loss, n_dim, n_iter, new_bound, init_shot)
+        self._optimise(self.loss, n_dim, n_iter, new_bound, init_shot)
         elapsed = time.perf_counter() - self.begin
         # Denormalise best solution
         new_solution = [par.denormalise(self.best_solution[j])
