@@ -7,9 +7,7 @@ import shutil
 from yaml import safe_dump
 import piglot.losses
 import piglot.optimisers
-from piglot.optimisers.optimiser import StoppingCriteria
-from piglot.links import LinksLoss
-from piglot.yaml_parser import parse_parameters, parse_case, parse_optimiser, parse_config_file, parse_objective
+from piglot.yaml_parser import parse_parameters, parse_optimiser, parse_config_file, parse_objective, parse_stop_criteria
 
 
 
@@ -182,13 +180,6 @@ def get_config_dict(args):
                 }
             }
         }
-    # Sanitise remaining fields
-    if config["conv_tol"] is not None:
-        config["conv_tol"] = float(config["conv_tol"])
-    if config["max_func_calls"] is not None:
-        config["max_func_calls"] = int(config["max_func_calls"])
-    if config["max_iters_no_improv"] is not None:
-        config["max_iters_no_improv"] = int(config["max_iters_no_improv"])
     return config
 
 
@@ -207,9 +198,7 @@ def main():
     parameters = parse_parameters(config)
     optimiser = parse_optimiser(config["optimiser"])
     objective = parse_objective(config["objective"], parameters, output_dir)
-    stop = StoppingCriteria(conv_tol=config["conv_tol"],
-                            max_func_calls=config["max_func_calls"],
-                            max_iters_no_improv=config["max_iters_no_improv"])
+    stop = parse_stop_criteria(config)
     # Run the optimisation
     _, best_params = optimiser.optimise(objective, config["iters"], parameters,
                                         output=output_dir,

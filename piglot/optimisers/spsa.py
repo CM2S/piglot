@@ -1,9 +1,11 @@
 """SPSA optimiser module."""
+import numpy as np
 from scipy.stats import bernoulli
-from piglot.optimisers.optimiser import Optimiser, boundary_check
+from piglot.objective import SingleObjective
+from piglot.optimisers.optimiser import ScalarOptimiser, boundary_check
 
 
-class SPSA(Optimiser):
+class SPSA(ScalarOptimiser):
     """
     Simultaneous Perturbation Stochastic Approximation method for optimisation.
 
@@ -39,6 +41,7 @@ class SPSA(Optimiser):
             Model parameter, refer to documentation, by default None
             If None, this parameter is defined according to internal heuristics.
         """
+        super().__init__('SPSA')
         self.alpha = alpha
         self.gamma = gamma
         self.prob = prob
@@ -46,10 +49,16 @@ class SPSA(Optimiser):
         self.A = A
         self.a = a
         self.c = 1e-6 if c is None else c
-        self.name = 'SPSA'
 
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _optimise(
+        self,
+        objective: SingleObjective,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ):
         """Solves the optimisation problem.
 
         Parameters
@@ -87,26 +96,26 @@ class SPSA(Optimiser):
             self.a = 2 * (self.A + 1)**self.alpha
 
         x = init_shot
-        new_value = func(x)
+        new_value = objective(x)
         if self._progress_check(0, new_value, x):
             return x, new_value
 
         for i in range(0, n_iter):
             a_k = self.a / (self.A + i + 1) ** self.alpha
             c_k = self.c / (i + 1) ** self.gamma
-            # [-1,1] Bernoulli distribution 
+            # [-1,1] Bernoulli distribution
             delta = 2 * bernoulli.rvs(self.prob, size=n_dim, random_state=self.seed + i) - 1
             # Bound check
             up = boundary_check(x + c_k * delta, bound)
             low = boundary_check(x - c_k * delta, bound)
-            pos_loss = func(up)
-            neg_loss = func(low)
+            pos_loss = objective(up)
+            neg_loss = objective(low)
             gradient = (pos_loss - neg_loss) / (up - low)
             # Update solution
             x = x - a_k * gradient
             # Bound check
             x = boundary_check(x, bound)
-            new_value = func(x)
+            new_value = objective(x)
             # Update progress and check convergence
             if self._progress_check(i+1, new_value, x):
                 break

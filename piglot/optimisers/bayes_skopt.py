@@ -1,4 +1,5 @@
 """BayesSkopt optimiser module."""
+import numpy as np
 try:
     from skopt.utils import create_result
     from bask import Optimizer
@@ -6,7 +7,8 @@ except ImportError:
     # Show a nice exception when this package is used
     from piglot.optimisers.optimiser import missing_method
     Optimizer = missing_method("SK Bayesian optimisation", "bask")
-from piglot.optimisers.optimiser import Optimiser
+from piglot.objective import SingleObjective
+from piglot.optimisers.optimiser import ScalarOptimiser
 
 
 class OptimizerMod(Optimizer):
@@ -68,7 +70,7 @@ class OptimizerMod(Optimizer):
         return create_result(self.Xi, self.yi, self.space, self.rng, models=[self.gp])
 
 
-class BayesSkopt(Optimiser):
+class BayesSkopt(ScalarOptimiser):
     """
     BayesSkopt optimiser.
     Documentation:
@@ -164,6 +166,7 @@ class BayesSkopt(Optimiser):
             Note that the kernel's hyperparameters are estimated using MCMC during
             fitting.
         """
+        super().__init__('BO skopt')
         if Optimizer is None:
             raise ImportError("BayesSkopt failed to load. Check your installation.")
         self.priors = priors
@@ -172,9 +175,15 @@ class BayesSkopt(Optimiser):
         self.acq_func = acq_func
         self.n_points = n_points
         self.kernel = kernel
-        self.name = 'BO skopt'
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _optimise(
+        self,
+        objective: SingleObjective,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ):
         """
         Parameters
         ----------
@@ -209,6 +218,6 @@ class BayesSkopt(Optimiser):
                            acq_func_kwargs=dict(n_thompson=3),
                            random_state=None)
 
-        model = opt.run(self, func, n_iter, replace=False, n_samples=5,
+        model = opt.run(self, objective, n_iter, replace=False, n_samples=5,
                         gp_samples=100, gp_burnin=10)
         return model.x, model.fun

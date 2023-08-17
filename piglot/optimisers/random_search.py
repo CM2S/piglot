@@ -5,10 +5,11 @@ try:
     from scipy.stats import qmc
 except ImportError:
     qmc = None
-from piglot.optimisers.optimiser import Optimiser
+from piglot.objective import SingleObjective
+from piglot.optimisers.optimiser import ScalarOptimiser
 
 
-class PureRandomSearch(Optimiser):
+class PureRandomSearch(ScalarOptimiser):
     """
     Pure Random Search optimiser.
 
@@ -37,6 +38,7 @@ class PureRandomSearch(Optimiser):
             decreasing standard deviation throughout the iterative process.
             - 'sobol': Sampling based on the Sobol sequence (requires scipy >= 1.7).
         """
+        super().__init__('PRS')
         # Check if sampling method is valid
         valid_samples = ['uniform', 'normal', 'sobol']
         if sampling not in valid_samples:
@@ -45,11 +47,17 @@ class PureRandomSearch(Optimiser):
         if sampling == 'sobol' and qmc is None:
             raise ValueError("Sobol sequence requires qmc module in scipy >= 1.7!")
         # Store parameters
-        self.name = 'PRS'
         self.sampling = sampling
         self.seed = seed
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _optimise(
+        self,
+        objective: SingleObjective,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ):
         """
         Parameters
         ----------
@@ -78,7 +86,7 @@ class PureRandomSearch(Optimiser):
 
         # Compute loss function value given the initial shot
         best_solution = init_shot
-        best_value = func(best_solution)
+        best_value = objective(best_solution)
 
         # Check convergence for the initial shot
         if self._progress_check(0, best_value, best_solution):
@@ -107,7 +115,7 @@ class PureRandomSearch(Optimiser):
                                             * (upper_bounds - lower_bounds)
 
             # Compute function value and update best solution
-            new_value = func(new_solution)
+            new_value = objective(new_solution)
             if new_value < best_value:
                 best_solution = new_solution
                 best_value = new_value

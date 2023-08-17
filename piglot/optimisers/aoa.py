@@ -1,9 +1,10 @@
 """AOA optimiser module."""
 import numpy as np
-from piglot.optimisers.optimiser import Optimiser
+from piglot.objective import SingleObjective
+from piglot.optimisers.optimiser import ScalarOptimiser
 
 
-class AOA(Optimiser):
+class AOA(ScalarOptimiser):
     """
     AOA optimiser.
     Documentation:
@@ -56,6 +57,7 @@ class AOA(Optimiser):
         MOA_end : float
             Math Optimizer Accelerated function end value
         """
+        super().__init__('AOA')
         self.n_solutions = n_solutions
         self.alpha = alpha
         self.mu = mu
@@ -63,9 +65,15 @@ class AOA(Optimiser):
         self.rng = np.random.default_rng(1)
         self.MOA_start = MOA_start
         self.MOA_end = MOA_end
-        self.name = 'AOA'
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _optimise(
+        self,
+        objective: SingleObjective,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ):
         """
         Parameters
         ----------
@@ -101,7 +109,7 @@ class AOA(Optimiser):
         # Evaluate fitness
         fitness = np.zeros(self.n_solutions)
         for i in range(0, self.n_solutions):
-            fitness[i] = func(solutions[i,:])
+            fitness[i] = objective(solutions[i,:])
         # Update best solution
         pos_best_solution = np.argmin(fitness)
         best_value = fitness[pos_best_solution]
@@ -142,7 +150,7 @@ class AOA(Optimiser):
                 new_solution = np.where(new_solution > bound[:,1], bound[:,1], new_solution)
                 new_solution = np.where(new_solution < bound[:,0], bound[:,0], new_solution)
                 # Update fitness function
-                new_fitness = func(new_solution)
+                new_fitness = objective(new_solution)
                 if new_fitness < fitness[i_solution]:
                     fitness[i_solution] = new_fitness
                     solutions[i_solution,:] = new_solution

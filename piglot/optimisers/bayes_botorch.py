@@ -18,11 +18,12 @@ try:
     from botorch.acquisition.knowledge_gradient import qKnowledgeGradient
     from botorch.optim import optimize_acqf
     from botorch.sampling import SobolQMCNormalSampler
-    from piglot.optimisers.optimiser import Optimiser
+    from piglot.objective import SingleObjective
+    from piglot.optimisers.optimiser import ScalarOptimiser
 except ImportError:
     # Show a nice exception when this package is used
     from piglot.optimisers.optimiser import missing_method
-    Optimiser = missing_method("Bayesian optimisation (BoTorch)", "botorch")
+    ScalarOptimiser = missing_method("Bayesian optimisation (BoTorch)", "botorch")
 
 
 
@@ -84,11 +85,12 @@ class BayesDataset:
 
 
 
-class BayesianBoTorch(Optimiser):
+class BayesianBoTorch(ScalarOptimiser):
 
     def __init__(self, n_initial=5, acquisition='ucb', log_space=False, def_variance=0,
                  beta=0.5, beta_final=None, noisy=False, q=1, seed=42, load_file=None,
                  export=None, n_test=0):
+        super().__init__('BoTorch')
         self.n_initial = n_initial
         self.acquisition = acquisition
         self.log_space = log_space
@@ -101,7 +103,6 @@ class BayesianBoTorch(Optimiser):
         self.load_file = load_file
         self.export = export
         self.n_test = n_test
-        self.name = 'BoTorch'
         if self.acquisition not in ('ucb', 'ei', 'pi', 'kg', 'qucb', 'qei', 'qpi', 'qkg'):
             raise RuntimeError(f"Unkown acquisition function {self.acquisition}")
         if not self.acquisition.startswith('q') and self.q != 1:
@@ -212,7 +213,14 @@ class BayesianBoTorch(Optimiser):
             points = qmc.Sobol(n_dim, seed=seed).random(n_points)
         return [point * (bound[:, 1] - bound[:, 0]) + bound[:, 0] for point in points]
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _optimise(
+        self,
+        objective: SingleObjective,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ):
         """
         Parameters
         ----------
@@ -242,11 +250,11 @@ class BayesianBoTorch(Optimiser):
 
         # Build initial dataset with the initial shot
         dataset = BayesDataset(n_dim, bound, export=self.export)
-        dataset.push(init_shot, loss_transformer(func(init_shot)), self.def_variance)
+        dataset.push(init_shot, loss_transformer(objective(init_shot)), self.def_variance)
 
         # If requested, sample some random points before starting (in parallel if possible)
         random_points = self._get_random_points(self.n_initial, n_dim, self.seed, bound)
-        init_losses = self._eval_candidates(func, random_points)
+        init_losses = self._eval_candidates(objective, random_points)
         for i, loss in enumerate(init_losses):
             dataset.push(random_points[i], loss_transformer(loss), self.def_variance)
 
@@ -258,7 +266,7 @@ class BayesianBoTorch(Optimiser):
         test_dataset = BayesDataset(n_dim, bound)
         if self.n_test > 0:
             test_points = self._get_random_points(self.n_test, n_dim, self.seed + 1, bound)
-            test_losses = self._eval_candidates(func, test_points)
+            test_losses = self._eval_candidates(objective, test_points)
             for i, loss in enumerate(test_losses):
                 test_dataset.push(test_points[i], loss_transformer(loss), self.def_variance)
 
@@ -272,7 +280,7 @@ class BayesianBoTorch(Optimiser):
 
             # Generate and evaluate candidates (in parallel if possible)
             candidates, cv_error = self.get_candidates(n_dim, dataset, beta, test_dataset)
-            losses = self._eval_candidates(func, candidates)
+            losses = self._eval_candidates(objective, candidates)
 
             # Find best value for this batch and update dataset
             best_idx = np.argmin(losses)

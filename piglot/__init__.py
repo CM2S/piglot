@@ -16,7 +16,6 @@ def optimiser(name, *args, **kwargs):
         - `direct`: DIRECT in `piglot.optimisers.direct`;
         - `ga`: Genetic Algorithm in `piglot.optimisers.ga`;
         - `lipo`: LIPO in `piglot.optimisers.lipo_opt`;
-        - `hybrid`: Random search with Adam SPSA in `piglot.optimisers.prs_spsa`;
         - `pso`: Particle swarm optimisation in `piglot.optimisers.pso`;
         - `random`: Random search in `piglot.optimisers.random_search`;
         - `spsa-adam`: SPSA with Adam gradient update in `piglot.optimisers.spsa_adam`;
@@ -45,8 +44,6 @@ def optimiser(name, *args, **kwargs):
         return piglot.optimisers.GA(*args, **kwargs)
     if name == 'lipo':
         return piglot.optimisers.LIPO(*args, **kwargs)
-    if name == 'hybrid':
-        return piglot.optimisers.PRS_SPSA(*args, **kwargs)
     if name == 'pso':
         return piglot.optimisers.PSO(*args, **kwargs)
     if name == 'random':
@@ -57,7 +54,7 @@ def optimiser(name, *args, **kwargs):
         return piglot.optimisers.SPSA_Adam_Composite(*args, **kwargs)
     if name == 'spsa':
         return piglot.optimisers.SPSA(*args, **kwargs)
-    raise NameError(f"Internal error: loss function not implemented!")
+    raise NameError("Internal error: loss function not implemented!")
 
 
 def loss(name, *args, **kwargs):
@@ -105,4 +102,4 @@ def loss(name, *args, **kwargs):
         return piglot.losses.VectorLoss(*args, **kwargs)
     if name == 'scalar_vector':
         return piglot.losses.ScalarVectorLoss(*args, **kwargs)
-    raise NameError(f"Internal error: loss function not implemented!")
+    raise NameError("Internal error: loss function not implemented!")

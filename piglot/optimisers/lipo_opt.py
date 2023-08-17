@@ -1,11 +1,13 @@
 """LIPO optimiser module."""
+import numpy as np
 try:
     from lipo import GlobalOptimizer
 except ImportError:
     # Show a nice exception when this package is used
     from piglot.optimisers.optimiser import missing_method
     GlobalOptimizer = missing_method("LIPO", "lipo")
-from piglot.optimisers.optimiser import Optimiser
+from piglot.objective import SingleObjective
+from piglot.optimisers.optimiser import ScalarOptimiser
 
 
 class GlobalOptimizerMod(GlobalOptimizer):
@@ -24,7 +26,7 @@ class GlobalOptimizerMod(GlobalOptimizer):
                 break
 
 
-class LIPO(Optimiser):
+class LIPO(ScalarOptimiser):
     """
     LIPO optimiser.
     Documentation:
@@ -85,15 +87,22 @@ class LIPO(Optimiser):
         random_state : int
             random state
         """
+        super().__init__('LIPO')
         self.log_args = log_args
         self.flexible_bounds = flexible_bounds
         self.flexible_bound_threshold = flexible_bound_threshold
         self.flexible_bound_threshold = flexible_bound_threshold
         self.epsilon = epsilon
         self.random_state = random_state
-        self.name = 'LIPO'
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _optimise(
+        self,
+        objective: SingleObjective,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ):
         """
         Parameters
         ----------
@@ -121,7 +130,7 @@ class LIPO(Optimiser):
         # Convert the optimization problem to a minimization problem by negating the
         # optimization function
         def negate(**kwargs):
-            return -func(list(kwargs.values()))
+            return -objective(list(kwargs.values()))
         #def negate(**kwargs):
         #    return func(list(kwargs.values()))
         # Convert the bounds in array type to dicitionary type, as required in the

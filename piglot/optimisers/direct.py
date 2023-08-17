@@ -1,7 +1,8 @@
 """DIRECT optimiser module."""
 import copy
 import numpy as np
-from piglot.optimisers.optimiser import Optimiser
+from piglot.objective import SingleObjective
+from piglot.optimisers.optimiser import ScalarOptimiser
 
 
 class Rectangle:
@@ -39,7 +40,7 @@ class Rectangle:
         return np.linalg.norm(self.size / 2)
 
 
-class DIRECT(Optimiser):
+class DIRECT(ScalarOptimiser):
     """
     DIRECT method for optimisation.
 
@@ -60,8 +61,8 @@ class DIRECT(Optimiser):
         epsilon : float, optional
             Model parameter, refer to documentation, by default 0.
         """
+        super().__init__('DIRECT')
         self.epsilon = epsilon
-        self.name = 'DIRECT'
         self.K = 0
 
     def __divide_rectangle(self, n_dim, rectangles, j, func):
@@ -206,7 +207,14 @@ class DIRECT(Optimiser):
                 final_potential.append(j)
         return final_potential
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _optimise(
+        self,
+        objective: SingleObjective,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ):
         """Solves the optimisation problem.
 
         Parameters
@@ -234,7 +242,7 @@ class DIRECT(Optimiser):
         self.K = 0
         center = (bound[:,1] + bound[:,0]) / 2
         cube_size = bound[:,1] - bound[:,0]
-        best_value = func(center)
+        best_value = objective(center)
         rectangles = [Rectangle(cube_size, center, best_value)]
 
         # Check if this solution is converged
@@ -250,8 +258,7 @@ class DIRECT(Optimiser):
             iter_value = np.inf
             iter_solution = None
             for j in potentially_optimal:
-                new_solution, new_value = self.__divide_rectangle(n_dim, rectangles, j,
-                                                                  func)
+                new_solution, new_value = self.__divide_rectangle(n_dim, rectangles, j, objective)
                 best_value = min(best_value, new_value)
                 if new_value < iter_value:
                     iter_value = new_value

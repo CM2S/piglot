@@ -20,11 +20,11 @@ try:
     from botorch.acquisition.objective import GenericMCObjective
     from botorch.optim import optimize_acqf, optimize_acqf_mixed
     from botorch.sampling import SobolQMCNormalSampler
-    from piglot.optimisers.optimiser import Optimiser
+    from piglot.optimisers.optimiser import CompositeOptimiser
 except ImportError:
     # Show a nice exception when this package is used
     from piglot.optimisers.optimiser import missing_method
-    Optimiser = missing_method("Bayesian optimisation (BoTorch)", "botorch")
+    CompositeOptimiser = missing_method("Bayesian optimisation (BoTorch)", "botorch")
 
 
 
@@ -96,11 +96,12 @@ class BayesDataset:
 
 
 
-class BayesianBoTorchComposite(Optimiser):
+class BayesianBoTorchComposite(CompositeOptimiser):
 
     def __init__(self, n_initial=5, acquisition='ucb', log_space=False, def_variance=0,
                  beta=0.5, beta_final=None, noisy=False, q=1, seed=42, load_file=None,
                  export=None, fidelities=None, n_test=0):
+        super().__init__('BoTorch')
         self.n_initial = n_initial
         self.acquisition = acquisition
         self.log_space = log_space
@@ -115,7 +116,6 @@ class BayesianBoTorchComposite(Optimiser):
         self.fidelities = fidelities
         self.n_test = n_test
         self.multi_fidelity_run = fidelities is not None
-        self.name = 'BoTorch'
         if self.acquisition not in ('ucb', 'ei', 'pi', 'kg', 'qucb', 'qei', 'qpi', 'qkg'):
             raise RuntimeError(f"Unkown acquisition function {self.acquisition}")
         torch.set_num_threads(1)
@@ -268,8 +268,14 @@ class BayesianBoTorchComposite(Optimiser):
             points = qmc.Sobol(n_dim, seed=seed).random(n_points)
         return [point * (bound[:, 1] - bound[:, 0]) + bound[:, 0] for point in points]
 
-
-    def _optimise(self, func: SingleCompositeObjective, n_dim, n_iter, bound, init_shot):
+    def _optimise(
+        self,
+        objective: SingleCompositeObjective,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ):
         """
         Parameters
         ----------
@@ -294,7 +300,7 @@ class BayesianBoTorchComposite(Optimiser):
         """
 
         # Evaluate initial shot and use it to infer number of dimensions
-        init_response = func(init_shot)
+        init_response = objective(init_shot)
         n_outputs = len(init_response)
         def_variance = np.ones(n_outputs) * self.def_variance
 
@@ -304,7 +310,7 @@ class BayesianBoTorchComposite(Optimiser):
 
         # If requested, sample some random points before starting (in parallel if possible)
         random_points = self._get_random_points(self.n_initial, n_dim, self.seed, bound)
-        init_responses = self._eval_candidates(func, random_points)
+        init_responses = self._eval_candidates(objective, random_points)
         for i, response in enumerate(init_responses):
             dataset.push(random_points[i], response, def_variance)
 
@@ -320,12 +326,12 @@ class BayesianBoTorchComposite(Optimiser):
         # Build test dataset
         test_dataset = BayesDataset(n_dim, n_outputs, bound)
         test_points = self._get_random_points(self.n_test, n_dim, self.seed + 1, bound)
-        test_responses = self._eval_candidates(func, test_points)
+        test_responses = self._eval_candidates(objective, test_points)
         for i, response in enumerate(test_responses):
             test_dataset.push(test_points[i], response, def_variance)
 
         # Find current best point to return to the driver
-        best_params, best_loss = self._get_best_point(dataset, func.composition)
+        best_params, best_loss = self._get_best_point(dataset, objective.composition)
         self._progress_check(0, best_loss, best_params)
 
         # Optimisation loop
@@ -333,9 +339,10 @@ class BayesianBoTorchComposite(Optimiser):
             beta = (self.beta * (n_iter - i_iter - 1) + self.beta_final * i_iter) / n_iter
 
             # Generate and evaluate candidates (in parallel if possible)
-            candidates, cv_error = self.get_candidates(n_dim, dataset, beta, test_dataset, func.composition)
-            responses = self._eval_candidates(func, candidates)
-            losses = [func.composition(response) for response in responses]
+            candidates, cv_error = self.get_candidates(n_dim, dataset, beta, test_dataset,
+                                                       objective.composition)
+            responses = self._eval_candidates(objective, candidates)
+            losses = [objective.composition(response) for response in responses]
 
             # Find best value for this batch and update dataset
             best_idx = np.argmin(losses)
@@ -349,5 +356,5 @@ class BayesianBoTorchComposite(Optimiser):
                 break
 
         # Return optimisation result
-        best_params, best_loss = self._get_best_point(dataset, func.composition)
+        best_params, best_loss = self._get_best_point(dataset, objective.composition)
         return best_params, best_loss

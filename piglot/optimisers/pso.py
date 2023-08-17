@@ -9,7 +9,8 @@ except ImportError:
     # Show a nice exception when this package is used
     from piglot.optimisers.optimiser import missing_method
     GlobalBestPSO = missing_method("PSO", "pyswarms")
-from piglot.optimisers.optimiser import Optimiser
+from piglot.objective import SingleObjective
+from piglot.optimisers.optimiser import ScalarOptimiser
 
 
 class GlobalBestPSOMod(GlobalBestPSO):
@@ -166,7 +167,7 @@ class GlobalBestPSOMod(GlobalBestPSO):
             # return np.concatenate(results)
 
 
-class PSO(Optimiser):
+class PSO(ScalarOptimiser):
     """
     PSO optimiser.
     Documentation:
@@ -249,6 +250,7 @@ class PSO(Optimiser):
             number of processes to use for parallel particle evaluation (default: None =
             no parallelization)
         """
+        super().__init__('PSO')
         self.n_part = n_part
         self.options = options
         self.oh_strategy = oh_strategy
@@ -258,10 +260,16 @@ class PSO(Optimiser):
         self.center = center
         self.ftol_iter = ftol_iter
         self.n_processes = n_processes
-        self.name = 'PSO'
         self.rng = np.random.default_rng(1)
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _optimise(
+        self,
+        objective: SingleObjective,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ):
         """
         Parameters
         ----------
@@ -294,5 +302,5 @@ class PSO(Optimiser):
                                  self.vh_strategy, self.center, -np.inf, self.ftol_iter,
                                  population)
 
-        x, new_value = model.optimize(self, func, n_iter, self.n_processes, False)
+        x, new_value = model.optimize(self, objective, n_iter, self.n_processes, False)
         return x, new_value

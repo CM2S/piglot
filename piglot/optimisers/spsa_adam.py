@@ -1,10 +1,11 @@
 """Hybrid SPSA-Adam optimiser module."""
 import numpy as np
 from scipy.stats import bernoulli
-from piglot.optimisers.optimiser import Optimiser, boundary_check
+from piglot.objective import SingleObjective
+from piglot.optimisers.optimiser import ScalarOptimiser, boundary_check
 
 
-class SPSA_Adam(Optimiser):
+class SPSA_Adam(ScalarOptimiser):
     """
     Hybrid Simultaneous Perturbation Stochastic Approximation-Adam method for optimisation.
 
@@ -40,6 +41,7 @@ class SPSA_Adam(Optimiser):
             Model parameter, refer to documentation, by default None
             If None, this parameter is defined according to internal heuristics.
         """
+        super().__init__('AdamSPSA')
         self.alpha = alpha
         self.beta1 = beta1
         self.beta2 = beta2
@@ -48,10 +50,16 @@ class SPSA_Adam(Optimiser):
         self.prob = prob
         self.c = 1e-6 if c is None else c
         self.seed = seed
-        self.name = 'AdamSPSA'
 
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _optimise(
+        self,
+        objective: SingleObjective,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ):
         """Solves the optimisation problem.
 
         Parameters
@@ -84,7 +92,7 @@ class SPSA_Adam(Optimiser):
             raise RuntimeError('Need to pass an initial shot for SPSA!')
 
         x = init_shot
-        new_value = func(x)
+        new_value = objective(x)
         if self._progress_check(0, new_value, x):
             return x, new_value
 
@@ -99,8 +107,8 @@ class SPSA_Adam(Optimiser):
             # Bound check
             up = boundary_check(x + c_k * delta, bound)
             low = boundary_check(x - c_k * delta, bound)
-            pos_loss = func(up)
-            neg_loss = func(low)
+            pos_loss = objective(up)
+            neg_loss = objective(low)
             gradient = (pos_loss - neg_loss) / (up - low)
             # Update solution with Adam
             m = self.beta1 * m + (1 - self.beta1) * gradient
@@ -110,7 +118,7 @@ class SPSA_Adam(Optimiser):
             x = x - self.alpha * mhat / (np.sqrt(vhat) + self.epsilon)
             # Bound check
             x = boundary_check(x, bound)
-            new_value = func(x)
+            new_value = objective(x)
             # Update progress and check convergence
             if self._progress_check(i+1, new_value, x):
                 break

@@ -8,7 +8,8 @@ except ImportError:
     # Show a nice exception when this package is used
     from piglot.optimisers.optimiser import missing_method
     BayesianOptimization = missing_method("Bayesian optimisation", "bayes_opt")
-from piglot.optimisers.optimiser import Optimiser
+from piglot.objective import SingleObjective
+from piglot.optimisers.optimiser import ScalarOptimiser
 
 
 class BayesianOptimizationMod(BayesianOptimization):
@@ -88,7 +89,7 @@ class BayesianOptimizationMod(BayesianOptimization):
         self.dispatch(Events.OPTIMIZATION_END)
 
 
-class Bayesian(Optimiser):
+class Bayesian(ScalarOptimiser):
     """
     Bayesian optimiser.
     Documentation:
@@ -182,6 +183,7 @@ class Bayesian(Optimiser):
         """
         if BayesianOptimization is None:
             raise ImportError("bayes_opt failed to load. Check your installation.")
+        super().__init__('BO')
         self.random_state = random_state
         self.verbose = verbose
         self.bounds_transformer = bounds_transformer
@@ -193,9 +195,15 @@ class Bayesian(Optimiser):
         self.xi = xi
         self.gp_params = gp_params
         self.log_space = log_space
-        self.name = 'BO'
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _optimise(
+        self,
+        objective: SingleObjective,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ):
         """
         Parameters
         ----------
@@ -222,7 +230,7 @@ class Bayesian(Optimiser):
         # optimization function
         loss_transformer = lambda loss: np.log(loss) if self.log_space else loss
         def negate(**kwargs):
-            return -loss_transformer(func(list(kwargs.values())))
+            return -loss_transformer(objective(list(kwargs.values())))
         # Convert the bounds in array type to dicitionary type, as required in the
         # BayesianOptimization documentation
         bound = tuple(map(tuple, bound))

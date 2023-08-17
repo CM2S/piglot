@@ -1,23 +1,26 @@
-"""Main optimizer module."""
+"""Main optimiser module"""
 import os
-import time 
+import time
 from abc import ABC, abstractmethod
+from typing import Tuple
 import numpy as np
 from tqdm import tqdm
+from piglot.parameter import ParameterSet
+from piglot.objective import Objective, SingleObjective, SingleCompositeObjective
 
 
 def pretty_time(elapsed_sec):
-    """Return a human-readable representation of a given elapsed time.
+    """Return a human-readable representation of a given elapsed time
 
     Parameters
     ----------
     elapsed_sec : float
-        Elapsed time, in seconds.
+        Elapsed time, in seconds
 
     Returns
     -------
     str
-        Pretty elapsed time string.
+        Pretty elapsed time string
     """
     mults = {
         'y': 60*60*24*365,
@@ -39,19 +42,19 @@ def pretty_time(elapsed_sec):
 
 
 def boundary_check(arg, bounds):
-    """Check if the values are within the bounds and correct them if not.
+    """Check if the values are within the bounds and correct them if not
 
     Parameters
     ----------
     arg : array
-        Values to check.
+        Values to check
     bounds : array
-        Lower and upper bounds.
+        Lower and upper bounds
 
     Returns
     -------
     array
-        Corrected values.
+        Corrected values
     """
     arg = np.where(arg > bounds[:,1], bounds[:,1], arg)
     arg = np.where(arg < bounds[:,0], bounds[:,0], arg)
@@ -59,7 +62,7 @@ def boundary_check(arg, bounds):
 
 
 def missing_method(name, package):
-    """Class generator for missing packages.
+    """Class generator for missing packages
 
     Parameters
     ----------
@@ -83,10 +86,9 @@ def missing_method(name, package):
         ImportError
             Every time it is called
         """
-        raise ImportError("{0} is not available. You need to install package {1}!"\
-                          .format(name, package))
+        raise ImportError(f"{name} is not available. You need to install package {package}!")
 
-    return type('Missing_{0}'.format(package), (),
+    return type(f'Missing_{package}', (),
                 {
                     'name': name,
                     'package': package,
@@ -101,59 +103,82 @@ class StoppingCriteria:
     Attributes
     ----------
     conv_tol : float
-        stop the optimizer if the loss reaches the conv_tol value
-    max_iters_no_improv : integer
-        stop the optimizer if the loss does not improve in max_iters_no_improv iterations
-    max_func_calls : integer
-        stop the optimizer if the optimizer called max_func_calls times the loss function
+        Stop the optimiser if the loss becomes small than this value
+    max_iters_no_improv : int
+        Stop the optimiser if the loss does not improve after this number of iterations in a row
+    max_func_calls : int
+        Stop the optimiser after this number of function calls
+    max_timeout : float
+        Stop the optimiser after this elapsed time (in seconds)
 
     Methods
     -------
     check_criteria(loss_value, iters_no_improv, func_calls):
         check the status of the stopping criteria
     """
-    def __init__(self, conv_tol=None, max_iters_no_improv=None, max_func_calls=None):
+    def __init__(
+            self,
+            conv_tol: float=None,
+            max_iters_no_improv: int=None,
+            max_func_calls: int=None,
+            max_timeout: float=None,
+        ):
         """
         Constructs all the necessary attributes for the stopping criteria
 
         Parameters
         ----------
         conv_tol : float
-            stop the optimizer if the loss reaches the conv_tol value
-        max_iters_no_improv : integer
-            stop the optimizer if the loss does not improve in max_iters_no_improv
-            iterations
-        max_func_calls : integer
-            stop the optimizer if the optimizer called max_func_calls times the loss
-            function
-
+            Stop the optimiser if the loss becomes small than this value
+        max_iters_no_improv : int
+            Stop the optimiser if the loss does not improve after this number of iterations in a row
+        max_func_calls : int
+            Stop the optimiser after this number of function calls
+        max_timeout : float
+            Stop the optimiser after this elapsed time (in seconds)
         """
         self.conv_tol = conv_tol
         self.max_iters_no_improv = max_iters_no_improv
         self.max_func_calls = max_func_calls
+        self.max_timeout = max_timeout
 
-    def check_criteria(self, loss_value, iters_no_improv, func_calls):
+    def check_criteria(
+            self,
+            loss_value: float,
+            iters_no_improv: int,
+            func_calls: int,
+            elapsed: float,
+        ) -> bool:
         """
         Check the status of the stopping criteria
 
         Parameters
         ----------
         loss_value : float
-            current loss value
-        iters_no_improv : integer
-            current number of iterations without loss improvement
-        func_calls : integer
-            current number of loss function calls
+            Current loss value
+        iters_no_improv : int
+            Current number of iterations without improvement
+        func_calls : int
+            Current number of function calls
+        elapsed : float
+            Elapsed time in seconds
 
         Returns
         -------
-        True if any of the criteria are satisfied
+        bool
+            Whether any of the criteria are satisfied
         """
-        conv = False if self.conv_tol is None else loss_value < self.conv_tol
-        func = False if self.max_func_calls is None else func_calls > self.max_func_calls
-        impr = False if self.max_iters_no_improv is None \
-                     else iters_no_improv > self.max_iters_no_improv
-        return conv or impr or func
+        conv = self.conv_tol is not None and loss_value < self.conv_tol
+        func = self.max_func_calls is not None and func_calls > self.max_func_calls
+        impr = self.max_iters_no_improv is not None and iters_no_improv > self.max_iters_no_improv
+        timr = self.max_timeout is not None and elapsed > self.max_timeout
+        return conv or impr or func or timr
+
+
+
+class InvalidOptimiserException(Exception):
+    """Exception signaling invalid combination of optimiser and objective function"""
+
 
 
 class Optimiser(ABC):
@@ -163,203 +188,291 @@ class Optimiser(ABC):
     Methods
     -------
     _init_optimiser(n_iter, parameters, pbar, loss, stop_criteria):
-        constructs the attributes for the optimizer
+        constructs the attributes for the optimiser
     optimise(loss, n_iter, parameters, stop_criteria = StoppingCriteria()):
-        initiates optimizer
+        initiates optimiser
     _optimise(self, func, n_dim, n_iter, bound, init_shot):
         performs the optimization
-    _progress_check(self, iiter, curr_value, curr_solution):
-        evaluates the optimizer progress
+    _progress_check(self, i_iter, curr_value, curr_solution):
+        evaluates the optimiser progress
     """
-    def _init_optimiser(self, n_iter, parameters, pbar, loss, stop_criteria, output, verbose):
-        """
-        Constructs the attributes for the optimizer
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.parameters = None
+        self.i_iter = None
+        self.n_iter = None
+        self.iters_no_improv = None
+        self.pbar = None
+        self.objective = None
+        self.stop_criteria = None
+        self.output = None
+        self.best_value = None
+        self.best_solution = None
+        self.begin_time = None
+
+
+    @abstractmethod
+    def _validate_problem(self, objective: Objective) -> None:
+        """Validate the combination of optimiser and objective
 
         Parameters
         ----------
-        n_iter : integer
-            maximum number of iterations
-        parameters : Parameter()
-            parameters class
-        pbar : tqdm
-            progress bar
-        loss : Loss()
-            loss class
-        stop_criteria : StoppingCriteria()
-            stopping criteria
-        output : bool
-            Whether to write output to a file
+        objective : Objective
+            Objective to optimise
         """
-        self.parameters = parameters
-        self.n_iter = n_iter
-        self.iters_no_improv = 0
-        n_dim = len(self.parameters)
-        # Prepare history arrays
-        self.value_history = np.empty(n_iter + 1)
-        self.best_value_history = np.empty(n_iter + 1)
-        self.solution_history = np.empty((n_iter + 1, n_dim))
-        self.value_history[:] = np.inf
-        self.best_value_history[:] = np.inf
-        self.solution_history[:,:] = np.nan
-        self.pbar = pbar
-        self.loss = loss
-        self.stop_criteria = stop_criteria
-        self.output = output
-        self._verbose = verbose
 
 
-    def optimise(self, loss, n_iter, parameters, stop_criteria=StoppingCriteria(), output=None, verbose=True):
+    def optimise(
+            self,
+            objective: Objective,
+            n_iter: int,
+            parameters: ParameterSet,
+            stop_criteria: StoppingCriteria=StoppingCriteria(),
+            output: str=None,
+            verbose: bool=True,
+        ) -> Tuple[float, np.ndarray]:
         """
-        Initiates optimizer
+        Optimiser for the outside world
 
         Parameters
         ----------
-        loss : Loss()
-            loss class
-        n_iter : integer
-            maximum number of iterations
-        parameters : Parameter()
-            parameters class
-        stop_criteria : StoppingCriteria()
-            stopping criteria
+        objective : Objective
+            Objective function to optimise
+        n_iter : int
+            Maximum number of iterations
+        parameters : ParameterSet
+            Set of parameters to optimise
+        stop_criteria : StoppingCriteria
+            List of stopping criteria, by default none attributed
         output : bool
-            Whether to write output to a file
+            Whether to write output to the output directory, by default None
+        verbose : bool
+            Whether to output progress status, by default True
 
         Returns
         -------
-        best_value : float
-            best loss function value
-        best_solution : list
-            best parameter solution
+        float
+            Best observed objective value
+        np.ndarray
+            Observed optimum of the objective
         """
+        # Sanity check
+        self._validate_problem(objective)
         # Initialise optimiser
-        pbar = tqdm(total=n_iter, desc=self.name) if verbose else None
-        self._init_optimiser(n_iter, parameters, pbar, loss, stop_criteria, output, verbose)
+        self.pbar = tqdm(total=n_iter, desc=self.name) if verbose else None
+        self.n_iter = n_iter
+        self.parameters = parameters
+        self.objective = objective
+        self.stop_criteria = stop_criteria
+        self.output = output
+        self.iters_no_improv = 0
         # Build initial shot and bounds
         n_dim = len(self.parameters)
         init_shot = [par.normalise(par.inital_value) for par in self.parameters]
-        new_bound = np.ones((n_dim, 2))
-        new_bound[:,0] = -1
+        bounds = np.ones((n_dim, 2))
+        bounds[:,0] = -1
         # Build best solution
         self.best_value = np.inf
         self.best_solution = None
         # Prepare history output files
-        if output:
-            with open(os.path.join(self.output, "history"), 'w') as file:
-                file.write(f'{"Iteration":>10}\t{"Time /s":>15}\t{"Best Loss":>15}\t{"Current Loss":>15}')
+        if output is not None:
+            with open(os.path.join(self.output, "history"), 'w', encoding='utf8') as file:
+                file.write(f'{"Iteration":>10}\t')
+                file.write(f'{"Time /s":>15}\t')
+                file.write(f'{"Best Loss":>15}\t')
+                file.write(f'{"Current Loss":>15}\t')
                 for par in self.parameters:
-                    file.write(f'\t{par.name:>15}')
+                    file.write(f'{par.name:>15}\t')
+                file.write('\tOptimiser info')
                 file.write('\n')
         # Optimise
-        self.begin = time.perf_counter()
-        self._optimise(self.loss, n_dim, n_iter, new_bound, init_shot)
-        elapsed = time.perf_counter() - self.begin
+        self.begin_time = time.perf_counter()
+        self._optimise(objective, n_dim, n_iter, bounds, init_shot)
+        elapsed = time.perf_counter() - self.begin_time
         # Denormalise best solution
-        new_solution = [par.denormalise(self.best_solution[j])
-                        for j, par in enumerate(self.parameters)]
+        new_solution = self.parameters.denormalise(self.best_solution)
         if verbose:
             self.pbar.close()
-            print(f'Completed {self.iiter} iterations in {pretty_time(elapsed)}')
+            print(f'Completed {self.i_iter} iterations in {pretty_time(elapsed)}')
             print(f'Best loss: {self.best_value:15.8e}')
-            print(f'Best parameters')
-            largest = max([len(par.name) for par in self.parameters])
+            print('Best parameters')
+            max_width = max(len(par.name) for par in self.parameters)
             for i, par in enumerate(self.parameters):
-                print(f'- {par.name.rjust(largest)}: {new_solution[i]:>12.6f}')
+                print(f'- {par.name.rjust(max_width)}: {new_solution[i]:>12.6f}')
         # Return the best value
-        return self.best_value, new_solution
+        return self.best_value, np.array(new_solution)
+
 
     @abstractmethod
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _optimise(
+        self,
+        objective: Objective,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ):
         """
-        Performs the optimization
+        Abstract method for optimising the objective
 
         Parameters
         ----------
-        func : callable
-            function to optimize
-        n_dim : integer
-            dimension, i.e., number of parameters to optimize
-        n_iter : integer
-            maximum number of iterations
-        bound : array
-            first column corresponding to the lower bound, and second column to the
-            upper bound
-        init_shot : list
-            initial shot for the optimization problem
+        objective : Objective
+            Objective function to optimise
+        n_dim : int
+            Number of parameters to optimise
+        n_iter : int
+            Maximum number of iterations
+        bound : np.ndarray
+            Array where first and second columns correspond to lower and upper bounds, respectively
+        init_shot : np.ndarray
+            Initial shot for the optimisation problem
 
         Returns
         -------
-        best_value : float
-            best loss function value
-        best_solution : list
-            best parameter solution
+        float
+            Best observed objective value
+        np.ndarray
+            Observed optimum of the objective
         """
 
-    def __update_progress_files(self, iiter, curr_solution, curr_value):
-        elapsed = time.perf_counter() - self.begin
-        denorm_best = [par.denormalise(self.best_solution[i]) for i, par in enumerate(self.parameters)]
-        denorm_curr = [par.denormalise(curr_solution[i]) for i, par in enumerate(self.parameters)]
+
+    def __update_progress_files(
+            self,
+            i_iter: int,
+            curr_solution: float,
+            curr_value: np.ndarray,
+            extra_info: str,
+        ) -> None:
+        """Update progress on output files
+
+        Parameters
+        ----------
+        i_iter : int
+            Current iteration number
+        curr_value : float
+            Current objective value
+        curr_solution : float
+            Current objective minimiser
+        extra_info : str
+            Additional information to pass to user
+        """
+        elapsed = time.perf_counter() - self.begin_time
+        denorm_curr = self.parameters.denormalise(curr_solution)
+        denorm_best = self.parameters.denormalise(self.best_solution)
         # Update progress file
-        with open(os.path.join(self.output, "progress"), 'w') as file:
-            file.write(f'Iteration: {iiter}\n')
-            file.write(f'Function calls: {self.loss.func_calls}\n')
+        with open(os.path.join(self.output, "progress"), 'w', encoding='utf8') as file:
+            file.write(f'Iteration: {i_iter}\n')
+            file.write(f'Function calls: {self.objective.func_calls}\n')
             file.write(f'Best loss: {self.best_value}\n')
-            file.write(f'Best parameters:\n')
+            if extra_info is not None:
+                file.write(f'Optimiser info: {extra_info}\n')
+            file.write('Best parameters:\n')
             for i, par in enumerate(self.parameters):
                 file.write(f'\t{par.name}: {denorm_best[i]}\n')
             file.write(f'\nElapsed time: {pretty_time(elapsed)}\n')
         # Update history file
-        with open(os.path.join(self.output, "history"), 'a') as file:
-            file.write(f'{iiter:>10}\t{elapsed:>15.8e}\t{self.best_value:>15.8e}\t{curr_value:>15.8e}')
+        with open(os.path.join(self.output, "history"), 'a', encoding='utf8') as file:
+            file.write(f'{i_iter:>10}\t')
+            file.write(f'{elapsed:>15.8e}\t')
+            file.write(f'{self.best_value:>15.8e}\t')
+            file.write(f'{curr_value:>15.8e}\t')
             for i, par in enumerate(self.parameters):
-                file.write(f'\t{denorm_curr[i]:>15.8f}')
+                file.write(f'{denorm_curr[i]:>15.8f}\t')
+            file.write(f"\t{'-' if extra_info is None else extra_info}")
             file.write('\n')
 
 
-    def _progress_check(self, iiter, curr_value, curr_solution, extra_info=None):
+    def _progress_check(
+            self,
+            i_iter: int,
+            curr_value: float,
+            curr_solution: np.ndarray,
+            extra_info: str=None,
+        ) -> bool:
         """
-        Check the optimizer progress
+        Report the optimiser progress and check for termination
 
         Parameters
         ----------
-        iiter : integer
-            current iteration
+        i_iter : int
+            Current iteration number
         curr_value : float
-            current loss value
+            Current objective value
         curr_solution : float
-            current parameter solution value
+            Current objective minimiser
+        extra_info : str
+            Additional information to pass to user
 
         Returns
         -------
-        True if any of the stopping criteria are satisfied
+        bool
+            Whether any of the stopping criteria is satisfied
         """
         # Update new value to best value
-        self.iiter = iiter
+        self.i_iter = i_iter
         if curr_value < self.best_value:
             self.best_value = curr_value
             self.best_solution = curr_solution
-        if iiter > 0:
-            if self._verbose:
-                if extra_info:
-                    self.pbar.set_postfix_str(f'Loss: {self.best_value:6.4e} ({extra_info})')
-                else:
-                    self.pbar.set_postfix_str(f'Loss: {self.best_value:6.4e}')
-                self.pbar.update()
-            # CHANGE TO BEST_HISTORY
-            if curr_value < self.value_history[iiter-1]:
-                self.iters_no_improv = 0
-            else:
-                self.iters_no_improv += 1
-        else:
             self.iters_no_improv = 0
-        # Update histories
-        self.value_history[iiter] = curr_value
-        self.best_value_history[iiter] = self.best_value
-        self.solution_history[iiter,:] = self.best_solution
-        # Output progress
+        else:
+            self.iters_no_improv += 1
+        # Update progress bar
+        if self.pbar is not None:
+            info = f'Loss: {self.best_value:6.4e}' + (f' ({extra_info})' if extra_info else '')
+            self.pbar.set_postfix_str(info)
+            if i_iter > 0:
+                self.pbar.update()
+        # Update progress in output files
         if self.output:
-            self.__update_progress_files(iiter, curr_solution, curr_value)
+            self.__update_progress_files(i_iter, curr_solution, curr_value, extra_info)
         # Convergence criterion
-        iter = False if self.n_iter is None else iiter > self.n_iter
-        return iter or self.stop_criteria.check_criteria(curr_value, self.iters_no_improv,
-                                                         self.loss.func_calls)
+        return i_iter > self.n_iter or self.stop_criteria.check_criteria(
+            curr_value,
+            self.iters_no_improv,
+            self.objective.func_calls,
+            time.perf_counter() - self.begin_time,
+        )
+
+
+
+class ScalarOptimiser(Optimiser):
+    """Base class for scalar single-objective optimisers"""
+
+    def _validate_problem(self, objective: Objective) -> None:
+        """Validate the combination of optimiser and objective
+
+        Parameters
+        ----------
+        objective : Objective
+            Objective to optimise
+
+        Raises
+        ------
+        InvalidOptimiserException
+            With an invalid combination of optimiser and objective function
+        """
+        if not isinstance(objective, SingleObjective):
+            raise InvalidOptimiserException('Scalar objective required for this optimiser')
+
+
+
+class CompositeOptimiser(Optimiser):
+    """Base class for composite single-objective optimisers"""
+
+    def _validate_problem(self, objective: Objective) -> None:
+        """Validate the combination of optimiser and objective
+
+        Parameters
+        ----------
+        objective : Objective
+            Objective to optimise
+
+        Raises
+        ------
+        InvalidOptimiserException
+            With an invalid combination of optimiser and objective function
+        """
+        if not isinstance(objective, SingleCompositeObjective):
+            raise InvalidOptimiserException('Composite objective required for this optimiser')

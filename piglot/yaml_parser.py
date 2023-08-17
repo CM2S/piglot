@@ -8,6 +8,7 @@ from yaml.scanner import ScannerError
 import piglot
 from piglot.losses import MixedLoss, Range, Minimum, Maximum, Slope
 from piglot.parameter import ParameterSet, DualParameterSet
+from piglot.optimisers.optimiser import StoppingCriteria
 from piglot.objective import AnalyticalObjective
 from piglot.links import LinksCase, Reaction, OutFile, LinksLoss, CompositeLinksLoss
 
@@ -290,6 +291,18 @@ def parse_objective(config, parameters, output_dir):
 
 
 
+def parse_stop_criteria(config):
+    def param_or_none(name, convert_type):
+        return convert_type(config[name]) if name in config else None
+    return StoppingCriteria(
+        conv_tol=param_or_none("conv_tol", float),
+        max_func_calls=param_or_none("max_func_calls", int),
+        max_iters_no_improv=param_or_none("max_iters_no_improv", int),
+        max_timeout=param_or_none("max_timeout", float),
+    )
+
+
+
 def parse_config_file(config_file):
     """Parses the YAML configuration file.
 
@@ -323,12 +336,6 @@ def parse_config_file(config_file):
     if 'parameters' not in config:
         raise RuntimeError("Missing parameters from the config file")
     # Add missing optional items
-    if 'conv_tol' not in config:
-        config["conv_tol"] = None
-    if 'max_func_calls' not in config:
-        config["max_func_calls"] = None
-    if 'max_iters_no_improv' not in config:
-        config["max_iters_no_improv"] = None
     if 'output' not in config:
         config['output'] = os.path.splitext(config_file)[0]
     if 'quiet' not in config:

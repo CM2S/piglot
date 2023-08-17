@@ -7,7 +7,8 @@ except ImportError:
     # Show a nice exception when this package is used
     from piglot.optimisers.optimiser import missing_method
     geneticalgorithm = missing_method("Genetic algorithm", "geneticalgorithm")
-from piglot.optimisers.optimiser import Optimiser
+from piglot.objective import SingleObjective
+from piglot.optimisers.optimiser import ScalarOptimiser
 
 
 class geneticalgorithmMod(geneticalgorithm):
@@ -154,7 +155,7 @@ class geneticalgorithmMod(geneticalgorithm):
                              ' maximum number of iterations without improvement was met!')
 
 
-class GA(Optimiser):
+class GA(ScalarOptimiser):
     """
     Genetic Algorithm optimiser.
     Documentation:
@@ -249,15 +250,22 @@ class GA(Optimiser):
             Show progress bar or not. Default is True.
 
         """
+        super().__init__('GA')
         self.variable_type = variable_type
         self.variable_type_mixed = variable_type_mixed
         self.function_timeout = function_timeout
         self.algorithm_parameters = algorithm_parameters
         self.convergence_curve = convergence_curve
         self.progress_bar = progress_bar
-        self.name = 'GA'
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _optimise(
+        self,
+        objective: SingleObjective,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ):
         """
         Parameters
         ----------
@@ -281,7 +289,7 @@ class GA(Optimiser):
             best parameter solution
         """
         self.algorithm_parameters['max_num_iteration'] = n_iter
-        model = geneticalgorithmMod(func, n_dim, self.variable_type, bound,
+        model = geneticalgorithmMod(objective, n_dim, self.variable_type, bound,
                                     self.variable_type_mixed,
                                     self.function_timeout, self.algorithm_parameters,
                                     self.convergence_curve, self.progress_bar)

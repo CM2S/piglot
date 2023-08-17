@@ -8,7 +8,6 @@ from piglot.optimisers.bayes_botorch_cf import BayesianBoTorchComposite
 from piglot.optimisers.direct import DIRECT
 from piglot.optimisers.ga import GA
 from piglot.optimisers.lipo_opt import LIPO
-from piglot.optimisers.prs_spsa import PRS_SPSA
 from piglot.optimisers.pso import PSO
 from piglot.optimisers.random_search import PureRandomSearch
 from piglot.optimisers.spsa_adam import SPSA_Adam
