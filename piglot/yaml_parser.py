@@ -9,7 +9,7 @@ import piglot
 from piglot.losses import MixedLoss, Range, Minimum, Maximum, Slope
 from piglot.parameter import ParameterSet, DualParameterSet
 from piglot.objective import AnalyticalObjective
-from piglot.links import LinksCase, Reaction, OutFile, LinksLoss, extract_parameters
+from piglot.links import LinksCase, Reaction, OutFile, LinksLoss, CompositeLinksLoss
 
 
 
@@ -255,6 +255,24 @@ def parse_links_objective(objective_conf, parameters, output_dir):
     return LinksLoss(cases, parameters, links_bin, output_dir=output_dir, **kwargs)
 
 
+def parse_links_cf_objective(objective_conf, parameters, output_dir):
+    # Manually parse cases
+    if not 'cases' in objective_conf:
+        raise RuntimeError("Missing Links cases")
+    cases_conf = objective_conf.pop("cases")
+    cases = [parse_case(file, case) for file, case in cases_conf.items()]
+    # Check for mandatory arguments
+    if not 'links' in objective_conf:
+        raise RuntimeError("Missing Links binary location")
+    links_bin = objective_conf.pop("links")
+    # Sanitise output directory, just in case it is passed
+    if 'output_dir' in objective_conf:
+        objective_conf.pop('output_dir')
+    # Build Links objective instance with remaining arguments
+    kwargs = {n: str_to_numeric(v) for n, v in objective_conf.items()}
+    return CompositeLinksLoss(cases, parameters, links_bin, output_dir=output_dir, **kwargs)
+
+
 
 def parse_objective(config, parameters, output_dir):
     if not 'name' in config:
@@ -264,6 +282,7 @@ def parse_objective(config, parameters, output_dir):
     objectives = {
         'analytical': parse_analytical_objective,
         'links': parse_links_objective,
+        'links_cf': parse_links_cf_objective,
     }
     if name not in objectives:
         raise RuntimeError(f"Unknown objective {name}. Must be one of {list(objectives.keys())}")

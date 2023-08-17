@@ -5,15 +5,16 @@ import time
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from multiprocessing.pool import ThreadPool as Pool
-from typing import Any
+from typing import Any, Dict, Tuple, List
 import numpy as np
 import pandas as pd
 from yaml import safe_dump_all
 from piglot.parameter import ParameterSet
 from piglot.optimisers.optimiser import pretty_time
-from piglot.objective import SingleObjective
-from piglot.losses.loss import Loss, ScalarLoss, VectorLoss
+from piglot.objective import SingleObjective, SingleCompositeObjective, MSEComposition
+from piglot.losses.loss import Loss
 
 
 def write_parameters(param_value, source, dest):
@@ -168,6 +169,9 @@ class OutputField(ABC):
         Reads the input file and returns the requested fields.
     """
 
+    def __init__(self, loss: Loss) -> None:
+        self.loss = loss
+
     @abstractmethod
     def check(self, input_file: str):
         """Checks for validity in the input file before reading.
@@ -227,7 +231,7 @@ class OutputField(ABC):
 class Reaction(OutputField):
     """Reaction outputs reader."""
 
-    def __init__(self, dim, group=1):
+    def __init__(self, dim, group=1, loss: Loss=None):
         """Constructor for reaction reader
 
         Parameters
@@ -237,6 +241,7 @@ class Reaction(OutputField):
         group : int, optional
             Node group to read, by default 1
         """
+        super().__init__(loss)
         dim_dict = {'x': 1, 'y': 2, 'z': 3}
         self.dim = dim_dict[dim]
         self.dim_name = dim
@@ -307,7 +312,7 @@ class Reaction(OutputField):
 class OutFile(OutputField):
     """Links .out file reader."""
 
-    def __init__(self, fields, i_elem=None, i_gauss=None, x_field="LoadFactor"):
+    def __init__(self, fields, i_elem=None, i_gauss=None, x_field="LoadFactor", loss: Loss=None):
         """Constructor for .out file reader
 
         Parameters
@@ -327,6 +332,7 @@ class OutFile(OutputField):
         RuntimeError
             If element and GP numbers are not consistent.
         """
+        super().__init__(loss)
         # Ensure fields is a list
         if isinstance(fields, str) or isinstance(fields, int):
             self.fields = [fields]
@@ -450,7 +456,13 @@ class OutFile(OutputField):
 class LinksCase:
     """Container with the required fields for each case to be run with Links."""
 
-    def __init__(self, filename, fields: dict, loss: Loss):
+    def __init__(
+            self,
+            filename: str,
+            fields: Dict[OutFile, np.ndarray],
+            loss: Loss = None,
+            weight: float=1.0,
+        ):
         """Constructor for the container.
 
         Parameters
@@ -461,141 +473,170 @@ class LinksCase:
             Pairs of fields to read from results and their reference solutions.
         loss : Loss
             Loss function to use when comparing predictions and references.
+        weight : float, optional
+            Relative weight of this case (defaults to 1.0).
         """
         self.filename = filename
         self.fields = fields
         self.loss = loss
+        self.weight = weight
         for field in self.fields.keys():
             field.check(filename)
+            # Assign the default loss to fields without one
+            if field.loss is None and loss is not None:
+                field.loss = loss
 
 
-class LinksLoss(SingleObjective):
+@dataclass
+class LinksCaseResult:
+    """Container with the results from a given case run with Links."""
+    begin_time: float
+    end_time: float
+    values: np.ndarray
+    failed: bool
+    responses: Dict[OutputField, Tuple[np.ndarray, np.ndarray]]
+
+
+class LinksSolver:
     """Main loss class for Links problems."""
 
-    def __init__(self, cases, parameters, links_bin, parallel=1, tmp_dir='tmp', output_dir=None):
+    def __init__(
+            self,
+            cases: List[LinksCase],
+            parameters: ParameterSet,
+            links_bin: str,
+            parallel: int,
+            tmp_dir: str,
+            output_dir: str,
+        ) -> None:
         """Constructor for the Links_Loss class.
 
         Parameters
         ----------
         cases : list
-            List of Links_Case's to be run.
+            List of LinksCases to be run.
         parameters : ParameterSet
             Parameter set for this problem.
         links_bin : str
             Path to the Links binary
-        parallel : int, optional
+        parallel : int
             Number of concurrent calls to Links in the multi-objective case, by default 1.
-        tmp_dir : str, optional
+        tmp_dir : str
             Path to temporary directory to run the analyses, by default 'tmp'.
-        output_dir : str, optional
+        output_dir : str
             Path to the output directory, if not passed history storing is disabled.
         """
-        super().__init__(parameters, output_dir=output_dir)
         self.cases = cases
+        self.parameters = parameters
         self.links_bin = links_bin
         self.parallel = parallel
+        self.output_dir = output_dir
+        self.begin_time = time.time()
         self.tmp_dir = os.path.join(output_dir, tmp_dir)
-        self.cases_dir = os.path.join(output_dir, "cases") if output_dir else None
-        self.cases_hist = os.path.join(output_dir, "cases_hist") if output_dir else None
-        # Sanitise loss types
-        self.base_loss = VectorLoss() if any([isinstance(case.loss, VectorLoss) for case in cases]) else ScalarLoss()
-        if output_dir:
-            os.makedirs(self.cases_dir, exist_ok=True)
-            if os.path.isdir(self.cases_hist):
-                shutil.rmtree(self.cases_hist)
-            os.mkdir(self.cases_hist)
-            # Build headers for case files
-            for case in self.cases:
-                case_dir = os.path.join(self.cases_dir, case.filename)
-                with open(case_dir, 'w', encoding='utf8') as file:
-                    file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}\t{"Loss":>15}\t{"Success":>10}')
-                    for param in self.parameters:
-                        file.write(f"\t{param.name:>15}")
-                    file.write(f'\t{"Hash":>64}\n')
+        self.cases_dir = os.path.join(output_dir, "cases")
+        self.cases_hist = os.path.join(output_dir, "cases_hist")
+        # Prepare required output directories
+        os.makedirs(self.cases_dir, exist_ok=True)
+        if os.path.isdir(self.cases_hist):
+            shutil.rmtree(self.cases_hist)
+        os.mkdir(self.cases_hist)
+        # Build headers for case log files
+        for case in self.cases:
+            case_dir = os.path.join(self.cases_dir, case.filename)
+            with open(case_dir, 'w', encoding='utf8') as file:
+                file.write(f"{'Start Time /s':>15}\t")
+                file.write(f"{'Run Time /s':>15}\t")
+                file.write(f"{'Loss':>15}\t")
+                file.write(f"{'Success':>10}\t")
+                for param in self.parameters:
+                    file.write(f"{param.name:>15}\t")
+                file.write(f'{"Hash":>64}\n')
 
 
-    def _run_case(self, X, case: LinksCase, tmp_dir: str):
+    def _run_case(self, values: np.ndarray, case: LinksCase, tmp_dir: str) -> LinksCaseResult:
         """Run a single case wth Links.
 
         Parameters
         ----------
-        case : Links_Case
+        values: np.ndarray
+            Current parameter values
+        case : LinksCase
             Case to run.
+        tmp_dir: str
+            Temporary directory to run the simulation
 
         Returns
         -------
-        float
-            Loss value for this case.
+        LinksCaseResult
+            Results for this case
         """
         # Copy input file replacing parameters by passed value
         filename = os.path.basename(case.filename)
         input_file = os.path.join(tmp_dir, filename)
         case_name = get_case_name(input_file)
-        write_parameters(self.parameters.to_dict(X), case.filename, input_file)
-        param_hash = self.parameters.hash(X)
-        # Run LINKS
-        begin_time = time.perf_counter()
-        subprocess.run([self.links_bin, input_file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        end_time = time.perf_counter()
+        write_parameters(self.parameters.to_dict(values), case.filename, input_file)
+        # Run LINKS (we don't use high precision timers here to keep track of the start time)
+        begin_time = time.time()
+        process_result = subprocess.run(
+            [self.links_bin, input_file],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False
+        )
+        end_time = time.time()
         # Check if simulation completed
         screen_file = os.path.join(os.path.splitext(input_file)[0], f'{case_name}.screen')
-        failed_case = not has_keyword(screen_file, "Program L I N K S successfully completed.")
-        # Post-process results
+        failed_case = (process_result.returncode != 0 or
+                       not has_keyword(screen_file, "Program L I N K S successfully completed."))
+        # Read results from output directories
+        responses = {field: (ref, field.get(input_file)) for field, ref in case.fields.items()}
+        return LinksCaseResult(begin_time, end_time, values, failed_case, responses)
+
+
+    def write_history_entry(self, case: LinksCase, result: LinksCaseResult, loss: float) -> None:
+        # Build case metadata
+        param_hash = self.parameters.hash(result.values)
+        cases_hist = {
+            "filename": case.filename,
+            "parameters": {p: float(v) for p, v in self.parameters.to_dict(result.values).items()},
+            "param_hash" : str(param_hash),
+            "loss": float(loss),
+            "success": not result.failed,
+            "start_time": time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(result.begin_time)),
+            "run_time": pretty_time(result.end_time - result.begin_time),
+        }
+        # Encode response to write
         responses = {}
-        case_loss = case.loss.zero()
-        for field, reference in case.fields.items():
-            ref_x = reference[:,0]
-            ref_y = reference[:,1:]
-            field_loss = case.loss.zero()
-            try:
-                # Compute loss for this case
-                field_data = field.get(input_file)
-                field_x = field_data[:,0]
-                field_y = field_data[:,1:]
-                for i in range(0, ref_y.shape[1]):
-                    field_loss = case.loss.sum(case.loss(ref_x, field_x, ref_y[:,i], field_y[:,i]), field_loss)
-                    responses[field.name(i)] = list(zip([float(a) for a in field_x],
-                                                        [float(a) for a in field_y[:,i]]))
-            except:
-                field_loss = case.loss.sum(case.loss.max_value(ref_x, ref_y), field_loss)
-            case_loss = case.loss.sum(field_loss, case_loss)
-        final_loss = case.loss.scale(case_loss, 1.0 / len(case.fields))
-        # Final touches on case history and file writing
-        if self.cases_hist:
-            cases_hist = {
-                "filename": case.filename,
-                "parameters": {p: float(v) for p, v in self.parameters.to_dict(X).items()},
-                "loss": float(case.loss.reduce(final_loss)),
-                "success": not failed_case,
-                "start_time": time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(begin_time)),
-                "run_time": pretty_time(end_time - begin_time),
-            }
-            with open(os.path.join(self.cases_hist, f'{case.filename}-{param_hash}'), 'w') as file:
-                safe_dump_all((cases_hist, responses), file)
-            with open(os.path.join(self.cases_dir, case.filename), 'a') as file:
-                file.write(f'{begin_time - self.begin_time:>15.8e}\t')
-                file.write(f'{end_time - begin_time:>15.8e}\t')
-                file.write(f'{case.loss.reduce(final_loss):>15.8e}\t')
-                file.write(f'{not failed_case:>10}')
-                for i, param in enumerate(self.parameters):
-                    file.write(f"\t{param.denormalise(X[i]):>15.6f}")
-                file.write(f'\t{param_hash}\n')
-        return final_loss
-    
-
-    def scalarise(self, loss_value: Any) -> float:
-        return self.base_loss.reduce(loss_value)
+        for field, (reference, prediction) in result.responses.items():
+            # The first column of the reference is the time
+            num_fields = reference.shape[1] - 1
+            for i in range(0, num_fields):
+                responses[field.name(i)] = list(zip([float(a) for a in prediction[:, 0]],
+                                                    [float(a) for a in prediction[:, i + 1]]))
+        # Write out the case file
+        output_case_hist = os.path.join(self.cases_hist, f'{case.filename}-{param_hash}')
+        with open(output_case_hist, 'w', encoding='utf8') as file:
+            safe_dump_all((cases_hist, responses), file)
+        # Add record to case log file
+        with open(os.path.join(self.cases_dir, case.filename), 'a', encoding='utf8') as file:
+            file.write(f'{result.begin_time - self.begin_time:>15.8e}\t')
+            file.write(f'{result.end_time - result.begin_time:>15.8e}\t')
+            file.write(f'{loss:>15.8e}\t')
+            file.write(f'{not result.failed:>10}\t')
+            for i, param in enumerate(self.parameters):
+                file.write(f"{param.denormalise(result.values[i]):>15.6f}\t")
+            file.write(f'{param_hash}\n')
 
 
-    def loss(self, values, parallel=False):
-        """Public loss function for a problem with Links.
+    def run(self, values: np.ndarray, parallel: bool) -> Dict[LinksCase, LinksCaseResult]:
+        """Run stored problems with Links.
 
         Parameters
         ----------
         values : array
-            Current parameters to evaluate the loss.
+            Current parameters to evaluate.
         parallel : bool
-            Whether this run may be concurrent to another one (so use unique file names)
+            Whether this run may be concurrent to another one (so use unique file names).
 
         Returns
         -------
@@ -608,15 +649,115 @@ class LinksLoss(SingleObjective):
             shutil.rmtree(tmp_dir)
         os.mkdir(tmp_dir)
         # Run cases (in parallel if specified)
-        run_case = lambda case: self._run_case(values, case, tmp_dir)
+        def run_case(case: LinksCase) -> LinksCaseResult:
+            return self._run_case(values, case, tmp_dir)
         if self.parallel > 1:
             with Pool(self.parallel) as pool:
-                losses = pool.map(run_case, self.cases)
+                results = pool.map(run_case, self.cases)
         else:
-            losses = map(run_case, self.cases)
-        # Compute total loss
-        final_loss = self.base_loss.average(list(losses))
+            results = map(run_case, self.cases)
+        # Ensure we actually resolve the map
+        results = list(results)
         # Cleanup temporary directories
         if parallel:
             shutil.rmtree(tmp_dir)
-        return final_loss
+        # Build output dict
+        return dict(zip(self.cases, results))
+
+
+
+class LinksLoss(SingleObjective):
+    """Main loss class for scalar single-objective Links problems."""
+
+    def __init__(
+        self,
+        cases: List[LinksCase],
+        parameters: ParameterSet,
+        links_bin: str,
+        output_dir: str,
+        parallel: int=1,
+        tmp_dir: str='tmp',
+    ) -> None:
+        super().__init__(parameters, output_dir=output_dir)
+        self.solver = LinksSolver(cases, parameters, links_bin, parallel, tmp_dir, output_dir)
+
+
+    def _objective(self, values: np.ndarray, parallel: bool=False) -> float:
+        """Objective function for a problem with Links.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Current parameters to evaluate the loss.
+        parallel : bool
+            Whether this run may be concurrent to another one (so use unique file names)
+
+        Returns
+        -------
+        float
+            Loss value for this set of parameters.
+        """
+        # Call solver for all cases
+        results = self.solver.run(values, parallel)
+        # Compute scalar loss for each case and write to output files
+        losses = {}
+        for case, result in results.items():
+            case_losses = []
+            for field, (reference, prediction) in result.responses.items():
+                for i in range(1, reference.shape[1]):
+                    case_losses.append(field.loss(reference[:,0], prediction[:,0],
+                                                  reference[:,i], prediction[:,i]))
+            case_loss = np.mean(case_losses)
+            self.solver.write_history_entry(case, result, case_loss)
+            losses[case] = case_loss
+        # Accumulate final loss with weighting
+        return np.mean([case.weight * loss for case, loss in losses.items()])
+
+
+
+class CompositeLinksLoss(SingleCompositeObjective):
+    """Main loss class for scalar single-objective Links problems."""
+
+    def __init__(
+        self,
+        cases: List[LinksCase],
+        parameters: ParameterSet,
+        links_bin: str,
+        output_dir: str,
+        parallel: int=1,
+        tmp_dir: str='tmp',
+    ) -> None:
+        super().__init__(parameters, MSEComposition(), output_dir=output_dir)
+        self.solver = LinksSolver(cases, parameters, links_bin, parallel, tmp_dir, output_dir)
+
+
+    def _inner_objective(self, values: np.ndarray, parallel: bool=False) -> np.ndarray:
+        """Objective function for a problem with Links.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Current parameters to evaluate the loss.
+        parallel : bool
+            Whether this run may be concurrent to another one (so use unique file names)
+
+        Returns
+        -------
+        float
+            Loss value for this set of parameters.
+        """
+        # Call solver for all cases
+        results = self.solver.run(values, parallel)
+        # Compute scalar loss for each case and write to output files
+        losses = {}
+        for case, result in results.items():
+            case_losses = np.array([])
+            for field, (reference, prediction) in result.responses.items():
+                for i in range(1, reference.shape[1]):
+                    loss = field.loss(reference[:,0], prediction[:,0],
+                                      reference[:,i], prediction[:,i])
+                    case_losses = np.append(case_losses, loss)
+            self.solver.write_history_entry(case, result, np.mean(case_losses))
+            losses[case] = case_losses
+        # Accumulate final loss with weighting
+        return np.concatenate([case.weight * loss for case, loss in losses.items()])

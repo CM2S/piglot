@@ -67,7 +67,7 @@ setup(
     },
 
     # Python version compatibility
-    python_requires='>=3.6',
+    python_requires='>=3.8',
 
     # Packages provided
     packages=find_packages(),

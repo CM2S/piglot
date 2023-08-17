@@ -2,6 +2,7 @@
 import warnings
 import numpy as np
 from multiprocessing.pool import ThreadPool as Pool
+from piglot.objective import Composition, SingleCompositeObjective
 try:
     from scipy.stats import qmc
 except ImportError:
@@ -119,28 +120,25 @@ class BayesianBoTorchComposite(Optimiser):
             raise RuntimeError(f"Unkown acquisition function {self.acquisition}")
         torch.set_num_threads(1)
 
-    @staticmethod
-    def loss_func_torch(samples):
-        return -samples.pow(2).mean(dim=-1)
-
-    @staticmethod
-    def loss_func_numpy(samples):
-        return np.mean(np.square(samples))
-
-    def get_candidates(self, n_dim, dataset: BayesDataset, beta, test_dataset: BayesDataset):
+    def get_candidates(self, n_dim, dataset: BayesDataset, beta, test_dataset: BayesDataset, composition: Composition):
         # Get data needed for unit-cube space mapping and standardisation
         X_delta = (dataset.ubounds - dataset.lbounds)
         y_avg = torch.mean(dataset.values, dim=-2)
         y_std = torch.std(dataset.values, dim=-2)
+        y_abs_avg = torch.mean(torch.abs(dataset.values), dim=-2)
 
         # Take particular care if we only have one point to avoid divisions by zero
         if dataset.n_points == 1:
             y_std = 1
 
         # Remove points that have near-null variance: not relevant to the model
-        mask = torch.abs(y_std * y_avg) > 1e-6
+        mask = torch.abs(y_std / y_abs_avg) > 1e-6
         y_avg = y_avg[mask]
         y_std = y_std[mask]
+
+        # Ensure we have at least one point after the previous step
+        if not torch.any(mask):
+            raise RuntimeError("All observed points are equal: add more initial samples")
 
         # Build unit cube space and standardised values
         X_cube = (dataset.params - dataset.lbounds) / X_delta
@@ -152,7 +150,7 @@ class BayesianBoTorchComposite(Optimiser):
 
         # Handy loss function using the standardised dataset
         def loss_func(value):
-            return self.loss_func_torch(value * y_std + y_avg)
+            return -composition.composition_torch(value * y_std + y_avg)
 
         # Build the GP: append the fidelity to the dataset in multi-fidelity runs
         if self.multi_fidelity_run:
@@ -257,9 +255,9 @@ class BayesianBoTorchComposite(Optimiser):
         pool = Pool(self.q)
         return pool.map(lambda x: func(x, unique=True), candidates)
     
-    def _get_best_point(self, dataset: BayesDataset):
+    def _get_best_point(self, dataset: BayesDataset, composition: Composition):
         params, values = dataset.get_params_value_pairs()
-        losses = [self.loss_func_numpy(value) for value in values]
+        losses = [composition(value) for value in values]
         idx = np.argmax(losses)
         return params[idx, :], losses[idx]
 
@@ -271,7 +269,7 @@ class BayesianBoTorchComposite(Optimiser):
         return [point * (bound[:, 1] - bound[:, 0]) + bound[:, 0] for point in points]
 
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _optimise(self, func: SingleCompositeObjective, n_dim, n_iter, bound, init_shot):
         """
         Parameters
         ----------
@@ -327,7 +325,7 @@ class BayesianBoTorchComposite(Optimiser):
             test_dataset.push(test_points[i], response, def_variance)
 
         # Find current best point to return to the driver
-        best_params, best_loss = self._get_best_point(dataset)
+        best_params, best_loss = self._get_best_point(dataset, func.composition)
         self._progress_check(0, best_loss, best_params)
 
         # Optimisation loop
@@ -335,9 +333,9 @@ class BayesianBoTorchComposite(Optimiser):
             beta = (self.beta * (n_iter - i_iter - 1) + self.beta_final * i_iter) / n_iter
 
             # Generate and evaluate candidates (in parallel if possible)
-            candidates, cv_error = self.get_candidates(n_dim, dataset, beta, test_dataset)
+            candidates, cv_error = self.get_candidates(n_dim, dataset, beta, test_dataset, func.composition)
             responses = self._eval_candidates(func, candidates)
-            losses = [self.loss_func_numpy(response) for response in responses]
+            losses = [func.composition(response) for response in responses]
 
             # Find best value for this batch and update dataset
             best_idx = np.argmin(losses)
@@ -351,5 +349,5 @@ class BayesianBoTorchComposite(Optimiser):
                 break
 
         # Return optimisation result
-        best_params, best_loss = self._get_best_point(dataset)
+        best_params, best_loss = self._get_best_point(dataset, func.composition)
         return best_params, best_loss
