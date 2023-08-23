@@ -238,6 +238,15 @@ def parse_analytical_objective(objective_conf, parameters, output_dir):
 
 
 
+def parse_test_function_objective(objective_conf, parameters, output_dir):
+    # Check for mandatory arguments
+    if not 'function' in objective_conf:
+        raise RuntimeError("Missing test function")
+    function = objective_conf.pop('function')
+    return SyntheticObjective(parameters, function, output_dir, **objective_conf)
+
+
+
 def parse_links_objective(objective_conf, parameters, output_dir):
     # Manually parse cases
     if not 'cases' in objective_conf:
@@ -282,6 +291,7 @@ def parse_objective(config, parameters, output_dir):
     # Delegate the objective
     objectives = {
         'analytical': parse_analytical_objective,
+        'test_function': parse_test_function_objective,
         'links': parse_links_objective,
         'links_cf': parse_links_cf_objective,
     }

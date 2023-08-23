@@ -83,13 +83,14 @@ setup(
         'tqdm',
         'pandas',
         'sympy',
-        'scipy>=1.6,<1.8'
+        'scipy>=1.6',
+        'torch',
+        'botorch',
     ],
 
     extras_require={'lipo': ['lipo'],
                     'bayesian': ['bayes_opt'],
                     'bayes_sk': ['bask'],
-                    'botorch' : ['botorch'],
                     'genetic': ['geneticalgorithm'],
                     'pso': ['pyswarms'],
                     'full': ['lipo', 'bask', 'geneticalgorithm', 'pyswarms', 'botorch']},
