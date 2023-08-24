@@ -233,7 +233,7 @@ def parse_optimiser(opt_config):
 def parse_analytical_objective(objective_conf, parameters, output_dir):
     # Check for mandatory arguments
     if not 'expression' in objective_conf:
-        raise RuntimeError("Missing Links binary location")
+        raise RuntimeError("Missing analytical expression to minimise")
     return AnalyticalObjective(parameters, objective_conf['expression'], output_dir=output_dir)
 
 
@@ -347,9 +347,7 @@ def parse_config_file(config_file):
         raise RuntimeError("Missing parameters from the config file")
     # Add missing optional items
     if 'output' not in config:
-        config_name, _ = os.path.splitext(os.path.basename(config_file))
-        config_dirname = os.path.dirname(config_file)
-        config['output'] = os.path.join(config_dirname, config_name)
+        config['output'] = os.path.splitext(config_file)[0]
     if 'quiet' not in config:
         config["quiet"] = False
     elif config['quiet']:
