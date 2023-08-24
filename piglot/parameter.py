@@ -24,6 +24,8 @@ class Parameter:
         self.inital_value = inital_value
         self.lbound = lbound
         self.ubound = ubound
+        if inital_value > ubound or inital_value < lbound:
+            raise RuntimeError("Initial shot outside of bounds")
 
     def normalise(self, value):
         """Normalise a value to internal [-1,1] bounds.
