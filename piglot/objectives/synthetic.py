@@ -1,4 +1,5 @@
 """Provide synthetic test functions"""
+import os.path
 from typing import Dict, Type
 import numpy as np
 import torch
@@ -24,6 +25,8 @@ class SyntheticObjective(SingleObjective):
         if name not in test_functions:
             raise RuntimeError(f'Unknown function {name}. Must be in {list(test_functions.keys())}')
         self.func = test_functions[name](*args, **kwargs)
+        with open(os.path.join(output_dir, 'optimum_value'), 'w', encoding='utf8') as file:
+            file.write(f'{self.func.optimal_value}')
 
     @staticmethod
     def get_test_functions() -> Dict[str, Type[SyntheticTestFunction]]:
@@ -73,4 +76,4 @@ class SyntheticObjective(SingleObjective):
             Objective value
         """
         params = torch.tensor(self.parameters.denormalise(values))
-        return self.func.evaluate_true(params)
+        return self.func.evaluate_true(params).numpy()
