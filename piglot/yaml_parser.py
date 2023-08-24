@@ -347,7 +347,9 @@ def parse_config_file(config_file):
         raise RuntimeError("Missing parameters from the config file")
     # Add missing optional items
     if 'output' not in config:
-        config['output'] = os.path.splitext(config_file)[0]
+        config_name, _ = os.path.splitext(os.path.basename(config_file))
+        config_dirname = os.path.dirname(config_file)
+        config['output'] = os.path.join(config_dirname, config_name)
     if 'quiet' not in config:
         config["quiet"] = False
     elif config['quiet']:
