@@ -289,7 +289,10 @@ class Reaction(OutputField):
         """
         casename = get_case_name(input_file)
         output_dir = os.path.splitext(input_file)[0]
-        reac_filename = os.path.join(output_dir, '{0}.reac'.format(casename))
+        reac_filename = os.path.join(output_dir, f'{casename}.reac')
+        # Ensure the file exists
+        if not os.path.exists(reac_filename):
+            return np.empty((0, 2))
         data = np.genfromtxt(reac_filename)
         return (data[data[:,0] == self.group, 1:])[:,[0, self.dim]]
 
@@ -415,10 +418,14 @@ class OutFile(OutputField):
         """
         casename = get_case_name(input_file)
         output_dir = os.path.splitext(input_file)[0]
-        reac_filename = os.path.join(output_dir, f'{casename}{self.suffix}.out')
+        filename = os.path.join(output_dir, f'{casename}{self.suffix}.out')
         from_gp = self.suffix != ''
+        df_columns = [self.x_field] + self.fields
+        # Ensure the file exists
+        if not os.path.exists(filename):
+            return np.empty((0, len(df_columns)))
         # Read the first line of the file to find the total number of columns
-        with open(reac_filename, 'r') as file:
+        with open(filename, 'r', encoding='utf8') as file:
             # Consume the first line if from a GP output (contains GP coordinates)
             if from_gp:
                 file.readline()
@@ -426,10 +433,9 @@ class OutFile(OutputField):
         n_columns = int(line_len / self.separator)
         # Fixed-width read (with a skip on the first line for GP outputs)
         header = 1 if from_gp else 0
-        df = pd.read_fwf(reac_filename, widths=n_columns*[self.separator], header=header)
+        df = pd.read_fwf(filename, widths=n_columns*[self.separator], header=header)
         # Extract indices for named columns
         columns = df.columns.tolist()
-        df_columns = [self.x_field] + self.fields
         int_columns = [columns.index(a) if isinstance(a, str) else a for a in df_columns]
         # Return the given quantity as the x-variable
         return df.iloc[:,int_columns].to_numpy()
@@ -459,7 +465,7 @@ class LinksCase:
     def __init__(
             self,
             filename: str,
-            fields: Dict[OutFile, np.ndarray],
+            fields: Dict[OutputField, np.ndarray],
             loss: Loss = None,
             weight: float=1.0,
         ):
