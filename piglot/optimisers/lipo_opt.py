@@ -62,7 +62,7 @@ class LIPO(ScalarOptimiser):
     """
 
     def __init__(self, log_args='auto', flexible_bounds={}, flexible_bound_threshold=-1.0,
-                 epsilon=0.0, random_state=None):
+                 epsilon=0.0, seed=None):
         """
         Constructs all the necessary attributes for the LIPO optimiser
 
@@ -84,7 +84,7 @@ class LIPO(ScalarOptimiser):
         epsilon : float
             accuracy below which exploration will be prioritized vs exploitation
             (default = 0)
-        random_state : int
+        seed : int
             random state
         """
         super().__init__('LIPO')
@@ -93,7 +93,7 @@ class LIPO(ScalarOptimiser):
         self.flexible_bound_threshold = flexible_bound_threshold
         self.flexible_bound_threshold = flexible_bound_threshold
         self.epsilon = epsilon
-        self.random_state = random_state
+        self.seed = seed
 
     def _optimise(
         self,
@@ -151,6 +151,6 @@ class LIPO(ScalarOptimiser):
         model = GlobalOptimizerMod(negate, lower_bounds, upper_bounds, categories,
                                    self.log_args, self.flexible_bounds,
                                    self.flexible_bound_threshold, evaluations, maximize,
-                                   self.epsilon, self.random_state)
+                                   self.epsilon, self.seed)
         model.run(self, n_iter)
         return list(model.optimum[0].values()), model.optimum[1]
