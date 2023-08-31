@@ -3,7 +3,7 @@ import os
 import os.path
 import time
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Dict
 import shutil
 from threading import Lock
 import numpy as np
@@ -102,7 +102,7 @@ class Objective(ABC):
 
     @abstractmethod
     def __call__(self, *args: Any, **kwds: Any) -> Any:
-        pass
+        """Objective computation for the outside world"""
 
 
 
@@ -203,10 +203,10 @@ class SingleCompositeObjective(ABC):
             # Build header for function calls file
             self.func_calls_file = os.path.join(output_dir, "func_calls")
             with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
-                file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}\t{"Loss":>15}')
+                file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}\t{"Loss":>15}\t')
                 for param in self.parameters:
-                    file.write(f"\t{param.name:>15}")
-                file.write(f'\t{"Hash":>64}\n')
+                    file.write(f"{param.name:>15}\t")
+                file.write(f'{"Hash":>64}\n')
 
     @abstractmethod
     def _inner_objective(self, values: np.ndarray, parallel: bool=False) -> np.ndarray:
@@ -250,10 +250,10 @@ class SingleCompositeObjective(ABC):
                 with open(self.func_calls_file, 'a', encoding='utf8') as file:
                     file.write(f'{begin_time - self.begin_time:>15.8e}\t')
                     file.write(f'{end_time - begin_time:>15.8e}\t')
-                    file.write(f'{self.composition(inner_objective):>15.8e}')
+                    file.write(f'{self.composition(inner_objective):>15.8e}\t')
                     for i, param in enumerate(self.parameters):
-                        file.write(f"\t{param.denormalise(values[i]):>15.6f}")
-                    file.write(f'\t{self.parameters.hash(values)}\n')
+                        file.write(f"{param.denormalise(values[i]):>15.6f}\t")
+                    file.write(f'{self.parameters.hash(values)}\n')
         return inner_objective
 
 
@@ -283,3 +283,118 @@ class AnalyticalObjective(SingleObjective):
             Objective value
         """
         return self.expression(**self.parameters.to_dict(values))
+
+
+
+class MultiFidelitySingleObjective(ABC):
+    """Class for multi-fidelity single-objectives"""
+
+    def __init__(
+            self,
+            objectives: Dict[float, Objective],
+            parameters: ParameterSet,
+            output_dir: str=None,
+        ) -> None:
+        super().__init__()
+        self.parameters = parameters
+        self.objectives = objectives
+        self.output_dir = output_dir
+        # Sanitise fidelities
+        self.fidelities = np.array(list(objectives.keys()))
+        if np.any(self.fidelities < 0) or np.any(self.fidelities > 1):
+            raise RuntimeError("Fidelities must be contained in the interval [0,1]")
+        self.func_calls = 0
+        self.begin_time = time.perf_counter()
+        self.__mutex = Lock()
+        self.call_timings = {fidelity: [] for fidelity in self.fidelities}
+        if self.output_dir:
+            # Prepare output directories
+            os.makedirs(self.output_dir, exist_ok=True)
+            # Build header for function calls file
+            self.func_calls_file = os.path.join(output_dir, "func_calls")
+            with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
+                file.write(f'{"Start Time /s":>15}\t')
+                file.write(f'{"Run Time /s":>15}\t')
+                file.write(f'{"Loss":>15}\t')
+                for param in self.parameters:
+                    file.write(f"{param.name:>15}\t")
+                file.write(f'{"Fidelity":>15}\t')
+                file.write(f'{"Hash":>64}\n')
+
+    def select_fidelity(self, fidelity: float) -> float:
+        """Select the target fidelity ensuring robustness to floating point round-off errors
+
+        Parameters
+        ----------
+        fidelity : float
+            Input fidelity
+
+        Returns
+        -------
+        float
+            Closest fidelity in the model
+
+        Raises
+        ------
+        RuntimeError
+            When a fidelity cannot be chosen
+        """
+        # Select the target fidelity: ensure float comparisons are approximate
+        candidates = np.nonzero(np.isclose(self.fidelities, fidelity))[0]
+        if len(candidates) != 1:
+            raise RuntimeError(f"Cannot select a target fidelity from the input {fidelity}")
+        return self.fidelities[candidates.squeeze()]
+
+    def cost(self, fidelity: float) -> float:
+        """Return the expected cost of evaluating the objective at a given fidelity
+
+        Parameters
+        ----------
+        fidelity : float
+            Target fidelity
+
+        Returns
+        -------
+        float
+            Expected cost, in seconds
+        """
+        target_fidelity = self.select_fidelity(fidelity)
+        return np.mean(self.call_timings[target_fidelity]) + 1e-9
+
+    def __call__(self, values: np.ndarray, fidelity: float, parallel: bool=False) -> float:
+        """Objective computation for the outside world - also handles output file writing
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Set of parameters to evaluate the objective for
+        fidelity : float
+            Fidelity to run this call at
+        parallel : bool, optional
+            Whether this call may be concurrent to others, by default False
+
+        Returns
+        -------
+        float
+            Objective value
+        """
+        # Evaluate objective at target fidelity
+        self.func_calls += 1
+        begin_time = time.perf_counter()
+        target_fidelity = self.select_fidelity(fidelity)
+        objective_value = self.objectives[target_fidelity](values, parallel=parallel)
+        end_time = time.perf_counter()
+        # Update function call history file
+        if self.output_dir:
+            with self.__mutex:
+                with open(os.path.join(self.func_calls_file), 'a', encoding='utf8') as file:
+                    file.write(f'{begin_time - self.begin_time:>15.8e}\t')
+                    file.write(f'{end_time - begin_time:>15.8e}\t')
+                    file.write(f'{objective_value:>15.8e}\t')
+                    for i, param in enumerate(self.parameters):
+                        file.write(f"{param.denormalise(values[i]):>15.6f}\t")
+                    file.write(f'{target_fidelity:>15.8f}\t')
+                    file.write(f'{self.parameters.hash(values)}\n')
+        # Update call time history
+        self.call_timings[target_fidelity].append(end_time - begin_time)
+        return objective_value

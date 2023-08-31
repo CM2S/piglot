@@ -1,4 +1,6 @@
 import os
+import os.path
+import shutil
 import numpy as np
 import sympy
 import pandas as pd
@@ -9,8 +11,9 @@ import piglot
 from piglot.losses import MixedLoss, Range, Minimum, Maximum, Slope
 from piglot.parameter import ParameterSet, DualParameterSet
 from piglot.optimisers.optimiser import StoppingCriteria
-from piglot.objective import AnalyticalObjective
+from piglot.objective import AnalyticalObjective, MultiFidelitySingleObjective
 from piglot.links import LinksCase, Reaction, OutFile, LinksLoss, CompositeLinksLoss
+from piglot.objectives.synthetic import SyntheticObjective
 
 
 
@@ -284,6 +287,26 @@ def parse_links_cf_objective(objective_conf, parameters, output_dir):
 
 
 
+def parse_mf_objective(objective_conf, parameters, output_dir):
+    # Check for mandatory arguments
+    if not 'objectives' in objective_conf:
+        raise RuntimeError("Missing multi-fidelity objectives")
+    # Create output directory right away to initialise child objectives
+    if os.path.isdir(output_dir):
+        shutil.rmtree(output_dir)
+    os.mkdir(output_dir)
+    # Parse each multi-fidelity objective
+    objectives = {}
+    for fidelity, config in objective_conf['objectives'].items():
+        output_path = os.path.join(output_dir, f'fidelity_{fidelity:<5.3f}')
+        if os.path.isdir(output_path):
+            shutil.rmtree(output_path)
+        os.mkdir(output_path)
+        objectives[fidelity] = parse_objective(config, parameters, output_path)
+    return MultiFidelitySingleObjective(objectives, parameters, output_dir=output_dir)
+
+
+
 def parse_objective(config, parameters, output_dir):
     if not 'name' in config:
         raise RuntimeError("Missing objective name")
@@ -294,6 +317,7 @@ def parse_objective(config, parameters, output_dir):
         'test_function': parse_test_function_objective,
         'links': parse_links_objective,
         'links_cf': parse_links_cf_objective,
+        'multi_fidelity': parse_mf_objective,
     }
     if name not in objectives:
         raise RuntimeError(f"Unknown objective {name}. Must be one of {list(objectives.keys())}")
