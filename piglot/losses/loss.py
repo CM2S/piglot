@@ -470,6 +470,9 @@ class ScalarLoss(Loss):
         float
             Loss value
         """
+        # Particular case if we have less than two prediction points
+        if len(x_pred) < 2:
+            return self.max_value(x_ref, y_ref)
         # Interpolate prediction grid on the reference grid
         x = x_ref
         ref = y_ref
