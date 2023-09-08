@@ -711,8 +711,11 @@ class LinksLoss(SingleObjective):
             case_losses = []
             for field, (reference, prediction) in result.responses.items():
                 for i in range(1, reference.shape[1]):
-                    case_losses.append(field.loss(reference[:,0], prediction[:,0],
-                                                  reference[:,i], prediction[:,i]))
+                    loss = field.loss(reference[:,0], prediction[:,0],
+                                      reference[:,i], prediction[:,i])
+                    if not np.isfinite(loss):
+                        loss = field.loss.max_value(reference[:,0], reference[:,i])
+                    case_losses.append(loss)
             case_loss = np.mean(case_losses)
             self.solver.write_history_entry(case, result, case_loss)
             losses[case] = case_loss
