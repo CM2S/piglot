@@ -694,8 +694,8 @@ class BayesianBoTorchMF(ScalarMultiFidelityOptimiser):
             improvements = {}
             for fidelity in objective.fidelities:
                 if fidelity < max(objective.fidelities):
-                    # acq = qVarianceExpectedImprovement(model, y_best[fidelity], sampler=sampler)
-                    acq = ExpectedImprovement(model, y_best[fidelity])
+                    acq = qVarianceExpectedImprovement(model, y_best[fidelity], sampler=sampler)
+                    # acq = ExpectedImprovement(model, y_best[fidelity])
                 else:
                     acq = ProbabilityOfImprovement(model, y_best_hf)
                 points[fidelity], value = optimize_acqf_mixed(
