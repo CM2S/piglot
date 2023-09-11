@@ -1160,14 +1160,18 @@ class BayesianBoTorchMF(ScalarMultiFidelityOptimiser):
 
         # Build initial dataset with the initial shot
         dataset = BayesDataset(n_dim, 1, bound, export=self.export)
-        for fidelity in fidelities:
-            dataset.push(init_shot, loss_transformer(objective(init_shot, fidelity)), self.def_variance, fidelity)
+        if self.acquisition in ('ucb', 'ei', 'pi', 'qkg'):
+            dataset.push(init_shot, loss_transformer(objective(init_shot, max(fidelities))), self.def_variance, max(fidelities))
+        else:
+            for fidelity in fidelities:
+                dataset.push(init_shot, loss_transformer(objective(init_shot, fidelity)), self.def_variance, fidelity)
 
         # If requested, sample some random points before starting (in parallel if possible)
+        init_fidelities = max(fidelities) if self.acquisition in ('ucb', 'ei', 'pi', 'qkg') else min(fidelities)
         random_points = self._get_random_points(self.n_initial, n_dim, self.seed, bound)
-        init_losses = self._eval_candidates(objective, random_points, min(fidelities))
+        init_losses = self._eval_candidates(objective, random_points, init_fidelities)
         for i, loss in enumerate(init_losses):
-            dataset.push(random_points[i], loss_transformer(loss), self.def_variance, min(fidelities))
+            dataset.push(random_points[i], loss_transformer(loss), self.def_variance, init_fidelities)
         # init_losses = self._eval_candidates(objective, random_points, max(fidelities))
         # for i, loss in enumerate(init_losses):
         #     dataset.push(random_points[i], loss_transformer(loss), self.def_variance, max(fidelities))
