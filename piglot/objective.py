@@ -361,7 +361,7 @@ class MultiFidelitySingleObjective(ABC):
         target_fidelity = self.select_fidelity(fidelity)
         return np.mean(self.call_timings[target_fidelity]) + 1e-9
 
-    def __call__(self, values: np.ndarray, fidelity: float, parallel: bool=False) -> float:
+    def __call__(self, values: np.ndarray, fidelity: float=1.0, parallel: bool=False) -> float:
         """Objective computation for the outside world - also handles output file writing
 
         Parameters
@@ -369,7 +369,7 @@ class MultiFidelitySingleObjective(ABC):
         values : np.ndarray
             Set of parameters to evaluate the objective for
         fidelity : float
-            Fidelity to run this call at
+            Fidelity to run this call at, by default 1.0
         parallel : bool, optional
             Whether this call may be concurrent to others, by default False
 
