@@ -13,7 +13,7 @@ from piglot.parameter import ParameterSet, DualParameterSet
 from piglot.optimisers.optimiser import StoppingCriteria
 from piglot.objective import AnalyticalObjective, MultiFidelitySingleObjective
 from piglot.links import LinksCase, Reaction, OutFile, LinksLoss, CompositeLinksLoss
-from piglot.objectives.synthetic import SyntheticObjective
+from piglot.objectives.synthetic import SyntheticObjective, SyntheticCompositeObjective
 
 
 
@@ -250,6 +250,15 @@ def parse_test_function_objective(objective_conf, parameters, output_dir):
 
 
 
+def parse_test_function_cf_objective(objective_conf, parameters, output_dir):
+    # Check for mandatory arguments
+    if not 'function' in objective_conf:
+        raise RuntimeError("Missing test function")
+    function = objective_conf.pop('function')
+    return SyntheticCompositeObjective(parameters, function, output_dir, **objective_conf)
+
+
+
 def parse_links_objective(objective_conf, parameters, output_dir):
     # Manually parse cases
     if not 'cases' in objective_conf:
@@ -315,6 +324,7 @@ def parse_objective(config, parameters, output_dir):
     objectives = {
         'analytical': parse_analytical_objective,
         'test_function': parse_test_function_objective,
+        'test_function_cf': parse_test_function_cf_objective,
         'links': parse_links_objective,
         'links_cf': parse_links_cf_objective,
         'multi_fidelity': parse_mf_objective,

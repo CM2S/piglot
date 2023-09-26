@@ -6,7 +6,7 @@ import torch
 import botorch.test_functions.synthetic
 from botorch.test_functions.synthetic import SyntheticTestFunction
 from piglot.parameter import ParameterSet
-from piglot.objective import SingleObjective
+from piglot.objective import SingleObjective, SingleCompositeObjective, MSEComposition
 
 
 class SyntheticObjective(SingleObjective):
@@ -18,6 +18,7 @@ class SyntheticObjective(SingleObjective):
             name: str,
             output_dir: str,
             *args,
+            transform: str = None,
             **kwargs,
         ) -> None:
         super().__init__(parameters, output_dir)
@@ -25,8 +26,11 @@ class SyntheticObjective(SingleObjective):
         if name not in test_functions:
             raise RuntimeError(f'Unknown function {name}. Must be in {list(test_functions.keys())}')
         self.func = test_functions[name](*args, **kwargs)
+        self.transform = None
+        if transform == 'mse_composition':
+            self.transform = lambda value, func: torch.square(value - func.optimal_value)
         with open(os.path.join(output_dir, 'optimum_value'), 'w', encoding='utf8') as file:
-            file.write(f'{self.func.optimal_value}')
+            file.write(f'{self.transform(self.func.optimal_value, self.func)}')
 
     @staticmethod
     def get_test_functions() -> Dict[str, Type[SyntheticTestFunction]]:
@@ -76,4 +80,47 @@ class SyntheticObjective(SingleObjective):
             Objective value
         """
         params = torch.tensor(self.parameters.denormalise(values))
-        return self.func.evaluate_true(params).numpy()
+        value = self.func.evaluate_true(params)
+        value = value if self.transform is None else self.transform(value, self.func)
+        return value.numpy()
+
+
+class SyntheticCompositeObjective(SingleCompositeObjective):
+    """Objective function derived from a composite synthetic test function"""
+
+    def __init__(
+            self,
+            parameters: ParameterSet,
+            name: str,
+            output_dir: str,
+            *args,
+            **kwargs,
+        ) -> None:
+        super().__init__(parameters, MSEComposition(), output_dir)
+        test_functions = SyntheticObjective.get_test_functions()
+        if name not in test_functions:
+            raise RuntimeError(f'Unknown function {name}. Must be in {list(test_functions.keys())}')
+        self.func = test_functions[name](*args, **kwargs)
+        with open(os.path.join(output_dir, 'optimum_value'), 'w', encoding='utf8') as file:
+            file.write(f'{self.func.optimal_value}')
+
+    def _inner_objective(self, values: np.ndarray, parallel: bool=False) -> np.ndarray:
+        """Objective computation for composite modified analytical functions
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Current parameters to evaluate the loss.
+        parallel : bool
+            Whether this run may be concurrent to another one (so use unique file names)
+
+        Returns
+        -------
+        float
+            Objective value
+        """
+        params = torch.tensor(self.parameters.denormalise(values))
+        value = self.func.evaluate_true(params) - self.func.optimal_value
+        if len(value.shape) < 1:
+            value = value.unsqueeze(0)
+        return value.numpy()
