@@ -40,6 +40,8 @@ def optimiser(name, *args, **kwargs):
         return piglot.optimisers.BayesianBoTorchComposite(*args, **kwargs)
     if name == 'botorch_mf':
         return piglot.optimisers.BayesianBoTorchMF(*args, **kwargs)
+    if name == 'botorch_mf_cf':
+        return piglot.optimisers.BayesianBoTorchMultiFidelityComposite(*args, **kwargs)
     if name == 'direct':
         return piglot.optimisers.DIRECT(*args, **kwargs)
     if name == 'ga':

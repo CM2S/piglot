@@ -7,7 +7,7 @@ import numpy as np
 from tqdm import tqdm
 from piglot.parameter import ParameterSet
 from piglot.objective import Objective, SingleObjective, SingleCompositeObjective
-from piglot.objective import MultiFidelitySingleObjective
+from piglot.objective import MultiFidelitySingleObjective, MultiFidelityCompositeObjective
 
 
 def pretty_time(elapsed_sec):
@@ -313,7 +313,7 @@ class Optimiser(ABC):
         n_iter: int,
         bound: np.ndarray,
         init_shot: np.ndarray,
-    ):
+    ) -> Tuple[float, np.ndarray]:
         """
         Abstract method for optimising the objective
 
@@ -497,4 +497,25 @@ class ScalarMultiFidelityOptimiser(Optimiser):
             With an invalid combination of optimiser and objective function
         """
         if not isinstance(objective, MultiFidelitySingleObjective):
+            raise InvalidOptimiserException('Multi-fidelity objective required for this optimiser')
+
+
+
+class CompositeMultiFidelityOptimiser(Optimiser):
+    """Base class for composite single-objective multi-fidelity optimisers"""
+
+    def _validate_problem(self, objective: Objective) -> None:
+        """Validate the combination of optimiser and objective
+
+        Parameters
+        ----------
+        objective : Objective
+            Objective to optimise
+
+        Raises
+        ------
+        InvalidOptimiserException
+            With an invalid combination of optimiser and objective function
+        """
+        if not isinstance(objective, MultiFidelityCompositeObjective):
             raise InvalidOptimiserException('Multi-fidelity objective required for this optimiser')
