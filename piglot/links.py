@@ -766,7 +766,7 @@ class CompositeLinksLoss(SingleCompositeObjective):
                     loss = field.loss(reference[:,0], prediction[:,0],
                                       reference[:,i], prediction[:,i])
                     case_losses = np.append(case_losses, loss)
-            self.solver.write_history_entry(case, result, np.mean(case_losses))
+            self.solver.write_history_entry(case, result, self.composition.composition(case_losses))
             losses[case] = case_losses
         # Accumulate final loss with weighting
         return np.concatenate([case.weight * loss for case, loss in losses.items()])
