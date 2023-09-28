@@ -850,7 +850,7 @@ class VectorLoss(Loss):
         x = x_ref
         ref = y_ref
         func = interp1d(x_pred, y_pred, kind=self.interp_kind, bounds_error=False,
-                        fill_value='extrapolate')
+                        fill_value=(y_pred[np.argmin(x_pred)], y_pred[np.argmax(x_pred)]))
         pred = func(x_ref)
         # Filters and modifiers
         x, ref, pred = self._apply_filters_modifiers(x, ref, pred)
