@@ -274,7 +274,7 @@ class Optimiser(ABC):
         bounds = np.ones((n_dim, 2))
         bounds[:,0] = -1
         # Build best solution
-        self.best_value = np.inf
+        self.best_value = np.nan
         self.best_solution = None
         # Prepare history output files
         if output is not None:
@@ -413,12 +413,12 @@ class Optimiser(ABC):
         """
         # Update new value to best value
         self.i_iter = i_iter
-        if curr_value < self.best_value:
+        if curr_value >= self.best_value:
+            self.iters_no_improv += 1
+        else:
             self.best_value = curr_value
             self.best_solution = curr_solution
             self.iters_no_improv = 0
-        else:
-            self.iters_no_improv += 1
         # Update progress bar
         if self.pbar is not None:
             info = f'Loss: {self.best_value:6.4e}' + (f' ({extra_info})' if extra_info else '')
