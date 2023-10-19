@@ -5,8 +5,46 @@ import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from piglot.yaml_parser import parse_case, parse_parameters, parse_config_file
-from piglot.plotter import CaseData, plot_case_data, plot_reference_data, CurrentPlot
+from scipy.integrate import trapezoid
+from piglot.yaml_parser import parse_parameters, parse_config_file, parse_objective
+
+
+def cumulative_regret(values: np.ndarray, x_grid: np.ndarray) -> np.ndarray:
+    """Compute the cumulative regret of a given function
+
+    Parameters
+    ----------
+    values : np.ndarray
+        Function values
+    x_grid : np.ndarray
+        Grid of x values
+
+    Returns
+    -------
+    np.ndarray
+        Cumulative regret
+    """
+    best = np.min(values)
+    regret = [trapezoid(values[:i+1] - best, x_grid[:i+1]) for i in range(len(values))]
+    return np.array(regret)
+
+
+def pick_from_best(values: np.ndarray, variable: np.ndarray) -> np.ndarray:
+    """Return the associated variable value associated with the current best objective
+
+    Parameters
+    ----------
+    values : np.ndarray
+        Objective values
+    variable : np.ndarray
+        Variable to output
+
+    Returns
+    -------
+    np.ndarray
+        Current best of the variable
+    """
+    return np.array([variable[np.argmin(values[:i+1])] for i in range(len(values))])
 
 
 def plot_case(args):
@@ -17,12 +55,17 @@ def plot_case(args):
     args : dict
         Passed arguments.
     """
-    case = CaseData(args.case_file)
-    fig, axes_dict = plot_case_data(case)
-    if args.config:
-        plot_reference_data(case, parse_config_file(args.config), fig, axes_dict)
+    # Build piglot problem
+    config = parse_config_file(args.config)
+    objective = parse_objective(config["objective"], parse_parameters(config), config["output"])
+    figs = objective.plot_case(args.case_hash)
     if args.save_fig:
-        fig.savefig(args.save_fig)
+        if len(figs) == 1:
+            figs[0].savefig(args.save_fig)
+        else:
+            base, ext = os.path.splitext(args.save_fig)
+            for i, fig in enumerate(figs):
+                fig.savefig(f'{base}_{i}{ext}')
     else:
         plt.show()
 
@@ -37,7 +80,8 @@ def plot_current(args):
     """
     plt.ion()
     config = parse_config_file(args.config)
-    plots = [CurrentPlot(parse_case(name, case), config) for name, case in config["cases"].items()]
+    objective = parse_objective(config["objective"], parse_parameters(config), config["output"])
+    plots = objective.plot_current()
     while True:
         for plot in plots:
             plot.update()
@@ -52,78 +96,110 @@ def plot_best(args):
     args : dict
         Passed arguments.
     """
+    # Build piglot problem
     config = parse_config_file(args.config)
-    func_calls_file = os.path.join(config["output"], "func_calls")
-    df = pd.read_table(func_calls_file)
-    df.columns = df.columns.str.strip()
-    min_series = df.iloc[df["Loss"].idxmin()]
-    call_hash = min_series["Hash"]
-    print("Best run:")
-    print(min_series)
-    for case in config["cases"].keys():
-        case_file = os.path.join(config["output"], "cases_hist", f"{case}-{call_hash}")
-        case_data = CaseData(case_file)
-        fig, axes_dict = plot_case_data(case_data, case)
-        plot_reference_data(case_data, config, fig, axes_dict)
+    objective = parse_objective(config["objective"], parse_parameters(config), config["output"])
+    figs = objective.plot_best()
+    if args.save_fig:
+        if len(figs) == 1:
+            figs[0].savefig(args.save_fig)
+        else:
+            base, ext = os.path.splitext(args.save_fig)
+            for i, fig in enumerate(figs):
+                fig.savefig(f'{base}_{i}{ext}')
+    else:
+        plt.show()
+
+
+def plot_history(args):
+    """Driver for plotting the history of a case.
+
+    Parameters
+    ----------
+    args : dict
+        Passed arguments.
+    """
+    # Build piglot problem
+    config = parse_config_file(args.config)
+    objective = parse_objective(config["objective"], parse_parameters(config), config["output"])
+    data = objective.get_history()
+    fig, axis = plt.subplots()
+    for name, (times, values, _) in data.items():
+        x_values = times if args.time else np.arange(len(times))
+        y_values = pick_from_best(values, values) if args.best else values
+        axis.plot(x_values, y_values, label=name)
+    if args.log:
+        axis.set_yscale('log')
+    axis.set_xlabel("Elapsed time /s" if args.time else "Function calls")
+    axis.set_ylabel("Objective")
+    if len(data) > 1:
+        axis.legend()
+    axis.grid()
+    fig.tight_layout()
     if args.save_fig:
         fig.savefig(args.save_fig)
     else:
         plt.show()
 
 
-def dump_run(args):
-    """Dump the normalised parameter history to a file.
+def plot_parameters(args):
+    """Driver for plotting the history of the parameters.
 
     Parameters
     ----------
     args : dict
         Passed arguments.
     """
+    # Build piglot problem
     config = parse_config_file(args.config)
     parameters = parse_parameters(config)
-    func_calls_file = os.path.join(config["output"], "func_calls")
-    df = pd.read_table(func_calls_file)
-    df.columns = df.columns.str.strip()
-    out_df = df.iloc[:,3:-1]
-    out_df = out_df.apply(lambda x: parameters.normalise(x), axis=1, result_type='expand')
-    out_df["Loss"] = df["Loss"]
-    np.savetxt(args.name, out_df.to_numpy())
-    if not args.quiet:
-        print(f"Saved parameter history to {args.name}")
+    objective = parse_objective(config["objective"], parameters, config["output"])
+    data = objective.get_history()
+    fig, axes = plt.subplots(nrows=len(parameters), sharex=True, squeeze=False)
+    for idx, param in enumerate(parameters):
+        axis = axes[idx, 0]
+        for name, (times, values, param_values) in data.items():
+            x_values = times if args.time else np.arange(len(times))
+            params = param_values[:,idx]
+            y_values = pick_from_best(values, params) if args.best else params
+            axis.plot(x_values, y_values, label=f'{param.name}: {name}')
+        if idx == len(parameters) - 1:
+            axis.set_xlabel("Elapsed time /s" if args.time else "Function calls")
+        axis.set_ylabel(param.name)
+        axis.set_ylim(ymin=param.lbound, ymax=param.ubound)
+        if len(data.items()) > 1:
+            axis.legend()
+        axis.grid()
+    fig.tight_layout()
+    if args.save_fig:
+        fig.savefig(args.save_fig)
+    else:
+        plt.show()
 
 
 def plot_regret(args):
-    """Plot the cummulative regret evolution for a given set of cases.
+    """Driver for plotting the cumulative regret of a case.
 
     Parameters
     ----------
     args : dict
         Passed arguments.
     """
-    fig, ax = plt.subplots()
-    if args.time:
-        ax.set_xlabel('Elapsed time /s')
-    else:
-        ax.set_xlabel('Function calls')
-    ax.set_ylabel('Cummulative regret')
-
-    for config_file in args.config:
-        config = parse_config_file(config_file)
-        func_calls_file = os.path.join(config["output"], "func_calls")
-        df = pd.read_table(func_calls_file)
-        df.columns = df.columns.str.strip()
-        losses = df["Loss"].to_numpy()
-        best_loss = np.min(losses) - 1e-6
-        regret = np.empty_like(losses)
-        for i in range(len(losses)):
-            regret[i] = np.sum(losses[:i+1]) - (i + 1) * best_loss
-        if args.time:
-            ax.plot(df["Start Time /s"], regret, label=config_file)
-            # ax.set_xlim(xmin=0, xmax=max(df["Start Time /s"]))
-        else:
-            ax.plot(regret, label=config_file)
-            # ax.set_xlim(xmin=0, xmax=len(regret) + 1)
-    ax.legend()
+    # Build piglot problem
+    config = parse_config_file(args.config)
+    objective = parse_objective(config["objective"], parse_parameters(config), config["output"])
+    data = objective.get_history()
+    fig, axis = plt.subplots()
+    for name, (times, values, _) in data.items():
+        x_axis = times if args.time else np.arange(len(times))
+        axis.plot(x_axis, cumulative_regret(values, x_axis), label=name)
+    if args.log:
+        axis.set_yscale('log')
+    axis.set_xlabel("Elapsed time /s" if args.time else "Function calls")
+    axis.set_ylabel("Cumulative regret")
+    axis.legend()
+    axis.grid()
+    fig.tight_layout()
     if args.save_fig:
         fig.savefig(args.save_fig)
     else:
@@ -151,16 +227,14 @@ def main():
         description='Plot a single case file.',
     )
     sp_case.add_argument(
-        'case_file',
+        'config',
         type=str,
-        help="Path for the case file to plot.",
+        help="Path for the used or generated configuration file.",
     )
     sp_case.add_argument(
-        '--config',
-        default=None,
+        'case_hash',
         type=str,
-        help=("Path for the used or generated configuration file. "
-              "Useful for plotting the references for each field alongside the response."),
+        help=("Hash of the case to plot."),
     )
     sp_case.add_argument(
         '--save_fig',
@@ -210,28 +284,75 @@ def main():
     )
     sp_best.set_defaults(func=plot_best)
 
-    # Dumping the parameter history
-    sp_dump = subparsers.add_parser(
-        'dump',
-        help='dump the internal parameter history to a file',
-        description=("Dump the internal parameter history to a file. This must be "
-                     "executed in the same path as the running piglot instance."),
+    # Plotting the objective history
+    sp_hist = subparsers.add_parser(
+        'history',
+        help='plot the objective history',
+        description=("Plot the objective history. This must be executed in "
+                     "the same path as the running piglot instance."),
     )
-    sp_dump.add_argument(
+    sp_hist.add_argument(
         'config',
         type=str,
         help="Path for the used or generated configuration file.",
     )
-    sp_dump.add_argument(
-        'name',
+    sp_hist.add_argument(
+        '--save_fig',
+        default=None,
         type=str,
-        help="Output file.",
+        help=("Path to save the generated figure. If used, graphical output is skipped."),
     )
-    sp_dump.add_argument(
-        '--quiet',
+    sp_hist.add_argument(
+        '--time',
         action='store_true',
+        help=("Whether to plot the objective history w.r.t. the elapsed time."),
     )
-    sp_dump.set_defaults(func=dump_run)
+    sp_hist.add_argument(
+        '--log',
+        action='store_true',
+        help=("Plot with a log scale."),
+    )
+    sp_hist.add_argument(
+        '--best',
+        action='store_true',
+        help=("Plot the best case so far."),
+    )
+    sp_hist.set_defaults(func=plot_history)
+
+    # Plotting the parameter history
+    sp_param = subparsers.add_parser(
+        'parameters',
+        help='plot the parameter history',
+        description=("Plot the parameter history. This must be "
+                     "executed in the same path as the running piglot instance."),
+    )
+    sp_param.add_argument(
+        'config',
+        type=str,
+        help="Path for the used or generated configuration file.",
+    )
+    sp_param.add_argument(
+        '--save_fig',
+        default=None,
+        type=str,
+        help=("Path to save the generated figure. If used, graphical output is skipped."),
+    )
+    sp_param.add_argument(
+        '--time',
+        action='store_true',
+        help="Plot w.r.t. the elapsed time"
+    )
+    sp_param.add_argument(
+        '--log',
+        action='store_true',
+        help="Plot with a log scale"
+    )
+    sp_param.add_argument(
+        '--best',
+        action='store_true',
+        help="Plot the best case so far.",
+    )
+    sp_param.set_defaults(func=plot_parameters)
 
     # Plotting cummulative regret measures
     sp_regret = subparsers.add_parser(
@@ -242,7 +363,6 @@ def main():
     )
     sp_regret.add_argument(
         'config',
-        nargs='+',
         type=str,
         help="Path for the used or generated configuration file.",
     )
@@ -256,6 +376,11 @@ def main():
         '--time',
         action='store_true',
         help="Plot w.r.t. the elapsed time"
+    )
+    sp_regret.add_argument(
+        '--log',
+        action='store_true',
+        help="Plot with a log scale"
     )
     sp_regret.set_defaults(func=plot_regret)
 

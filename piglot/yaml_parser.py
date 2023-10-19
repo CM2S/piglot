@@ -301,17 +301,10 @@ def parse_mf_objective(objective_conf, parameters, output_dir):
     # Check for mandatory arguments
     if not 'objectives' in objective_conf:
         raise RuntimeError("Missing multi-fidelity objectives")
-    # Create output directory right away to initialise child objectives
-    if os.path.isdir(output_dir):
-        shutil.rmtree(output_dir)
-    os.mkdir(output_dir)
     # Parse each multi-fidelity objective
     objectives = {}
     for fidelity, config in objective_conf['objectives'].items():
         output_path = os.path.join(output_dir, f'fidelity_{fidelity:<5.3f}')
-        if os.path.isdir(output_path):
-            shutil.rmtree(output_path)
-        os.mkdir(output_path)
         objectives[fidelity] = parse_objective(config, parameters, output_path)
     return MultiFidelitySingleObjective(objectives, parameters, output_dir=output_dir)
 
@@ -320,17 +313,10 @@ def parse_mf_cf_objective(objective_conf, parameters, output_dir):
     # Check for mandatory arguments
     if not 'objectives' in objective_conf:
         raise RuntimeError("Missing multi-fidelity objectives")
-    # Create output directory right away to initialise child objectives
-    if os.path.isdir(output_dir):
-        shutil.rmtree(output_dir)
-    os.mkdir(output_dir)
     # Parse each multi-fidelity objective
     objectives = {}
     for fidelity, config in objective_conf['objectives'].items():
         output_path = os.path.join(output_dir, f'fidelity_{fidelity:<5.3f}')
-        if os.path.isdir(output_path):
-            shutil.rmtree(output_path)
-        os.mkdir(output_path)
         objectives[fidelity] = parse_objective(config, parameters, output_path)
     return MultiFidelityCompositeObjective(objectives, parameters, output_dir=output_dir)
 

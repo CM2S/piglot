@@ -1,4 +1,5 @@
 """Module for losses associated with LINKS calls."""
+from __future__ import annotations
 import os
 import re
 import time
@@ -7,13 +8,16 @@ import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from multiprocessing.pool import ThreadPool as Pool
-from typing import Any, Dict, Tuple, List
+from typing import Dict, Tuple, List
 import numpy as np
 import pandas as pd
-from yaml import safe_dump_all
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+from yaml import safe_dump_all, safe_load_all
 from piglot.parameter import ParameterSet
-from piglot.optimisers.optimiser import pretty_time
+from piglot.optimisers.optimiser import pretty_time, reverse_pretty_time
 from piglot.objective import SingleObjective, SingleCompositeObjective, MSEComposition
+from piglot.objective import DynamicPlotter
 from piglot.losses.loss import Loss
 
 
@@ -195,7 +199,7 @@ class OutputField(ABC):
         """
 
     @abstractmethod
-    def name(self, field_idx: int = None):
+    def name(self, field_idx: int = None) -> str:
         """Return the name of the current field.
 
         Parameters
@@ -296,7 +300,7 @@ class Reaction(OutputField):
         data = np.genfromtxt(reac_filename)
         return (data[data[:,0] == self.group, 1:])[:,[0, self.dim]]
 
-    def name(self, field_idx: int = None):
+    def name(self, field_idx: int = None) -> str:
         """Return the name of the current field.
 
         Parameters
@@ -440,7 +444,7 @@ class OutFile(OutputField):
         # Return the given quantity as the x-variable
         return df.iloc[:,int_columns].to_numpy()
 
-    def name(self, field_idx: int = None):
+    def name(self, field_idx: int = None) -> str:
         """Return the name of the current field.
 
         Parameters
@@ -502,6 +506,85 @@ class LinksCaseResult:
     failed: bool
     responses: Dict[OutputField, Tuple[np.ndarray, np.ndarray]]
 
+    @staticmethod
+    def read(filename: str) -> LinksCaseResult:
+        """Read a case result file
+
+        Parameters
+        ----------
+        filename : str
+            Path to the case result file
+
+        Returns
+        -------
+        LinksCaseResult
+            Result instance
+        """
+        with open(filename, 'r', encoding='utf8') as file:
+            metadata, responses_raw = safe_load_all(file)
+        responses = {name: (np.array([a[0] for a in data]), np.array([a[1] for a in data]))
+                     for name, data in responses_raw.items()}
+        return LinksCaseResult(
+            0.0,
+            reverse_pretty_time(metadata["run_time"]),
+            np.array(metadata["parameters"].values()),
+            not metadata["success"] == "true",
+            responses,
+        )
+
+
+class CurrentPlot(DynamicPlotter):
+    """Container for dynamically-updating plots."""
+
+    def __init__(self, case: LinksCase, tmp_dir: str):
+        """Constructor for dynamically-updating plots
+
+        Parameters
+        ----------
+        case : LinksCase
+            Case to plot
+        tmp_dir : str
+            Path of the temporary directory
+        """
+        self.case = case
+        n_fields = len(case.fields)
+        n_cols = min(max(1, n_fields), 2)
+        n_rows = int(np.ceil(n_fields / 2))
+        self.fig, axes = plt.subplots(n_rows, n_cols, squeeze=False)
+        self.axes = [a for b in axes for a in b]
+        self.path = os.path.join(tmp_dir, case.filename)
+        # Make initial plot
+        self.pred = {}
+        for i, (field, reference) in enumerate(self.case.fields.items()):
+            name = field.name()
+            data = field.get(self.path)
+            self.axes[i].plot(reference[:, 0], reference[:, 1],
+                              label='Reference', ls='dashed', c='black', marker='x')
+            self.pred[name], = self.axes[i].plot(data[:, 0], data[:, 1],
+                                                 label='Prediction', c='red')
+            self.axes[i].set_title(name)
+            self.axes[i].grid()
+            self.axes[i].legend()
+        self.fig.suptitle(case.filename)
+        plt.show()
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
+    def update(self) -> None:
+        """Update the plot with the most recent data"""
+        for i, field in enumerate(self.case.fields.keys()):
+            name = field.name()
+            try:
+                data = field.get(self.path)
+                self.pred[name].set_xdata(data[:, 0])
+                self.pred[name].set_ydata(data[:, 1])
+                self.axes[i].relim()
+                self.axes[i].autoscale_view()
+            except (FileNotFoundError, IndexError):
+                pass
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+
 
 class LinksSolver:
     """Main loss class for Links problems."""
@@ -541,7 +624,10 @@ class LinksSolver:
         self.tmp_dir = os.path.join(output_dir, tmp_dir)
         self.cases_dir = os.path.join(output_dir, "cases")
         self.cases_hist = os.path.join(output_dir, "cases_hist")
-        # Prepare required output directories
+
+
+    def prepare(self) -> None:
+        """Prepare output directories for the optimsation"""
         os.makedirs(self.cases_dir, exist_ok=True)
         if os.path.isdir(self.cases_hist):
             shutil.rmtree(self.cases_hist)
@@ -671,6 +757,52 @@ class LinksSolver:
         return dict(zip(self.cases, results))
 
 
+    def plot_case(self, case_hash: str) -> List[Figure]:
+        """Plot a given function call given the parameter hash
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        figures = []
+        for case in self.cases:
+            # Load responses for this case
+            filename = os.path.join(self.cases_hist, f'{case.filename}-{case_hash}')
+            with open(filename, 'r', encoding='utf8') as file:
+                _, responses_raw = safe_load_all(file)
+            responses = {name: np.array(data) for name, data in responses_raw.items()}
+            # Build figure, index axes and plot response
+            fig, axes_raw = plt.subplots(len(responses_raw), squeeze=False)
+            axes = {field.name(): axes_raw[i,0] for i, field in enumerate(case.fields.keys())}
+            for field, reference in case.fields.items():
+                name = field.name()
+                axis = axes[name]
+                axis.plot(reference[:,0], reference[:,1],
+                          label='Reference', ls='dashed', c='black', marker='x')
+                axis.plot(responses[name][:,0], responses[name][:,1], c='red', label='Prediction')
+                axis.set_title(name)
+                axis.grid()
+                axis.legend()
+            figures.append(fig)
+        return figures
+
+
+    def plot_current(self) -> List[DynamicPlotter]:
+        """Plot the currently running function call
+
+        Returns
+        -------
+        List[DynamicPlotter]
+            List of instances of a updatable plots
+        """
+        return [CurrentPlot(case, self.tmp_dir) for case in self.cases]
+
 
 class LinksLoss(SingleObjective):
     """Main loss class for scalar single-objective Links problems."""
@@ -687,6 +819,10 @@ class LinksLoss(SingleObjective):
         super().__init__(parameters, output_dir=output_dir)
         self.solver = LinksSolver(cases, parameters, links_bin, parallel, tmp_dir, output_dir)
 
+    def prepare(self) -> None:
+        """Prepare output directories for the optimsation"""
+        super().prepare()
+        self.solver.prepare()
 
     def _objective(self, values: np.ndarray, parallel: bool=False) -> float:
         """Objective function for a problem with Links.
@@ -722,6 +858,30 @@ class LinksLoss(SingleObjective):
         # Accumulate final loss with weighting
         return np.mean([case.weight * loss for case, loss in losses.items()])
 
+    def plot_case(self, case_hash: str) -> List[Figure]:
+        """Plot a given function call given the parameter hash
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        return self.solver.plot_case(case_hash)
+
+    def plot_current(self) -> List[DynamicPlotter]:
+        """Plot the currently running function call
+
+        Returns
+        -------
+        List[DynamicPlotter]
+            List of instances of a updatable plots
+        """
+        return self.solver.plot_current()
 
 
 class CompositeLinksLoss(SingleCompositeObjective):
@@ -739,6 +899,10 @@ class CompositeLinksLoss(SingleCompositeObjective):
         super().__init__(parameters, MSEComposition(), output_dir=output_dir)
         self.solver = LinksSolver(cases, parameters, links_bin, parallel, tmp_dir, output_dir)
 
+    def prepare(self) -> None:
+        """Prepare output directories for the optimsation"""
+        super().prepare()
+        self.solver.prepare()
 
     def _inner_objective(self, values: np.ndarray, parallel: bool=False) -> np.ndarray:
         """Objective function for a problem with Links.
@@ -770,3 +934,28 @@ class CompositeLinksLoss(SingleCompositeObjective):
             losses[case] = case_losses
         # Accumulate final loss with weighting
         return np.concatenate([case.weight * loss for case, loss in losses.items()])
+
+    def plot_case(self, case_hash: str) -> List[Figure]:
+        """Plot a given function call given the parameter hash
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        return self.solver.plot_case(case_hash)
+
+    def plot_current(self) -> List[DynamicPlotter]:
+        """Plot the currently running function call
+
+        Returns
+        -------
+        List[DynamicPlotter]
+            List of instances of a updatable plots
+        """
+        return self.solver.plot_current()

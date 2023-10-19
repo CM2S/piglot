@@ -3,12 +3,15 @@ import os
 import os.path
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 import shutil
 from threading import Lock
 import numpy as np
 import sympy
 import torch
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 from piglot.parameter import ParameterSet
 
 
@@ -97,6 +100,15 @@ class MSEComposition(Composition):
 
 
 
+class DynamicPlotter(ABC):
+    """Abstract class for dynamically-updating plots"""
+
+    @abstractmethod
+    def update(self) -> None:
+        """Update the plot with the most recent data"""
+
+
+
 class Objective(ABC):
     """Abstract class for optimisation objectives"""
 
@@ -104,9 +116,58 @@ class Objective(ABC):
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         """Objective computation for the outside world"""
 
+    @abstractmethod
+    def prepare(self) -> None:
+        """Generic method to prepare output files before optimising the problem"""
+
+    def plot_case(self, case_hash: str) -> List[Figure]:
+        """Plot a given function call given the parameter hash
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        raise NotImplementedError("Single case plotting not implemented for this objective")
+
+    def plot_best(self) -> List[Figure]:
+        """Plot the current best case
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        raise NotImplementedError("Best case plotting not implemented for this objective")
+
+    def plot_current(self) -> List[DynamicPlotter]:
+        """Plot the currently running function call
+
+        Returns
+        -------
+        List[DynamicPlotter]
+            List of instances of a updatable plots
+        """
+        raise NotImplementedError("Current case plotting not implemented for this objective")
+    
+    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        """Get the objective history
+
+        Returns
+        -------
+        Dict[str, Tuple[np.ndarray, np.ndarray]]
+            Dictionary of objective history
+        """
+        raise NotImplementedError("Objective history not implemented for this objective")
 
 
-class SingleObjective(ABC):
+
+class SingleObjective(Objective):
     """Abstract class for scalar single-objectives"""
 
     def __init__(self, parameters: ParameterSet, output_dir: str=None) -> None:
@@ -116,13 +177,17 @@ class SingleObjective(ABC):
         self.func_calls = 0
         self.begin_time = time.perf_counter()
         self.__mutex = Lock()
+        self.func_calls_file = os.path.join(output_dir, "func_calls") if output_dir else None
+
+    def prepare(self) -> None:
+        """Prepare output directories for the optimsation"""
+        super().prepare()
         if self.output_dir:
             # Prepare output directories
             if os.path.isdir(self.output_dir):
                 shutil.rmtree(self.output_dir)
             os.mkdir(self.output_dir)
             # Build header for function calls file
-            self.func_calls_file = os.path.join(output_dir, "func_calls")
             with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
                 file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}\t{"Loss":>15}')
                 for param in self.parameters:
@@ -177,9 +242,45 @@ class SingleObjective(ABC):
                     file.write(f'\t{self.parameters.hash(values)}\n')
         return objective_value
 
+    def plot_best(self) -> List[Figure]:
+        """Plot the current best case
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        # Find hash associated with the best case
+        df = pd.read_table(self.func_calls_file)
+        df.columns = df.columns.str.strip()
+        min_series = df.iloc[df["Loss"].idxmin()]
+        call_hash = str(min_series["Hash"])
+        # Use the single case plotting utility
+        figures = self.plot_case(call_hash)
+        # Also display the best case
+        print("Best run:")
+        print(min_series.drop(["Loss", "Hash"]))
+        print(f"Hash: {call_hash}")
+        print(f"Loss: {min_series['Loss']:15.8e}")
+        return figures
+    
+    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        """Get the objective history
+
+        Returns
+        -------
+        Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]
+            Dictionary of objective history
+        """
+        df = pd.read_table(self.func_calls_file)
+        df.columns = df.columns.str.strip()
+        x_axis = df["Start Time /s"] + df["Run Time /s"]
+        params = df[[param.name for param in self.parameters]]
+        return {"Loss": (x_axis.to_numpy(), df["Loss"].to_numpy(), params.to_numpy())}
 
 
-class SingleCompositeObjective(ABC):
+
+class SingleCompositeObjective(Objective):
     """Abstract class for composite single-objectives"""
 
     def __init__(
@@ -195,13 +296,17 @@ class SingleCompositeObjective(ABC):
         self.func_calls = 0
         self.begin_time = time.perf_counter()
         self.__mutex = Lock()
+        self.func_calls_file = os.path.join(output_dir, "func_calls") if output_dir else None
+
+    def prepare(self) -> None:
+        """Prepare output directories for the optimsation"""
+        super().prepare()
         if self.output_dir:
             # Prepare output directories
             if os.path.isdir(self.output_dir):
                 shutil.rmtree(self.output_dir)
             os.mkdir(self.output_dir)
             # Build header for function calls file
-            self.func_calls_file = os.path.join(output_dir, "func_calls")
             with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
                 file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}\t{"Loss":>15}\t')
                 for param in self.parameters:
@@ -256,6 +361,42 @@ class SingleCompositeObjective(ABC):
                     file.write(f'{self.parameters.hash(values)}\n')
         return inner_objective
 
+    def plot_best(self) -> List[Figure]:
+        """Plot the current best case
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        # Find hash associated with the best case
+        df = pd.read_table(self.func_calls_file)
+        df.columns = df.columns.str.strip()
+        min_series = df.iloc[df["Loss"].idxmin()]
+        call_hash = str(min_series["Hash"])
+        # Use the single case plotting utility
+        figures = self.plot_case(call_hash)
+        # Also display the best case
+        print("Best run:")
+        print(min_series.drop(["Loss", "Hash"]))
+        print(f"Hash: {call_hash}")
+        print(f"Loss: {min_series['Loss']:15.8e}")
+        return figures
+    
+    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        """Get the objective history
+
+        Returns
+        -------
+        Dict[str, Tuple[np.ndarray, np.ndarray]]
+            Dictionary of objective history
+        """
+        df = pd.read_table(self.func_calls_file)
+        df.columns = df.columns.str.strip()
+        x_axis = df["Start Time /s"] + df["Run Time /s"]
+        params = df[[param.name for param in self.parameters]]
+        return {"Loss": (x_axis.to_numpy(), df["Loss"].to_numpy(), params.to_numpy())}
+
 
 
 class AnalyticalObjective(SingleObjective):
@@ -286,7 +427,7 @@ class AnalyticalObjective(SingleObjective):
 
 
 
-class MultiFidelitySingleObjective(ABC):
+class MultiFidelitySingleObjective(Objective):
     """Class for multi-fidelity single-objectives"""
 
     def __init__(
@@ -307,11 +448,17 @@ class MultiFidelitySingleObjective(ABC):
         self.begin_time = time.perf_counter()
         self.__mutex = Lock()
         self.call_timings = {fidelity: [] for fidelity in self.fidelities}
+        self.func_calls_file = os.path.join(output_dir, "func_calls") if output_dir else None
+
+    def prepare(self) -> None:
+        """Prepare output directories for the optimsation"""
+        super().prepare()
         if self.output_dir:
             # Prepare output directories
-            os.makedirs(self.output_dir, exist_ok=True)
+            if os.path.isdir(self.output_dir):
+                shutil.rmtree(self.output_dir)
+            os.mkdir(self.output_dir)
             # Build header for function calls file
-            self.func_calls_file = os.path.join(output_dir, "func_calls")
             with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
                 file.write(f'{"Start Time /s":>15}\t')
                 file.write(f'{"Run Time /s":>15}\t')
@@ -320,6 +467,12 @@ class MultiFidelitySingleObjective(ABC):
                     file.write(f"{param.name:>15}\t")
                 file.write(f'{"Fidelity":>15}\t')
                 file.write(f'{"Hash":>64}\n')
+        for fidelity, objective in self.objectives.items():
+            output_path = os.path.join(self.output_dir, f'fidelity_{fidelity:<5.3f}')
+            if os.path.isdir(output_path):
+                shutil.rmtree(output_path)
+            os.mkdir(output_path)
+            objective.prepare()
 
     def select_fidelity(self, fidelity: float) -> float:
         """Select the target fidelity ensuring robustness to floating point round-off errors
@@ -399,8 +552,47 @@ class MultiFidelitySingleObjective(ABC):
         self.call_timings[target_fidelity].append(end_time - begin_time)
         return objective_value
 
+    def plot_best(self) -> List[Figure]:
+        """Plot the current best case
 
-class MultiFidelityCompositeObjective(ABC):
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        # Find hash associated with the best case (at highest fidelity)
+        df = pd.read_table(self.func_calls_file)
+        df.columns = df.columns.str.strip()
+        max_fidelity = df["Fidelity"].max()
+        df = df[df["Fidelity"] == max_fidelity]
+        min_series = df.iloc[df["Loss"].idxmin()]
+        call_hash = str(min_series["Hash"])
+        # Use the single case plotting utility
+        figures = self.plot_case(call_hash)
+        # Also display the best case
+        print("Best run:")
+        print(min_series.drop(["Loss", "Hash"]))
+        print(f"Hash: {call_hash}")
+        print(f"Loss: {min_series['Loss']:15.8e}")
+        return figures
+
+    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        """Get the objective history
+
+        Returns
+        -------
+        Dict[str, Tuple[np.ndarray, np.ndarray]]
+            Dictionary of objective history
+        """
+        result = {}
+        for fidelity, objective in self.objectives.items():
+            data = objective.get_history()
+            for name, values in data.items():
+                result[f"{name} (fidelity={fidelity})"] = values
+        return result
+
+
+class MultiFidelityCompositeObjective(Objective):
     """Class for multi-fidelity composite single-objectives"""
 
     def __init__(
@@ -426,11 +618,17 @@ class MultiFidelityCompositeObjective(ABC):
         self.begin_time = time.perf_counter()
         self.__mutex = Lock()
         self.call_timings = {fidelity: [] for fidelity in self.fidelities}
+        self.func_calls_file = os.path.join(output_dir, "func_calls") if output_dir else None
+
+    def prepare(self) -> None:
+        """Prepare output directories for the optimsation"""
+        super().prepare()
         if self.output_dir:
             # Prepare output directories
-            os.makedirs(self.output_dir, exist_ok=True)
+            if os.path.isdir(self.output_dir):
+                shutil.rmtree(self.output_dir)
+            os.mkdir(self.output_dir)
             # Build header for function calls file
-            self.func_calls_file = os.path.join(output_dir, "func_calls")
             with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
                 file.write(f'{"Start Time /s":>15}\t')
                 file.write(f'{"Run Time /s":>15}\t')
@@ -439,6 +637,12 @@ class MultiFidelityCompositeObjective(ABC):
                     file.write(f"{param.name:>15}\t")
                 file.write(f'{"Fidelity":>15}\t')
                 file.write(f'{"Hash":>64}\n')
+        for fidelity, objective in self.objectives.items():
+            output_path = os.path.join(self.output_dir, f'fidelity_{fidelity:<5.3f}')
+            if os.path.isdir(output_path):
+                shutil.rmtree(output_path)
+            os.mkdir(output_path)
+            objective.prepare()
 
     def select_fidelity(self, fidelity: float) -> float:
         """Select the target fidelity ensuring robustness to floating point round-off errors
@@ -518,3 +722,42 @@ class MultiFidelityCompositeObjective(ABC):
         # Update call time history
         self.call_timings[target_fidelity].append(end_time - begin_time)
         return inner_objective
+
+    def plot_best(self) -> List[Figure]:
+        """Plot the objective history
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        # Find hash associated with the best case (at highest fidelity)
+        df = pd.read_table(self.func_calls_file)
+        df.columns = df.columns.str.strip()
+        max_fidelity = df["Fidelity"].max()
+        df = df[df["Fidelity"] == max_fidelity]
+        min_series = df.iloc[df["Loss"].idxmin()]
+        call_hash = str(min_series["Hash"])
+        # Use the single case plotting utility
+        figures = self.plot_case(call_hash)
+        # Also display the best case
+        print("Best run:")
+        print(min_series.drop(["Loss", "Hash"]))
+        print(f"Hash: {call_hash}")
+        print(f"Loss: {min_series['Loss']:15.8e}")
+        return figures
+
+    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        """Get the objective history
+
+        Returns
+        -------
+        Dict[str, Tuple[np.ndarray, np.ndarray]]
+            Dictionary of objective history
+        """
+        result = {}
+        for fidelity, objective in self.objectives.items():
+            data = objective.get_history()
+            for name, values in data.items():
+                result[f"{name} (fidelity={fidelity})"] = values
+        return result
