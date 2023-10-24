@@ -473,6 +473,13 @@ class ScalarLoss(Loss):
         # Particular case if we have less than two prediction points
         if len(x_pred) < 2:
             return self.max_value(x_ref, y_ref)
+        # Filter out points with the same x coordinate (to prevent issues during interpolation)
+        mask = np.append(np.abs(x_pred[1:] - x_pred[:-1]) > 1e-16, np.array([True]), axis=0)
+        x_pred = x_pred[mask]
+        y_pred = y_pred[mask]
+        # Re-check this
+        if len(x_pred) < 2:
+            return self.max_value(x_ref, y_ref)
         # Interpolate prediction grid on the reference grid
         x = x_ref
         ref = y_ref
@@ -766,12 +773,13 @@ class MixedLoss(ScalarLoss):
 class VectorLoss(Loss):
     """Base class for generic vector losses based on the difference of responses."""
 
-    def __init__(self, *args, reduction=None, **kwargs):
+    def __init__(self, *args, reduction=None, clamp_value=10.0, **kwargs):
         """Constructor for VectorLoss"""
         super().__init__(*args, **kwargs)
         if reduction and reduction not in ('trapezoid'):
             raise RuntimeError(f"Unknown reduction {reduction} for vector loss")
         self.reduction = reduction
+        self.clamp_value = clamp_value
     
     def average(self, losses):
         """Average a set of losses.
@@ -846,14 +854,25 @@ class VectorLoss(Loss):
         # Particular case if we have less than two prediction points
         if len(x_pred) < 2:
             return self.max_value(x_ref, y_ref)
+        # Filter out points with the same x coordinate (to prevent issues during interpolation)
+        mask = np.append(np.abs(x_pred[1:] - x_pred[:-1]) > 1e-16, np.array([True]), axis=0)
+        x_pred = x_pred[mask]
+        y_pred = y_pred[mask]
+        # Re-check this
+        if len(x_pred) < 2:
+            return self.max_value(x_ref, y_ref)
         # Interpolate prediction grid on the reference grid
         x = x_ref
         ref = y_ref
         func = interp1d(x_pred, y_pred, kind=self.interp_kind, bounds_error=False,
-                        fill_value=(y_pred[np.argmin(x_pred)], y_pred[np.argmax(x_pred)]))
+                        fill_value='extrapolate')
         pred = func(x_ref)
         # Filters and modifiers
         x, ref, pred = self._apply_filters_modifiers(x, ref, pred)
+        # Clamp response
+        a_min = ref - np.abs(ref) * self.clamp_value
+        a_max = ref + np.abs(ref) * self.clamp_value
+        pred = np.clip(pred, a_min=a_min, a_max=a_max)
         # Compute the derived vector loss
         if self.reduction == 'trapezoid':
             # Weight each point to get the equivalent of a trapezoid integration
