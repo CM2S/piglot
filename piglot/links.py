@@ -8,7 +8,7 @@ import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from multiprocessing.pool import ThreadPool as Pool
-from typing import Dict, Tuple, List
+from typing import Dict, List
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -19,6 +19,7 @@ from piglot.optimisers.optimiser import pretty_time, reverse_pretty_time
 from piglot.objective import SingleObjective, SingleCompositeObjective, MSEComposition
 from piglot.objective import DynamicPlotter
 from piglot.losses.loss import Loss
+from piglot.utils.reduce_response import reduce_response
 
 
 def write_parameters(param_value, source, dest):
@@ -177,7 +178,7 @@ class OutputField(ABC):
         self.loss = loss
 
     @abstractmethod
-    def check(self, input_file: str):
+    def check(self, input_file: str) -> None:
         """Checks for validity in the input file before reading.
 
         This needs to be called prior to any reading on the file.
@@ -189,7 +190,7 @@ class OutputField(ABC):
         """
 
     @abstractmethod
-    def get(self, input_file: str):
+    def get(self, input_file: str) -> np.ndarray:
         """Reads an output from the simulation.
 
         Parameters
@@ -214,7 +215,7 @@ class OutputField(ABC):
         """
 
     @classmethod
-    def read(cls, input_file: str, *args, **kwargs):
+    def read(cls, input_file: str, *args, **kwargs) -> np.ndarray:
         """Direct reading of the results of the given input file.
 
         Parameters
@@ -251,7 +252,7 @@ class Reaction(OutputField):
         self.dim_name = dim
         self.group = group
 
-    def check(self, input_file: str):
+    def check(self, input_file: str) -> None:
         """Sanity checks on the input file.
 
         This checks if:
@@ -278,7 +279,7 @@ class Reaction(OutputField):
             raise RuntimeError("Reactions requested on an input file without NODE_GROUPS!")
         # TODO: check group number and dimensions
 
-    def get(self, input_file: str):
+    def get(self, input_file: str) -> np.ndarray:
         """Reads reactions from a Links analysis.
 
         Parameters
@@ -359,7 +360,7 @@ class OutFile(OutputField):
         self.x_field = x_field
         self.separator = 16
 
-    def check(self, input_file: str):
+    def check(self, input_file: str) -> None:
         """Sanity checks on the input file.
 
         This checks for:
@@ -407,7 +408,7 @@ class OutFile(OutputField):
         # Check if single or double precision output
         self.separator = 24 if has_keyword(input_file, "DOUBLE_PRECISION_OUTPUT") else 16
 
-    def get(self, input_file: str):
+    def get(self, input_file: str) -> np.ndarray:
         """Get a parameter from the .out file.
 
         Parameters
@@ -463,13 +464,122 @@ class OutFile(OutputField):
         return f"OutFile: column {field + 1}"
 
 
+class Reference:
+    """Container for reference solutions"""
+
+    def __init__(
+            self,
+            filename: str,
+            x_col: int=1,
+            y_col: int=2,
+            skip_header: int=0,
+            x_scale: float=1.0,
+            y_scale: float=1.0,
+            x_offset: float=0.0,
+            y_offset: float=0.0,
+            filter_tol: float=0.0,
+            show: bool=False,
+        ):
+        self.data = np.genfromtxt(filename, skip_header=skip_header)[:,[x_col - 1, y_col - 1]]
+        self.data[:,0] = x_offset + x_scale * self.data[:,0]
+        self.data[:,1] = y_offset + y_scale * self.data[:,1]
+        self.orig_data = np.copy(self.data)
+        self.filter_tol = filter_tol
+        self.show = show
+
+    def prepare(self) -> None:
+        """Prepare the reference data"""
+        if self.has_filtering():
+            print("Filtering reference ...", end='')
+            num, error, (x, y) = reduce_response(self.data[:,0], self.data[:,1], self.filter_tol)
+            self.data = np.array([x, y]).T
+            print(f" done (from {self.orig_data.shape[0]} to {num} points, error = {error:.2e})")
+            if self.show:
+                _, ax = plt.subplots()
+                ax.plot(self.orig_data[:,0], self.orig_data[:,1], label="Reference")
+                ax.plot(self.data[:,0], self.data[:,1], c='r', ls='dashed')
+                ax.scatter(self.data[:,0], self.data[:,1], c='r', label="Resampled")
+                ax.legend()
+                plt.show()
+
+    def num_fields(self) -> int:
+        """Get the number of reference fields
+
+        Returns
+        -------
+        int
+            Number of reference fields
+        """
+        return self.data.shape[1] - 1
+
+    def has_filtering(self) -> bool:
+        """Check if the reference has filtering
+
+        Returns
+        -------
+        bool
+            Whether the reference has filtering
+        """
+        return self.filter_tol > 0.0
+
+    def get_time(self) -> np.ndarray:
+        """Get the time column of the reference
+
+        Returns
+        -------
+        np.ndarray
+            Time column
+        """
+        return self.data[:, 0]
+
+    def get_data(self, field_idx: int=0) -> np.ndarray:
+        """Get the data column of the reference
+
+        Parameters
+        ----------
+        field_idx : int
+            Index of the field to output
+
+        Returns
+        -------
+        np.ndarray
+            Data column
+        """
+        return self.data[:, field_idx + 1]
+
+    def get_orig_time(self) -> np.ndarray:
+        """Get the original time column of the reference
+
+        Returns
+        -------
+        np.ndarray
+            Original time column
+        """
+        return self.orig_data[:, 0]
+
+    def get_orig_data(self, field_idx: int=0) -> np.ndarray:
+        """Get the original data column of the reference
+
+        Parameters
+        ----------
+        field_idx : int
+            Index of the field to output
+
+        Returns
+        -------
+        np.ndarray
+            Original data column
+        """
+        return self.orig_data[:, field_idx + 1]
+
+
 class LinksCase:
     """Container with the required fields for each case to be run with Links."""
 
     def __init__(
             self,
             filename: str,
-            fields: Dict[OutputField, np.ndarray],
+            fields: Dict[OutputField, Reference],
             loss: Loss = None,
             weight: float=1.0,
         ):
@@ -479,7 +589,7 @@ class LinksCase:
         ----------
         filename : str
             Input file path.
-        fields : dict
+        fields : Dict[OutputField, Reference]
             Pairs of fields to read from results and their reference solutions.
         loss : Loss
             Loss function to use when comparing predictions and references.
@@ -490,11 +600,50 @@ class LinksCase:
         self.fields = fields
         self.loss = loss
         self.weight = weight
-        for field in self.fields.keys():
-            field.check(filename)
+
+    def prepare(self) -> None:
+        """Prepare the case for running."""
+        for field, reference in self.fields.items():
+            # Prepare the field
+            field.check(self.filename)
             # Assign the default loss to fields without one
-            if field.loss is None and loss is not None:
-                field.loss = loss
+            if field.loss is None and self.loss is not None:
+                field.loss = self.loss
+            # Prepare the reference
+            reference.prepare()
+
+    def get_field(self, name: str) -> OutputField:
+        """Get the field with the given name
+
+        Parameters
+        ----------
+        name : str
+            Name of the field to get
+
+        Returns
+        -------
+        OutputField
+            Field with the given name
+        """
+        for field in self.fields.keys():
+            if field.name() == name:
+                return field
+        return None
+
+    def get_reference(self, name: str) -> Reference:
+        """Get the reference with the given name
+
+        Parameters
+        ----------
+        name : str
+            Name of the reference to get
+
+        Returns
+        -------
+        Reference
+            Reference with the given name
+        """
+        return self.fields[self.get_field(name)]
 
 
 @dataclass
@@ -504,7 +653,7 @@ class LinksCaseResult:
     end_time: float
     values: np.ndarray
     failed: bool
-    responses: Dict[OutputField, Tuple[np.ndarray, np.ndarray]]
+    responses: Dict[str, np.ndarray]
 
     @staticmethod
     def read(filename: str) -> LinksCaseResult:
@@ -558,7 +707,7 @@ class CurrentPlot(DynamicPlotter):
         for i, (field, reference) in enumerate(self.case.fields.items()):
             name = field.name()
             data = field.get(self.path)
-            self.axes[i].plot(reference[:, 0], reference[:, 1],
+            self.axes[i].plot(reference.get_time(), reference.get_data(),
                               label='Reference', ls='dashed', c='black', marker='x')
             self.pred[name], = self.axes[i].plot(data[:, 0], data[:, 1],
                                                  label='Prediction', c='red')
@@ -624,6 +773,11 @@ class LinksSolver:
         self.tmp_dir = os.path.join(output_dir, tmp_dir)
         self.cases_dir = os.path.join(output_dir, "cases")
         self.cases_hist = os.path.join(output_dir, "cases_hist")
+        # Check if there is a reference response reduction
+        self.use_loss_orig = any([reference.has_filtering()
+                                  for case in self.cases
+                                  for reference in case.fields.values()])
+        
 
 
     def prepare(self) -> None:
@@ -639,10 +793,15 @@ class LinksSolver:
                 file.write(f"{'Start Time /s':>15}\t")
                 file.write(f"{'Run Time /s':>15}\t")
                 file.write(f"{'Loss':>15}\t")
+                if self.use_loss_orig:
+                    file.write(f"{'Loss (orig.)':>15}\t")
                 file.write(f"{'Success':>10}\t")
                 for param in self.parameters:
                     file.write(f"{param.name:>15}\t")
                 file.write(f'{"Hash":>64}\n')
+        # Prepare each case for optimisation
+        for case in self.cases:
+            case.prepare()
 
 
     def _run_case(self, values: np.ndarray, case: LinksCase, tmp_dir: str) -> LinksCaseResult:
@@ -681,11 +840,30 @@ class LinksSolver:
         failed_case = (process_result.returncode != 0 or
                        not has_keyword(screen_file, "Program L I N K S successfully completed."))
         # Read results from output directories
-        responses = {field: (ref, field.get(input_file)) for field, ref in case.fields.items()}
+        responses = {field.name(): field.get(input_file) for field in case.fields.keys()}
         return LinksCaseResult(begin_time, end_time, values, failed_case, responses)
 
 
-    def write_history_entry(self, case: LinksCase, result: LinksCaseResult, loss: float) -> None:
+    def write_history_entry(
+            self,
+            case: LinksCase,
+            result: LinksCaseResult,
+            loss: float,
+            loss_orig: float,
+        ) -> None:
+        """Write this case's history entry
+
+        Parameters
+        ----------
+        case : LinksCase
+            Case to write
+        result : LinksCaseResult
+            Result for this case
+        loss : float
+            Loss value
+        loss_orig : float
+            Loss value in the original reference
+        """
         # Build case metadata
         param_hash = self.parameters.hash(result.values)
         cases_hist = {
@@ -697,14 +875,15 @@ class LinksSolver:
             "start_time": time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(result.begin_time)),
             "run_time": pretty_time(result.end_time - result.begin_time),
         }
+        if self.use_loss_orig:
+            cases_hist['loss_orig'] = float(loss_orig)
         # Encode response to write
         responses = {}
-        for field, (reference, prediction) in result.responses.items():
-            # The first column of the reference is the time
-            num_fields = reference.shape[1] - 1
-            for i in range(0, num_fields):
-                responses[field.name(i)] = list(zip([float(a) for a in prediction[:, 0]],
-                                                    [float(a) for a in prediction[:, i + 1]]))
+        for field, prediction in result.responses.items():
+            reference = case.get_reference(field)
+            for i in range(reference.num_fields()):
+                responses[field] = list(zip([float(a) for a in prediction[:, 0]],
+                                            [float(a) for a in prediction[:, i + 1]]))
         # Write out the case file
         output_case_hist = os.path.join(self.cases_hist, f'{case.filename}-{param_hash}')
         with open(output_case_hist, 'w', encoding='utf8') as file:
@@ -714,6 +893,8 @@ class LinksSolver:
             file.write(f'{result.begin_time - self.begin_time:>15.8e}\t')
             file.write(f'{result.end_time - result.begin_time:>15.8e}\t')
             file.write(f'{loss:>15.8e}\t')
+            if self.use_loss_orig:
+                file.write(f'{loss_orig:>15.8e}\t')
             file.write(f'{not result.failed:>10}\t')
             for i, param in enumerate(self.parameters):
                 file.write(f"{param.denormalise(result.values[i]):>15.6f}\t")
@@ -783,7 +964,7 @@ class LinksSolver:
             for field, reference in case.fields.items():
                 name = field.name()
                 axis = axes[name]
-                axis.plot(reference[:,0], reference[:,1],
+                axis.plot(reference.get_time(), reference.get_data(),
                           label='Reference', ls='dashed', c='black', marker='x')
                 axis.plot(responses[name][:,0], responses[name][:,1], c='red', label='Prediction')
                 axis.set_title(name)
@@ -845,15 +1026,25 @@ class LinksLoss(SingleObjective):
         losses = {}
         for case, result in results.items():
             case_losses = []
-            for field, (reference, prediction) in result.responses.items():
-                for i in range(1, reference.shape[1]):
-                    loss = field.loss(reference[:,0], prediction[:,0],
-                                      reference[:,i], prediction[:,i])
+            case_losses_orig = []
+            for field_name, prediction in result.responses.items():
+                field = case.get_field(field_name)
+                reference = case.get_reference(field_name)
+                for i in range(reference.num_fields()):
+                    loss = field.loss(reference.get_time(), prediction[:,0],
+                                      reference.get_data(i), prediction[:,i+1])
+                    loss_orig = field.loss(reference.get_orig_time(), prediction[:,0],
+                                           reference.get_orig_data(i), prediction[:,i+1])
                     if not np.isfinite(loss):
-                        loss = field.loss.max_value(reference[:,0], reference[:,i])
+                        loss = field.loss.max_value(reference.get_time(), reference.get_data(i))
+                    if not np.isfinite(loss_orig):
+                        loss_orig = field.loss.max_value(reference.get_orig_time(),
+                                                         reference.get_orig_data(i))
                     case_losses.append(loss)
+                    case_losses_orig.append(loss_orig)
             case_loss = np.mean(case_losses)
-            self.solver.write_history_entry(case, result, case_loss)
+            case_loss_orig = np.mean(case_losses_orig)
+            self.solver.write_history_entry(case, result, case_loss, case_loss_orig)
             losses[case] = case_loss
         # Accumulate final loss with weighting
         return np.mean([case.weight * loss for case, loss in losses.items()])
@@ -925,12 +1116,23 @@ class CompositeLinksLoss(SingleCompositeObjective):
         losses = {}
         for case, result in results.items():
             case_losses = np.array([])
-            for field, (reference, prediction) in result.responses.items():
-                for i in range(1, reference.shape[1]):
-                    loss = field.loss(reference[:,0], prediction[:,0],
-                                      reference[:,i], prediction[:,i])
+            case_losses_orig = np.array([])
+            for field_name, prediction in result.responses.items():
+                field = case.get_field(field_name)
+                reference = case.get_reference(field_name)
+                for i in range(reference.num_fields()):
+                    loss = field.loss(reference.get_time(), prediction[:,0],
+                                      reference.get_data(i), prediction[:,i+1])
+                    loss_orig = field.loss(reference.get_orig_time(), prediction[:,0],
+                                           reference.get_orig_data(i), prediction[:,i+1])
                     case_losses = np.append(case_losses, loss)
-            self.solver.write_history_entry(case, result, self.composition.composition(case_losses))
+                    case_losses_org = np.append(case_losses_orig, loss_orig)
+            self.solver.write_history_entry(
+                case,
+                result,
+                self.composition.composition(case_losses),
+                self.composition.composition(case_losses_org),
+            )
             losses[case] = case_losses
         # Accumulate final loss with weighting
         return np.concatenate([case.weight * loss for case, loss in losses.items()])

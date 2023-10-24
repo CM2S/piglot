@@ -13,7 +13,7 @@ from piglot.parameter import ParameterSet, DualParameterSet
 from piglot.optimisers.optimiser import StoppingCriteria
 from piglot.objective import AnalyticalObjective, MultiFidelitySingleObjective
 from piglot.objective import MultiFidelityCompositeObjective
-from piglot.links import LinksCase, Reaction, OutFile, LinksLoss, CompositeLinksLoss
+from piglot.links import LinksCase, Reaction, OutFile, LinksLoss, CompositeLinksLoss, Reference
 from piglot.objectives.synthetic import SyntheticObjective, SyntheticCompositeObjective
 
 
@@ -124,24 +124,23 @@ def parse_loss(file, loss_data):
 def parse_reference_file(file, index, reference):
     # Parse the simple specification: only the path to the file with 2 columns is given
     if isinstance(reference, str):
-        return np.genfromtxt(reference)[:, 0:2]
+        return Reference(reference)
     # Parse the detailed specification
     if not isinstance(reference, dict):
         raise RuntimeError(f"Failed to parse the reference for field {index + 1} of case {file}")
     if not 'file' in reference:
         raise RuntimeError(f"Reference file not given for field {index + 1} of case {file}")
-    # Parse optional arguments
-    x_col = optional_dict(reference, "x_col", 1, int) - 1
-    y_col = optional_dict(reference, "y_col", 2, int) - 1
-    x_scale = optional_dict(reference, "x_scale", 1.0, float)
-    y_scale = optional_dict(reference, "y_scale", 1.0, float)
-    x_offset = optional_dict(reference, "x_offset", 0.0, float)
-    y_offset = optional_dict(reference, "y_offset", 0.0, float)
-    # Load the data and perform the given transformation
-    data = np.genfromtxt(reference["file"])[:, [x_col, y_col]]
-    data[:, 0] = x_offset + x_scale * data[:, 0]
-    data[:, 1] = y_offset + y_scale * data[:, 1]
-    return data
+    return Reference(
+        reference["file"],
+        x_col=optional_dict(reference, "x_col", 1, int),
+        y_col=optional_dict(reference, "y_col", 2, int),
+        x_scale=optional_dict(reference, "x_scale", 1.0, float),
+        y_scale=optional_dict(reference, "y_scale", 1.0, float),
+        x_offset=optional_dict(reference, "x_offset", 0.0, float),
+        y_offset=optional_dict(reference, "y_offset", 0.0, float),
+        filter_tol=optional_dict(reference, "filter_tol", 0.0, float),
+        show=optional_dict(reference, "show", False, bool),
+    )
 
 
 
