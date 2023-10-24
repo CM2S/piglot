@@ -26,9 +26,9 @@ class SyntheticObjective(SingleObjective):
         if name not in test_functions:
             raise RuntimeError(f'Unknown function {name}. Must be in {list(test_functions.keys())}')
         self.func = test_functions[name](*args, **kwargs)
-        self.transform = None
+        self.transform = lambda x, y: x
         if transform == 'mse_composition':
-            self.transform = lambda value, func: torch.square(value - func.optimal_value)
+            self.transform = lambda v, func: torch.square(torch.tensor([v - func.optimal_value]))
         with open(os.path.join(output_dir, 'optimum_value'), 'w', encoding='utf8') as file:
             file.write(f'{self.transform(self.func.optimal_value, self.func)}')
 
@@ -82,7 +82,7 @@ class SyntheticObjective(SingleObjective):
         params = torch.tensor(self.parameters.denormalise(values))
         value = self.func.evaluate_true(params)
         value = value if self.transform is None else self.transform(value, self.func)
-        return value.numpy()
+        return float(value.item())
 
 
 class SyntheticCompositeObjective(SingleCompositeObjective):

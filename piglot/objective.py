@@ -512,7 +512,9 @@ class MultiFidelitySingleObjective(Objective):
             Expected cost, in seconds
         """
         target_fidelity = self.select_fidelity(fidelity)
-        return np.mean(self.call_timings[target_fidelity]) + 1e-9
+        if len(self.call_timings[target_fidelity]) > 0:
+            return np.mean(self.call_timings[target_fidelity]) + 1e-9
+        return 1e-9
 
     def __call__(self, values: np.ndarray, fidelity: float=1.0, parallel: bool=False) -> np.ndarray:
         """Objective computation for the outside world - also handles output file writing
@@ -684,7 +686,7 @@ class MultiFidelityCompositeObjective(Objective):
         target_fidelity = self.select_fidelity(fidelity)
         return np.mean(self.call_timings[target_fidelity]) + 1e-9
 
-    def __call__(self, values: np.ndarray, fidelity: float, parallel: bool=False) -> np.ndarray:
+    def __call__(self, values: np.ndarray, fidelity: float=1.0, parallel: bool=False) -> np.ndarray:
         """Objective computation for the outside world - also handles output file writing
 
         Parameters
