@@ -109,6 +109,10 @@ class ParameterSet:
     def __len__(self):
         """Length of the parameter set."""
         return len(self.parameters)
+    
+    def __getitem__(self, key):
+        """Get a parameter by name."""
+        return self.parameters[key]
 
     def add(self, name, inital_value, lbound, ubound):
         """Add a parameter to this set.

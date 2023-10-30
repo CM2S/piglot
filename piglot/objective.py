@@ -425,6 +425,103 @@ class AnalyticalObjective(SingleObjective):
         """
         return self.expression(**self.parameters.to_dict(values))
 
+    def _objective_denorm(self, values: np.ndarray) -> float:
+        """Objective computation for analytical functions (denormalised parameters)
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Set of parameters to evaluate the objective for (denormalised)
+
+        Returns
+        -------
+        float
+            Objective value
+        """
+        return self.expression(**self.parameters.to_dict(values, input_normalised=False))
+    
+    def _plot_1d(self, values: np.ndarray) -> Figure:
+        """Plot the objective in 1D
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Parameter values to plot for
+
+        Returns
+        -------
+        Figure
+            Figure with the plot
+        """
+        fig, axis = plt.subplots()
+        x = np.linspace(self.parameters[0].lbound, self.parameters[0].ubound, 1000)
+        y = np.array([self._objective_denorm(np.array([x_i])) for x_i in x])
+        axis.plot(x, y, c="black", label="Analytical Objective")
+        axis.scatter(values[0], self._objective_denorm(values), c="red", label="Case")
+        axis.set_xlabel(self.parameters[0].name)
+        axis.set_ylabel("Analytical Objective")
+        axis.set_xlim(self.parameters[0].lbound, self.parameters[0].ubound)
+        axis.legend()
+        axis.grid()
+        return fig
+    
+    def _plot_2d(self, values: np.ndarray) -> Figure:
+        """Plot the objective in 2D
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Parameter values to plot for
+
+        Returns
+        -------
+        Figure
+            Figure with the plot
+        """
+        fig, axis = plt.subplots(subplot_kw={"projection": "3d"})
+        x = np.linspace(self.parameters[0].lbound, self.parameters[0].ubound, 100)
+        y = np.linspace(self.parameters[1].lbound, self.parameters[1].ubound, 100)
+        X, Y = np.meshgrid(x, y)
+        Z = np.array([[self._objective_denorm(np.array([x_i, y_i])) for x_i in x] for y_i in y])
+        axis.plot_surface(X, Y, Z, alpha=0.8, label="Analytical Objective")
+        axis.scatter(values[0], values[1], self._objective_denorm(values), c="k", label="Case")
+        axis.set_xlabel(self.parameters[0].name)
+        axis.set_ylabel(self.parameters[1].name)
+        axis.set_zlabel("Analytical Objective")
+        axis.set_xlim(self.parameters[0].lbound, self.parameters[0].ubound)
+        axis.set_ylim(self.parameters[1].lbound, self.parameters[1].ubound)
+        axis.legend()
+        axis.grid()
+        fig.tight_layout()
+        return fig
+    
+    def plot_case(self, case_hash: str) -> List[Figure]:
+        """Plot a given function call given the parameter hash
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        # Find parameters associated with the hash
+        df = pd.read_table(self.func_calls_file)
+        df.columns = df.columns.str.strip()
+        df = df[df["Hash"] == case_hash]
+        values = df[[param.name for param in self.parameters]].to_numpy()[0,:]
+        # Plot depending on the dimensions
+        if len(self.parameters) <= 0:
+            raise RuntimeError("Missing dimensions.")
+        if len(self.parameters) == 1:
+            return [self._plot_1d(values)]
+        if len(self.parameters) == 2:
+            return [self._plot_2d(values)]
+        raise RuntimeError("Plotting not supported for 3 or more parameters.")
+
 
 
 class MultiFidelitySingleObjective(Objective):
