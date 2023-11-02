@@ -8,7 +8,7 @@ import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from multiprocessing.pool import ThreadPool as Pool
-from typing import Dict, List
+from typing import Dict, List, Any
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -718,6 +718,7 @@ class CurrentPlot(DynamicPlotter):
         plt.show()
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
+        self.count = 0
 
     def update(self) -> None:
         """Update the plot with the most recent data"""
@@ -733,6 +734,9 @@ class CurrentPlot(DynamicPlotter):
                 pass
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
+        self.fig.savefig(f'{self.count}.png')
+        self.count += 1
+
 
 
 class LinksSolver:
@@ -938,19 +942,26 @@ class LinksSolver:
         return dict(zip(self.cases, results))
 
 
-    def plot_case(self, case_hash: str) -> List[Figure]:
+    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
         """Plot a given function call given the parameter hash
 
         Parameters
         ----------
         case_hash : str, optional
             Parameter hash for the case to plot
+        options : Dict[str, Any], optional
+            Options for the plot, by default None
 
         Returns
         -------
         List[Figure]
             List of figures with the plot
         """
+        # Check if we need to preserve the reference axis limits
+        reference_limits = options is not None and options.get('reference_limits', False)
+        append_title = ''
+        if options is not None and 'append_title' in options:
+            append_title = f' ({options["append_title"]})'
         figures = []
         for case in self.cases:
             # Load responses for this case
@@ -966,8 +977,12 @@ class LinksSolver:
                 axis = axes[name]
                 axis.plot(reference.get_time(), reference.get_data(),
                           label='Reference', ls='dashed', c='black', marker='x')
+                xlim, ylim = axis.get_xlim(), axis.get_ylim()
                 axis.plot(responses[name][:,0], responses[name][:,1], c='red', label='Prediction')
-                axis.set_title(name)
+                if reference_limits:
+                    axis.set_xlim(xlim)
+                    axis.set_ylim(ylim)
+                axis.set_title(name + append_title)
                 axis.grid()
                 axis.legend()
             figures.append(fig)
@@ -1049,20 +1064,22 @@ class LinksLoss(SingleObjective):
         # Accumulate final loss with weighting
         return np.mean([case.weight * loss for case, loss in losses.items()])
 
-    def plot_case(self, case_hash: str) -> List[Figure]:
+    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
         """Plot a given function call given the parameter hash
 
         Parameters
         ----------
         case_hash : str, optional
             Parameter hash for the case to plot
+        options : Dict[str, Any], optional
+            Options for the plot, by default None
 
         Returns
         -------
         List[Figure]
             List of figures with the plot
         """
-        return self.solver.plot_case(case_hash)
+        return self.solver.plot_case(case_hash, options)
 
     def plot_current(self) -> List[DynamicPlotter]:
         """Plot the currently running function call
@@ -1137,20 +1154,22 @@ class CompositeLinksLoss(SingleCompositeObjective):
         # Accumulate final loss with weighting
         return np.concatenate([case.weight * loss for case, loss in losses.items()])
 
-    def plot_case(self, case_hash: str) -> List[Figure]:
+    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
         """Plot a given function call given the parameter hash
 
         Parameters
         ----------
         case_hash : str, optional
             Parameter hash for the case to plot
+        options : Dict[str, Any], optional
+            Options for the plot, by default None
 
         Returns
         -------
         List[Figure]
             List of figures with the plot
         """
-        return self.solver.plot_case(case_hash)
+        return self.solver.plot_case(case_hash, options)
 
     def plot_current(self) -> List[DynamicPlotter]:
         """Plot the currently running function call

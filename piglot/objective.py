@@ -120,13 +120,15 @@ class Objective(ABC):
     def prepare(self) -> None:
         """Generic method to prepare output files before optimising the problem"""
 
-    def plot_case(self, case_hash: str) -> List[Figure]:
+    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
         """Plot a given function call given the parameter hash
 
         Parameters
         ----------
         case_hash : str, optional
             Parameter hash for the case to plot
+        options : Dict[str, Any], optional
+            Options to pass to the plotting function, by default None
 
         Returns
         -------
@@ -155,12 +157,12 @@ class Objective(ABC):
         """
         raise NotImplementedError("Current case plotting not implemented for this objective")
     
-    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]:
         """Get the objective history
 
         Returns
         -------
-        Dict[str, Tuple[np.ndarray, np.ndarray]]
+        Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]
             Dictionary of objective history
         """
         raise NotImplementedError("Objective history not implemented for this objective")
@@ -264,19 +266,20 @@ class SingleObjective(Objective):
         print(f"Loss: {min_series['Loss']:15.8e}")
         return figures
     
-    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]:
         """Get the objective history
 
         Returns
         -------
-        Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]
+        Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]
             Dictionary of objective history
         """
         df = pd.read_table(self.func_calls_file)
         df.columns = df.columns.str.strip()
         x_axis = df["Start Time /s"] + df["Run Time /s"]
         params = df[[param.name for param in self.parameters]]
-        return {"Loss": (x_axis.to_numpy(), df["Loss"].to_numpy(), params.to_numpy())}
+        param_hash = df["Hash"].to_list()
+        return {"Loss": (x_axis.to_numpy(), df["Loss"].to_numpy(), params.to_numpy(), param_hash)}
 
 
 
@@ -383,19 +386,20 @@ class SingleCompositeObjective(Objective):
         print(f"Loss: {min_series['Loss']:15.8e}")
         return figures
     
-    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]:
         """Get the objective history
 
         Returns
         -------
-        Dict[str, Tuple[np.ndarray, np.ndarray]]
+        Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]
             Dictionary of objective history
         """
         df = pd.read_table(self.func_calls_file)
         df.columns = df.columns.str.strip()
         x_axis = df["Start Time /s"] + df["Run Time /s"]
         params = df[[param.name for param in self.parameters]]
-        return {"Loss": (x_axis.to_numpy(), df["Loss"].to_numpy(), params.to_numpy())}
+        param_hash = df["Hash"].to_list()
+        return {"Loss": (x_axis.to_numpy(), df["Loss"].to_numpy(), params.to_numpy(), param_hash)}
 
 
 
@@ -440,13 +444,15 @@ class AnalyticalObjective(SingleObjective):
         """
         return self.expression(**self.parameters.to_dict(values, input_normalised=False))
     
-    def _plot_1d(self, values: np.ndarray) -> Figure:
+    def _plot_1d(self, values: np.ndarray, append_title: str) -> Figure:
         """Plot the objective in 1D
 
         Parameters
         ----------
         values : np.ndarray
             Parameter values to plot for
+        append_title : str
+            String to append to the title
 
         Returns
         -------
@@ -463,15 +469,18 @@ class AnalyticalObjective(SingleObjective):
         axis.set_xlim(self.parameters[0].lbound, self.parameters[0].ubound)
         axis.legend()
         axis.grid()
+        axis.set_title(append_title)
         return fig
     
-    def _plot_2d(self, values: np.ndarray) -> Figure:
+    def _plot_2d(self, values: np.ndarray, append_title: str) -> Figure:
         """Plot the objective in 2D
 
         Parameters
         ----------
         values : np.ndarray
             Parameter values to plot for
+        append_title : str
+            String to append to the title
 
         Returns
         -------
@@ -483,8 +492,10 @@ class AnalyticalObjective(SingleObjective):
         y = np.linspace(self.parameters[1].lbound, self.parameters[1].ubound, 100)
         X, Y = np.meshgrid(x, y)
         Z = np.array([[self._objective_denorm(np.array([x_i, y_i])) for x_i in x] for y_i in y])
-        axis.plot_surface(X, Y, Z, alpha=0.8, label="Analytical Objective")
-        axis.scatter(values[0], values[1], self._objective_denorm(values), c="k", label="Case")
+        axis.scatter(values[0], values[1], self._objective_denorm(values), c="r", label="Case", s=50)
+        surf = axis.plot_surface(X, Y, Z, alpha=0.7, label="Analytical Objective")
+        surf._facecolors2d = surf._facecolors3d
+        surf._edgecolors2d = surf._edgecolors3d
         axis.set_xlabel(self.parameters[0].name)
         axis.set_ylabel(self.parameters[1].name)
         axis.set_zlabel("Analytical Objective")
@@ -492,16 +503,19 @@ class AnalyticalObjective(SingleObjective):
         axis.set_ylim(self.parameters[1].lbound, self.parameters[1].ubound)
         axis.legend()
         axis.grid()
+        axis.set_title(append_title)
         fig.tight_layout()
         return fig
     
-    def plot_case(self, case_hash: str) -> List[Figure]:
+    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
         """Plot a given function call given the parameter hash
 
         Parameters
         ----------
         case_hash : str, optional
             Parameter hash for the case to plot
+        options : Dict[str, Any], optional
+            Options to pass to the plotting function, by default None
 
         Returns
         -------
@@ -513,13 +527,17 @@ class AnalyticalObjective(SingleObjective):
         df.columns = df.columns.str.strip()
         df = df[df["Hash"] == case_hash]
         values = df[[param.name for param in self.parameters]].to_numpy()[0,:]
+        # Build title
+        append_title = ''
+        if options is not None and 'append_title' in options:
+            append_title = f'{options["append_title"]}'
         # Plot depending on the dimensions
         if len(self.parameters) <= 0:
             raise RuntimeError("Missing dimensions.")
         if len(self.parameters) == 1:
-            return [self._plot_1d(values)]
+            return [self._plot_1d(values, append_title)]
         if len(self.parameters) == 2:
-            return [self._plot_2d(values)]
+            return [self._plot_2d(values, append_title)]
         raise RuntimeError("Plotting not supported for 3 or more parameters.")
 
 
@@ -675,12 +693,12 @@ class MultiFidelitySingleObjective(Objective):
         print(f"Loss: {min_series['Loss']:15.8e}")
         return figures
 
-    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]:
         """Get the objective history
 
         Returns
         -------
-        Dict[str, Tuple[np.ndarray, np.ndarray]]
+        Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]
             Dictionary of objective history
         """
         result = {}
@@ -846,12 +864,12 @@ class MultiFidelityCompositeObjective(Objective):
         print(f"Loss: {min_series['Loss']:15.8e}")
         return figures
 
-    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]:
         """Get the objective history
 
         Returns
         -------
-        Dict[str, Tuple[np.ndarray, np.ndarray]]
+        Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]
             Dictionary of objective history
         """
         result = {}

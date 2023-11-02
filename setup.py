@@ -86,6 +86,7 @@ setup(
         'scipy>=1.6',
         'torch',
         'botorch',
+        'Pillow',
     ],
 
     extras_require={'lipo': ['lipo'],
