@@ -73,10 +73,12 @@ setup(
     packages=find_packages(),
 
     # Scripts provided
-    scripts=[
-        'bin/piglot',
-        'bin/piglot-plot',
-    ],
+    entry_points={
+        'console_scripts': [
+            'piglot = piglot.bin.piglot:main',
+            'piglot-plot = piglot.bin.piglot_plot:main',
+        ]
+    },
 
     install_requires=[
         'numpy',
@@ -87,6 +89,8 @@ setup(
         'torch',
         'botorch',
         'Pillow',
+        'matplotlib',
+        'PyYAML'
     ],
 
     extras_require={'lipo': ['lipo'],

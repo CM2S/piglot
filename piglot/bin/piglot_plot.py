@@ -2,10 +2,9 @@
 import os
 import time
 import argparse
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 from tempfile import TemporaryDirectory
+import numpy as np
+import matplotlib.pyplot as plt
 from scipy.integrate import trapezoid
 from PIL import Image
 from piglot.yaml_parser import parse_parameters, parse_config_file, parse_objective
