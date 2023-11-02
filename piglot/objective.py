@@ -156,7 +156,7 @@ class Objective(ABC):
             List of instances of a updatable plots
         """
         raise NotImplementedError("Current case plotting not implemented for this objective")
-    
+
     def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]:
         """Get the objective history
 
@@ -197,14 +197,14 @@ class SingleObjective(Objective):
                 file.write(f'\t{"Hash":>64}\n')
 
     @abstractmethod
-    def _objective(self, values: np.ndarray, parallel: bool=False) -> float:
+    def _objective(self, values: np.ndarray, concurrent: bool=False) -> float:
         """Abstract method for loss computation
 
         Parameters
         ----------
         values : np.ndarray
             Set of parameters to evaluate the objective for
-        parallel : bool, optional
+        concurrent : bool, optional
             Whether this call may be concurrent to others, by default False
 
         Returns
@@ -213,14 +213,14 @@ class SingleObjective(Objective):
             Objective value
         """
 
-    def __call__(self, values: np.ndarray, parallel: bool=False) -> float:
+    def __call__(self, values: np.ndarray, concurrent: bool=False) -> float:
         """Objective computation for the outside world - also handles output file writing
 
         Parameters
         ----------
         values : np.ndarray
             Set of parameters to evaluate the objective for
-        parallel : bool, optional
+        concurrent : bool, optional
             Whether this call may be concurrent to others, by default False
 
         Returns
@@ -230,7 +230,7 @@ class SingleObjective(Objective):
         """
         self.func_calls += 1
         begin_time = time.perf_counter()
-        objective_value = self._objective(values, parallel=parallel)
+        objective_value = self._objective(values, concurrent=concurrent)
         end_time = time.perf_counter()
         # Update function call history file
         if self.output_dir:
@@ -317,14 +317,14 @@ class SingleCompositeObjective(Objective):
                 file.write(f'{"Hash":>64}\n')
 
     @abstractmethod
-    def _inner_objective(self, values: np.ndarray, parallel: bool=False) -> np.ndarray:
+    def _inner_objective(self, values: np.ndarray, concurrent: bool=False) -> np.ndarray:
         """Abstract method for computation of the inner function of the composite objective
 
         Parameters
         ----------
         values : np.ndarray
             Set of parameters to evaluate the objective for
-        parallel : bool, optional
+        concurrent : bool, optional
             Whether this call may be concurrent to others, by default False
 
         Returns
@@ -333,14 +333,14 @@ class SingleCompositeObjective(Objective):
             Inner function value
         """
 
-    def __call__(self, values: np.ndarray, parallel: bool=False) -> np.ndarray:
+    def __call__(self, values: np.ndarray, concurrent: bool=False) -> np.ndarray:
         """Objective computation for the outside world - also handles output file writing
 
         Parameters
         ----------
         values : np.ndarray
             Set of parameters to evaluate the objective for
-        parallel : bool, optional
+        concurrent : bool, optional
             Whether this call may be concurrent to others, by default False
 
         Returns
@@ -350,7 +350,7 @@ class SingleCompositeObjective(Objective):
         """
         self.func_calls += 1
         begin_time = time.perf_counter()
-        inner_objective = self._inner_objective(values, parallel=parallel)
+        inner_objective = self._inner_objective(values, concurrent=concurrent)
         end_time = time.perf_counter()
         # Update function call history file
         if self.output_dir:
@@ -412,14 +412,14 @@ class AnalyticalObjective(SingleObjective):
         self.parameters = parameters
         self.expression = sympy.lambdify(symbs, expression)
 
-    def _objective(self, values: np.ndarray, parallel: bool=False) -> float:
+    def _objective(self, values: np.ndarray, concurrent: bool=False) -> float:
         """Objective computation for analytical functions
 
         Parameters
         ----------
         values : np.ndarray
             Set of parameters to evaluate the objective for
-        parallel : bool, optional
+        concurrent : bool, optional
             Whether this call may be concurrent to others, by default False
 
         Returns
@@ -631,7 +631,12 @@ class MultiFidelitySingleObjective(Objective):
             return np.mean(self.call_timings[target_fidelity]) + 1e-9
         return 1e-9
 
-    def __call__(self, values: np.ndarray, fidelity: float=1.0, parallel: bool=False) -> np.ndarray:
+    def __call__(
+            self,
+            values: np.ndarray,
+            fidelity: float=1.0,
+            concurrent: bool=False,
+        ) -> np.ndarray:
         """Objective computation for the outside world - also handles output file writing
 
         Parameters
@@ -640,7 +645,7 @@ class MultiFidelitySingleObjective(Objective):
             Set of parameters to evaluate the objective for
         fidelity : float
             Fidelity to run this call at, by default 1.0
-        parallel : bool, optional
+        concurrent : bool, optional
             Whether this call may be concurrent to others, by default False
 
         Returns
@@ -652,7 +657,7 @@ class MultiFidelitySingleObjective(Objective):
         self.func_calls += 1
         begin_time = time.perf_counter()
         target_fidelity = self.select_fidelity(fidelity)
-        objective_value = self.objectives[target_fidelity](values, parallel=parallel)
+        objective_value = self.objectives[target_fidelity](values, concurrent=concurrent)
         end_time = time.perf_counter()
         # Update function call history file
         if self.output_dir:
@@ -801,7 +806,12 @@ class MultiFidelityCompositeObjective(Objective):
         target_fidelity = self.select_fidelity(fidelity)
         return np.mean(self.call_timings[target_fidelity]) + 1e-9
 
-    def __call__(self, values: np.ndarray, fidelity: float=1.0, parallel: bool=False) -> np.ndarray:
+    def __call__(
+            self,
+            values: np.ndarray,
+            fidelity: float=1.0,
+            concurrent: bool=False,
+        ) -> np.ndarray:
         """Objective computation for the outside world - also handles output file writing
 
         Parameters
@@ -810,7 +820,7 @@ class MultiFidelityCompositeObjective(Objective):
             Set of parameters to evaluate the objective for
         fidelity : float
             Fidelity to run this call at
-        parallel : bool, optional
+        concurrent : bool, optional
             Whether this call may be concurrent to others, by default False
 
         Returns
@@ -823,7 +833,7 @@ class MultiFidelityCompositeObjective(Objective):
         begin_time = time.perf_counter()
         target_fidelity = self.select_fidelity(fidelity)
         objective = self.objectives[target_fidelity]
-        inner_objective = objective._inner_objective(values, parallel=parallel)
+        inner_objective = objective._inner_objective(values, concurrent=concurrent)
         end_time = time.perf_counter()
         # Update function call history file
         if self.output_dir:
