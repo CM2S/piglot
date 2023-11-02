@@ -7,6 +7,31 @@ from piglot.solver.solver import Solver, Case, OutputField, OutputResult, generi
 from piglot.solver.links.fields import links_fields_reader
 
 
+class LinksCase(Case):
+    """Container for Links cases."""
+
+    def prepare(self) -> None:
+        """Prepare the case for the simulation."""
+
+    @staticmethod
+    def read(name: str, config: Dict[str, Any]) -> Case:
+        """Read the case from the configuration dictionary.
+
+        Parameters
+        ----------
+        name : str
+            Case name.
+        config : Dict[str, Any]
+            Configuration dictionary.
+
+        Returns
+        -------
+        Case
+            Case to use for this problem.
+        """
+        return LinksCase(name)
+
+
 class LinksSolver(Solver):
     """Links solver."""
 
@@ -60,6 +85,7 @@ class LinksSolver(Solver):
         Dict[Case, Dict[OutputField, OutputResult]]
             Evaluated results for each output field.
         """
+        raise NotImplementedError()
 
     @staticmethod
     def read(config: Dict[str, Any], parameters: ParameterSet, output_dir: str) -> Solver:
@@ -89,6 +115,6 @@ class LinksSolver(Solver):
         # Read the cases
         if not 'cases' in config:
             raise ValueError("Missing 'cases' in solver configuration.")
-        cases = generic_read_cases(config['cases'], output_dir, links_fields_reader)
+        cases = generic_read_cases(config['cases'], LinksCase, links_fields_reader)
         # Return the solver
         return LinksSolver(cases, parameters, output_dir, links_bin, parallel, tmp_dir)

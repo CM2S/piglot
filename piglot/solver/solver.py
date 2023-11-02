@@ -10,17 +10,22 @@ from piglot.parameter import ParameterSet
 class Case(ABC):
     """Generic class for cases."""
 
+    def __init__(self, filename: str) -> None:
+        self.filename = filename
+
     @abstractmethod
     def prepare(self) -> None:
         """Prepare the case for the simulation."""
 
     @staticmethod
     @abstractmethod
-    def read(config: Dict[str, Any]) -> Case:
+    def read(name: str, config: Dict[str, Any]) -> Case:
         """Read the case from the configuration dictionary.
 
         Parameters
         ----------
+        name : str
+            Case name.
         config : Dict[str, Any]
             Configuration dictionary.
 
@@ -61,21 +66,6 @@ class OutputField(ABC):
         ----------
         case : Case
             Container for the solver input data.
-        """
-
-    @abstractmethod
-    def name(self, field_idx: int = None) -> str:
-        """Return the name of the current field.
-
-        Parameters
-        ----------
-        field_idx : int, optional
-            Index of the field to output, by default None.
-
-        Returns
-        -------
-        str
-            Field name.
         """
 
     @staticmethod
@@ -150,10 +140,10 @@ class Solver(ABC):
         self.begin_time = time.time()
 
     def prepare(self) -> None:
-        """Prepare data for the optimsation."""
+        """Prepare data for the optimisation."""
         for case, fields in self.cases.items():
             case.prepare()
-            for field in fields:
+            for field in fields.values():
                 field.check(case)
 
     def get_output_fields(self) -> Dict[str, Tuple[Case, OutputField]]:
@@ -238,7 +228,7 @@ def generic_read_cases(
     cases = {}
     for case_name, case_config in config_cases.items():
         # Read the case
-        case = case_class.read(case_config)
+        case = case_class.read(case_name, case_config)
         # Read the output fields for this case
         if not 'fields' in case_config:
             raise ValueError(f"Missing output fields for case '{case_name}'.")
