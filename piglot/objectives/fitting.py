@@ -164,7 +164,7 @@ class Reference:
             Reference to use for this problem.
         """
         if 'prediction' not in config:
-            raise ValueError(f"Missing prediction for reference'{filename}'.")
+            raise ValueError(f"Missing prediction for reference '{filename}'.")
         return Reference(
             filename,
             config['prediction'],
@@ -188,7 +188,7 @@ class FittingSolver:
     def __init__(
             self,
             solver: Solver,
-            references: Dict[Reference, Dict[Case, OutputField]],
+            references: Dict[Reference, List[str]],
         ) -> None:
         self.solver = solver
         self.references = references
@@ -216,10 +216,9 @@ class FittingSolver:
         """
         result = self.solver.solve(values, concurrent)
         # Populate output results
-        output = {reference: [] for reference in self.references.keys()}
+        output = {}
         for reference, cases in self.references.items():
-            for case, field in cases.items():
-                output[reference].append(result[case][field])
+            output[reference] = [result[case] for case in cases]
         return output
 
 
@@ -295,14 +294,14 @@ def read_fitting_objective(
     # Read the references
     if not 'references' in config:
         raise ValueError("Missing references for fitting objective.")
-    references: Dict[Reference, Dict[Case, OutputField]] = {}
+    references: Dict[Reference, List[str]] = {}
     for reference_name, reference_config in config.pop('references').items():
         reference = Reference.read(reference_name, reference_config)
         # Map the reference to the solver cases
-        references[reference] = {}
-        for field_name, (case, field) in solver.get_output_fields().items():
+        references[reference] = []
+        for field_name in solver.get_output_fields():
             if field_name == reference.prediction:
-                references[reference][case] = field
+                references[reference].append(field_name)
         # Sanitise reference: check if it is associated to at least one case
         if len(references[reference]) == 0:
             raise ValueError(f"Reference '{reference_name}' is not associated to any case.")

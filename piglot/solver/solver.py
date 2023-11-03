@@ -1,38 +1,57 @@
 """Module for solvers"""
 from __future__ import annotations
-from typing import Dict, Tuple, Any, Type, Callable
+from dataclasses import dataclass
+from typing import List, Dict, Tuple, Any, Type, Callable
 from abc import ABC, abstractmethod
+import os
 import time
+import shutil
 import numpy as np
+from yaml import safe_dump_all, safe_load_all
 from piglot.parameter import ParameterSet
+from piglot.utils.assorted import pretty_time
 
 
-class Case(ABC):
-    """Generic class for cases."""
-
-    def __init__(self, filename: str) -> None:
-        self.filename = filename
+class InputData(ABC):
+    """Generic class for solver input data."""
 
     @abstractmethod
-    def prepare(self) -> None:
-        """Prepare the case for the simulation."""
-
-    @staticmethod
-    @abstractmethod
-    def read(name: str, config: Dict[str, Any]) -> Case:
-        """Read the case from the configuration dictionary.
+    def prepare(self, values: np.ndarray, parameters: ParameterSet, tmp_dir: str=None) -> InputData:
+        """Prepare the input data for the simulation with a given set of parameters.
 
         Parameters
         ----------
-        name : str
-            Case name.
-        config : Dict[str, Any]
-            Configuration dictionary.
+        values : np.ndarray
+            Parameters to run for.
+        parameters : ParameterSet
+            Parameter set for this problem.
+        tmp_dir : str, optional
+            Temporary directory to run the analyses, by default None
 
         Returns
         -------
-        Case
-            Case to use for this problem.
+        InputData
+            Input data prepared for the simulation.
+        """
+
+    @abstractmethod
+    def check(self, parameters: ParameterSet) -> None:
+        """Check if the input data is valid according to the given parameters.
+
+        Parameters
+        ----------
+        parameters : ParameterSet
+            Parameter set for this problem.
+        """
+
+    @abstractmethod
+    def name(self) -> str:
+        """Return the name of the input data.
+
+        Returns
+        -------
+        str
+            Name of the input data.
         """
 
 
@@ -49,22 +68,22 @@ class OutputField(ABC):
     """
 
     @abstractmethod
-    def check(self, case: Case) -> None:
+    def check(self, input_data: InputData) -> None:
         """Check for validity in the input data before reading.
 
         Parameters
         ----------
-        case : Case
+        input_data : InputData
             Container for the solver input data.
         """
 
     @abstractmethod
-    def get(self, case: Case) -> np.ndarray:
+    def get(self, input_data: InputData) -> np.ndarray:
         """Read the output data from the simulation.
 
         Parameters
         ----------
-        case : Case
+        input_data : InputData
             Container for the solver input data.
         """
 
@@ -85,10 +104,36 @@ class OutputField(ABC):
         """
 
 
-class OutputResult(ABC):
-    """Generic class for output results."""
+class Case:
+    """Generic class for cases."""
 
-    @abstractmethod
+    def __init__(self, input_data: InputData, fields: Dict[str, OutputField]) -> None:
+        self.input_data = input_data
+        self.fields = fields
+
+    def check(self, parameters: ParameterSet) -> None:
+        """Prepare the case for the simulation."""
+        self.input_data.check(parameters)
+        for field in self.fields.values():
+            field.check(self.input_data)
+
+    def name(self) -> str:
+        """Return the name of the case.
+
+        Returns
+        -------
+        str
+            Name of the case.
+        """
+        return self.input_data.name()
+
+
+@dataclass
+class OutputResult:
+    """Container for output results."""
+    time: np.ndarray
+    data: np.ndarray
+
     def get_time(self) -> np.ndarray:
         """Get the time column of the result.
 
@@ -97,21 +142,88 @@ class OutputResult(ABC):
         np.ndarray
             Time column.
         """
+        return self.time
 
-    @abstractmethod
-    def get_data(self, field_idx: int=0) -> np.ndarray:
+    def get_data(self) -> np.ndarray:
         """Get the data column of the result.
-
-        Parameters
-        ----------
-        field_idx : int
-            Index of the field to output.
 
         Returns
         -------
         np.ndarray
             Data column.
         """
+        return self.data
+
+
+@dataclass
+class CaseResult:
+    """Class for case results."""
+    begin_time: float
+    run_time: float
+    values: np.ndarray
+    success: bool
+    param_hash: str
+    responses: Dict[str, OutputResult]
+
+    def write(self, filename: str, parameters: ParameterSet) -> None:
+        """Write out the case result.
+
+        Parameters
+        ----------
+        filename : str
+            Path to write the file to.
+        parameters : ParameterSet
+            Set of parameters for this case.
+        """
+        # Build case metadata
+        metadata = {
+            "start_time": time.strftime("%a, %d %b %Y %H:%M:%S", time.gmtime(self.begin_time)),
+            "begin_time": self.begin_time,
+            "run_time": self.run_time,
+            "run_time (pretty)": pretty_time(self.run_time),
+            "parameters": {n: float(v) for n, v in parameters.to_dict(self.values).items()},
+            "success": "true" if self.success else "false",
+            "param_hash": self.param_hash,
+        }
+        # Build response data
+        responses = {
+            name: list(zip(result.get_time().tolist(), result.get_data().tolist()))
+            for name, result in self.responses.items()
+        }
+        # Dump all data to file
+        with open(filename, 'w', encoding='utf8') as file:
+            safe_dump_all((metadata, responses), file)
+
+    @staticmethod
+    def read(filename: str) -> CaseResult:
+        """Read a case result file.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the case result file.
+
+        Returns
+        -------
+        CaseResult
+            Result instance.
+        """
+        # Read the file
+        with open(filename, 'r', encoding='utf8') as file:
+            metadata, responses_raw = safe_load_all(file)
+        # Parse the responses
+        responses = {
+            name: OutputResult(np.array([a[0] for a in data]), np.array([a[1] for a in data]))
+            for name, data in responses_raw.items()
+        }
+        return CaseResult(
+            metadata["begin_time"],
+            metadata["run_time"],
+            np.array(metadata["parameters"].values()),
+            metadata["success"] == "true",
+            metadata["param_hash"],
+            responses,
+        )
 
 
 class Solver(ABC):
@@ -119,7 +231,7 @@ class Solver(ABC):
 
     def __init__(
             self,
-            cases: Dict[Case, Dict[str, OutputField]],
+            cases: List[Case],
             parameters: ParameterSet,
             output_dir: str,
         ) -> None:
@@ -127,8 +239,8 @@ class Solver(ABC):
 
         Parameters
         ----------
-        cases : Dict[Case, Dict[str, OutputField]]
-            Cases to be run and respective output fields.
+        cases : List[Case]
+            Cases to be run.
         parameters : ParameterSet
             Parameter set for this problem.
         output_dir : str
@@ -138,13 +250,56 @@ class Solver(ABC):
         self.parameters = parameters
         self.output_dir = output_dir
         self.begin_time = time.time()
+        self.cases_dir = os.path.join(output_dir, "cases")
+        self.cases_hist = os.path.join(output_dir, "cases_hist")
 
     def prepare(self) -> None:
         """Prepare data for the optimisation."""
-        for case, fields in self.cases.items():
-            case.prepare()
-            for field in fields.values():
-                field.check(case)
+        # Create output directories
+        os.makedirs(self.cases_dir, exist_ok=True)
+        if os.path.isdir(self.cases_hist):
+            shutil.rmtree(self.cases_hist)
+        os.mkdir(self.cases_hist)
+        # Build headers for case log files
+        for case in self.cases:
+            case_dir = os.path.join(self.cases_dir, case.name())
+            with open(case_dir, 'w', encoding='utf8') as file:
+                file.write(f"{'Start Time /s':>15}\t")
+                file.write(f"{'Run Time /s':>15}\t")
+                file.write(f"{'Success':>10}\t")
+                for param in self.parameters:
+                    file.write(f"{param.name:>15}\t")
+                file.write(f'{"Hash":>64}\n')
+        # Prepare individual cases and output fields
+        for case in self.cases:
+            case.check(self.parameters)
+
+    def _write_history_entry(
+            self,
+            case: Case,
+            result: CaseResult,
+        ) -> None:
+        """Write this case's history entry.
+
+        Parameters
+        ----------
+        case : Case
+            Case to write.
+        result : CaseResult
+            Result for this case.
+        """
+        # Write out the case file
+        param_hash = self.parameters.hash(result.values)
+        output_case_hist = os.path.join(self.cases_hist, f'{case.name()}-{param_hash}')
+        result.write(output_case_hist, self.parameters)
+        # Add record to case log file
+        with open(os.path.join(self.cases_dir, case.name()), 'a', encoding='utf8') as file:
+            file.write(f'{result.begin_time - self.begin_time:>15.8e}\t')
+            file.write(f'{result.run_time:>15.8e}\t')
+            file.write(f'{result.success:>10}\t')
+            for i, param in enumerate(self.parameters):
+                file.write(f"{param.denormalise(result.values[i]):>15.6f}\t")
+            file.write(f'{param_hash}\n')
 
     def get_output_fields(self) -> Dict[str, Tuple[Case, OutputField]]:
         """Get all output fields.
@@ -155,19 +310,39 @@ class Solver(ABC):
             Output fields.
         """
         output_fields = {}
-        for case, fields in self.cases.items():
-            for name, field in fields.items():
+        for case in self.cases:
+            for name, field in case.fields.items():
                 if name in output_fields:
                     raise ValueError(f"Duplicate output field '{name}'.")
                 output_fields[name] = (case, field)
         return output_fields
 
     @abstractmethod
+    def _solve(
+            self,
+            values: np.ndarray,
+            concurrent: bool,
+        ) -> Dict[Case, CaseResult]:
+        """Internal solver for the prescribed problems.
+
+        Parameters
+        ----------
+        values : array
+            Current parameters to evaluate.
+        concurrent : bool
+            Whether this run may be concurrent to another one (so use unique file names).
+
+        Returns
+        -------
+        Dict[Case, CaseResult]
+            Results for each case.
+        """
+
     def solve(
             self,
             values: np.ndarray,
             concurrent: bool,
-        ) -> Dict[Case, Dict[OutputField, OutputResult]]:
+        ) -> Dict[str, OutputResult]:
         """Solve all cases for the given set of parameter values.
 
         Parameters
@@ -179,9 +354,18 @@ class Solver(ABC):
 
         Returns
         -------
-        Dict[Case, Dict[OutputField, OutputResult]]
+        Dict[str, OutputResult]
             Evaluated results for each output field.
         """
+        # Evaluate all cases
+        results = self._solve(values, concurrent)
+        # Post-process results: write history entries and collect outputs
+        outputs: Dict[str, OutputResult] = {}
+        for case, result in results.items():
+            self._write_history_entry(case, result)
+            for name in case.fields:
+                outputs[name] = result.responses[name]
+        return outputs
 
     @staticmethod
     @abstractmethod
@@ -202,35 +386,3 @@ class Solver(ABC):
         Solver
             Solver to use for this problem.
         """
-
-
-def generic_read_cases(
-        config_cases: Dict[str, Any],
-        case_class: Type[Case],
-        fields_reader: Callable[[Dict[str, Any]], OutputField],
-    ) -> Dict[Case, Dict[str, OutputField]]:
-    """Read the cases from the configuration dictionary.
-
-    Parameters
-    ----------
-    config_cases : Dict[str, Any]
-        Configuration dictionary.
-    case_class : Case
-        Case class to use for this problem.
-    fields_reader : Callable[[Dict[str, Any]], OutputField]
-        Function to read the output fields.
-
-    Returns
-    -------
-    Dict[Case, Dict[str, OutputField]]
-        Cases to use for this problem.
-    """
-    cases = {}
-    for case_name, case_config in config_cases.items():
-        # Read the case
-        case = case_class.read(case_name, case_config)
-        # Read the output fields for this case
-        if not 'fields' in case_config:
-            raise ValueError(f"Missing output fields for case '{case_name}'.")
-        cases[case] = {name: fields_reader(field) for name, field in case_config['fields'].items()}
-    return cases

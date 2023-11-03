@@ -1,4 +1,5 @@
 """Optimisation parameter module."""
+from typing import Iterator
 from hashlib import sha256
 import numpy as np
 
@@ -102,15 +103,15 @@ class ParameterSet:
         """Constructor for a parameter set."""
         self.parameters = []
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Parameter]:
         """Iterator for a parameter set."""
         return iter(self.parameters)
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Length of the parameter set."""
         return len(self.parameters)
     
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> Parameter:
         """Get a parameter by name."""
         return self.parameters[key]
 

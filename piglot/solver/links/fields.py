@@ -4,8 +4,66 @@ from typing import Dict, Any, Union
 import os
 import numpy as np
 import pandas as pd
-from piglot.solver.solver import Case, OutputField
-from piglot.utils.solver_utils import get_case_name, has_keyword, find_keyword
+from piglot.parameter import ParameterSet
+from piglot.solver.solver import InputData, OutputField, OutputResult
+from piglot.utils.solver_utils import get_case_name, has_keyword, find_keyword, write_parameters
+
+
+class LinksInputData(InputData):
+    """Container for Links input data."""
+
+    def __init__(self, input_file: str) -> None:
+        super().__init__()
+        self.input_file = input_file
+
+    def prepare(
+            self,
+            values: np.ndarray,
+            parameters: ParameterSet,
+            tmp_dir: str=None,
+        ) -> LinksInputData:
+        """Prepare the input data for the simulation with a given set of parameters.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Parameters to run for.
+        parameters : ParameterSet
+            Parameter set for this problem.
+        tmp_dir : str, optional
+            Temporary directory to run the analyses, by default None
+
+        Returns
+        -------
+        LinksInputData
+            Input data prepared for the simulation.
+        """
+        # Copy file and write out the parameters
+        dest_file = os.path.join(tmp_dir, os.path.basename(self.input_file))
+        write_parameters(parameters.to_dict(values), self.input_file, dest_file)
+        return LinksInputData(dest_file)
+
+    def check(self, parameters: ParameterSet) -> None:
+        """Check if the input data is valid according to the given parameters.
+
+        Parameters
+        ----------
+        parameters : ParameterSet
+            Parameter set for this problem.
+        """
+        for parameter in parameters:
+            if not has_keyword(self.input_file, f'<{parameter.name}>'):
+                raise RuntimeError(f"Parameter {parameter} not found in input file.")
+
+    def name(self) -> str:
+        """Return the name of the input data.
+
+        Returns
+        -------
+        str
+            Name of the input data.
+        """
+        return os.path.basename(self.input_file)
 
 
 class Reaction(OutputField):
@@ -27,7 +85,7 @@ class Reaction(OutputField):
         self.field_name = field
         self.group = group
 
-    def check(self, case: Case) -> None:
+    def check(self, input_data: LinksInputData) -> None:
         """Sanity checks on the input file.
 
         This checks if:
@@ -36,8 +94,8 @@ class Reaction(OutputField):
 
         Parameters
         ----------
-        input_file : str
-            Path to the input file.
+        input_data : LinksInputData
+            Input data for this case.
 
         Raises
         ------
@@ -47,34 +105,38 @@ class Reaction(OutputField):
             If reaction output is not requested in the input file.
         """
         # Is macroscopic file?
-        if not case.filename.endswith('.dat'):
+        input_file = input_data.input_file
+        if not input_file.endswith('.dat'):
             raise RuntimeError("Reactions only available for macroscopic simulations.")
         # Has node groups keyword?
-        if not has_keyword(case.filename, "NODE_GROUPS"):
+        if not has_keyword(input_file, "NODE_GROUPS"):
             raise RuntimeError("Reactions requested on an input file without NODE_GROUPS.")
         # TODO: check group number and dimensions
 
-    def get(self, case: Case) -> np.ndarray:
+    def get(self, input_data: LinksInputData) -> np.ndarray:
         """Reads reactions from a Links analysis.
 
         Parameters
         ----------
-        input_file : str
-            Path to the input file
+        input_data : LinksInputData
+            Input data for this case.
 
         Returns
         -------
         array
             2D array with load factor in the first column and reactions in the second.
         """
-        casename = get_case_name(case.filename)
-        output_dir, _ = os.path.splitext(case.filename)
+        input_file = input_data.input_file
+        casename = get_case_name(input_file)
+        output_dir, _ = os.path.splitext(input_file)
         reac_filename = os.path.join(output_dir, f'{casename}.reac')
         # Ensure the file exists
         if not os.path.exists(reac_filename):
             return np.empty((0, 2))
         data = np.genfromtxt(reac_filename)
-        return (data[data[:,0] == self.group, 1:])[:,[0, self.field]]
+        # Filter-out the requested group
+        data_group = data[data[:,0] == self.group, 1:]
+        return OutputResult(data_group[:,0], data_group[:,self.field])
 
     @staticmethod
     def read(config: Dict[str, Any]) -> Reaction:
@@ -143,7 +205,7 @@ class OutFile(OutputField):
         self.x_field = x_field
         self.separator = 16
 
-    def check(self, case: Case) -> None:
+    def check(self, input_data: LinksInputData) -> None:
         """Sanity checks on the input file.
 
         This checks for:
@@ -153,8 +215,8 @@ class OutFile(OutputField):
 
         Parameters
         ----------
-        case : Case
-            Case to get data from.
+        input_data : LinksInputData
+            Input data for this case.
 
         Raises
         ------
@@ -166,7 +228,7 @@ class OutFile(OutputField):
             If the requested element and GP has not been specified in the input file.
         """
         # Check if appropriate scale
-        input_file = case.filename
+        input_file = input_data.input_file
         extension = os.path.splitext(input_file)[1]
         if extension == ".dat" and self.suffix == '':
             raise RuntimeError("Cannot extract homogenised .out from macro simulations.")
@@ -192,28 +254,27 @@ class OutFile(OutputField):
         # Check if single or double precision output
         self.separator = 24 if has_keyword(input_file, "DOUBLE_PRECISION_OUTPUT") else 16
 
-    def get(self, case: Case) -> np.ndarray:
+    def get(self, input_data: LinksInputData) -> np.ndarray:
         """Get a parameter from the .out file.
 
         Parameters
         ----------
-        case : Case
-            Input case to read.
+        input_data : LinksInputData
+            Input data for this case.
 
         Returns
         -------
         DataFrame
             DataFrame with the requested fields.
         """
-        input_file = case.filename
+        input_file = input_data.input_file
         casename = get_case_name(input_file)
         output_dir = os.path.splitext(input_file)[0]
         filename = os.path.join(output_dir, f'{casename}{self.suffix}.out')
         from_gp = self.suffix != ''
-        df_columns = [self.x_field] + [self.field]
         # Ensure the file exists
         if not os.path.exists(filename):
-            return np.empty((0, len(df_columns)))
+            return OutputResult(np.empty(0), np.empty(0))
         # Read the first line of the file to find the total number of columns
         with open(filename, 'r', encoding='utf8') as file:
             # Consume the first line if from a GP output (contains GP coordinates)
@@ -226,9 +287,10 @@ class OutFile(OutputField):
         df = pd.read_fwf(filename, widths=n_columns*[self.separator], header=header)
         # Extract indices for named columns
         columns = df.columns.tolist()
-        int_columns = [columns.index(a) if isinstance(a, str) else a for a in df_columns]
+        x_column = columns.index(self.x_field) if isinstance(self.x_field, str) else self.x_field
+        y_column = columns.index(self.field) if isinstance(self.field, str) else self.field
         # Return the given quantity as the x-variable
-        return df.iloc[:,int_columns].to_numpy()
+        return OutputResult(df.iloc[:,x_column].to_numpy(), df.iloc[:,y_column].to_numpy())
 
     @staticmethod
     def read(config: Dict[str, Any]) -> OutFile:

@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from yaml import safe_dump_all, safe_load_all
 from piglot.parameter import ParameterSet
-from piglot.optimisers.optimiser import pretty_time, reverse_pretty_time
+from piglot.utils.assorted import pretty_time, reverse_pretty_time
 from piglot.objective import SingleObjective, SingleCompositeObjective, MSEComposition
 from piglot.objective import DynamicPlotter
 from piglot.losses.loss import Loss
