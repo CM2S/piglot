@@ -53,7 +53,7 @@ class LinksInputData(InputData):
         """
         for parameter in parameters:
             if not has_keyword(self.input_file, f'<{parameter.name}>'):
-                raise RuntimeError(f"Parameter {parameter} not found in input file.")
+                raise RuntimeError(f"Parameter '{parameter.name}' not found in input file.")
 
     def name(self) -> str:
         """Return the name of the input data.

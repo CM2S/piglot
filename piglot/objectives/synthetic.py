@@ -1,6 +1,7 @@
 """Provide synthetic test functions"""
+from __future__ import annotations
+from typing import Dict, Type, Any
 import os.path
-from typing import Dict, Type
 import numpy as np
 import torch
 import botorch.test_functions.synthetic
@@ -64,7 +65,7 @@ class SyntheticObjective(SingleObjective):
             'three_hump_camel': botorch.test_functions.synthetic.ThreeHumpCamel,
         }
 
-    def _objective(self, values: np.ndarray, parallel: bool=False) -> float:
+    def _objective(self, values: np.ndarray, concurrent: bool=False) -> float:
         """Objective computation for analytical functions
 
         Parameters
@@ -83,6 +84,34 @@ class SyntheticObjective(SingleObjective):
         value = self.func.evaluate_true(params)
         value = value if self.transform is None else self.transform(value, self.func)
         return float(value.item())
+
+    @staticmethod
+    def read(
+            config: Dict[str, Any],
+            parameters: ParameterSet,
+            output_dir: str,
+        ) -> SyntheticObjective:
+        """Read the objective from a configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Terms from the configuration dictionary.
+        parameters : ParameterSet
+            Set of parameters for this problem.
+        output_dir : str
+            Path to the output directory.
+
+        Returns
+        -------
+        SyntheticObjective
+            Objective function to optimise.
+        """
+        # Check for mandatory arguments
+        if not 'function' in config:
+            raise RuntimeError("Missing test function")
+        function = config.pop('function')
+        return SyntheticObjective(parameters, function, output_dir, **config)
 
 
 class SyntheticCompositeObjective(SingleCompositeObjective):
@@ -104,7 +133,7 @@ class SyntheticCompositeObjective(SingleCompositeObjective):
         with open(os.path.join(output_dir, 'optimum_value'), 'w', encoding='utf8') as file:
             file.write(f'{self.func.optimal_value}')
 
-    def _inner_objective(self, values: np.ndarray, parallel: bool=False) -> np.ndarray:
+    def _inner_objective(self, values: np.ndarray, concurrent: bool=False) -> np.ndarray:
         """Objective computation for composite modified analytical functions
 
         Parameters
@@ -124,3 +153,31 @@ class SyntheticCompositeObjective(SingleCompositeObjective):
         if len(value.shape) < 1:
             value = value.unsqueeze(0)
         return value.numpy()
+
+    @staticmethod
+    def read(
+            config: Dict[str, Any],
+            parameters: ParameterSet,
+            output_dir: str,
+        ) -> SyntheticCompositeObjective:
+        """Read the objective from a configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Terms from the configuration dictionary.
+        parameters : ParameterSet
+            Set of parameters for this problem.
+        output_dir : str
+            Path to the output directory.
+
+        Returns
+        -------
+        SyntheticCompositeObjective
+            Objective function to optimise.
+        """
+        # Check for mandatory arguments
+        if not 'function' in config:
+            raise RuntimeError("Missing test function")
+        function = config.pop('function')
+        return SyntheticCompositeObjective(parameters, function, output_dir, **config)

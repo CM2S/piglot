@@ -11,10 +11,9 @@ import piglot
 from piglot.losses import MixedLoss, Range, Minimum, Maximum, Slope
 from piglot.parameter import ParameterSet, DualParameterSet
 from piglot.optimisers.optimiser import StoppingCriteria
-from piglot.objective import AnalyticalObjective, MultiFidelitySingleObjective
+from piglot.objective import MultiFidelitySingleObjective
 from piglot.objective import MultiFidelityCompositeObjective
 from piglot.links import LinksCase, Reaction, OutFile, LinksLoss, CompositeLinksLoss, Reference
-from piglot.objectives.synthetic import SyntheticObjective, SyntheticCompositeObjective
 
 
 
@@ -233,32 +232,6 @@ def parse_optimiser(opt_config):
 
 
 
-def parse_analytical_objective(objective_conf, parameters, output_dir):
-    # Check for mandatory arguments
-    if not 'expression' in objective_conf:
-        raise RuntimeError("Missing analytical expression to minimise")
-    return AnalyticalObjective(parameters, objective_conf['expression'], output_dir=output_dir)
-
-
-
-def parse_test_function_objective(objective_conf, parameters, output_dir):
-    # Check for mandatory arguments
-    if not 'function' in objective_conf:
-        raise RuntimeError("Missing test function")
-    function = objective_conf.pop('function')
-    return SyntheticObjective(parameters, function, output_dir, **objective_conf)
-
-
-
-def parse_test_function_cf_objective(objective_conf, parameters, output_dir):
-    # Check for mandatory arguments
-    if not 'function' in objective_conf:
-        raise RuntimeError("Missing test function")
-    function = objective_conf.pop('function')
-    return SyntheticCompositeObjective(parameters, function, output_dir, **objective_conf)
-
-
-
 def parse_links_objective(objective_conf, parameters, output_dir):
     # Manually parse cases
     if not 'cases' in objective_conf:
@@ -327,9 +300,6 @@ def parse_objective(config, parameters, output_dir):
     name = config.pop('name')
     # Delegate the objective
     objectives = {
-        'analytical': parse_analytical_objective,
-        'test_function': parse_test_function_objective,
-        'test_function_cf': parse_test_function_cf_objective,
         'links': parse_links_objective,
         'links_cf': parse_links_cf_objective,
         'multi_fidelity': parse_mf_objective,

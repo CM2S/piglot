@@ -9,7 +9,7 @@ import numpy as np
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import Solver, Case, CaseResult, OutputField
 from piglot.solver.links.fields import links_fields_reader, LinksInputData
-from piglot.utils.solver_utils import write_parameters, has_keyword
+from piglot.utils.solver_utils import has_keyword
 
 
 

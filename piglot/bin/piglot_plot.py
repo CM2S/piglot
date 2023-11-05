@@ -7,7 +7,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import trapezoid
 from PIL import Image
-from piglot.yaml_parser import parse_parameters, parse_config_file, parse_objective
+from piglot.objectives import read_objective
+from piglot.yaml_parser import parse_parameters, parse_config_file
 
 
 def cumulative_regret(values: np.ndarray, x_grid: np.ndarray) -> np.ndarray:
@@ -58,7 +59,7 @@ def plot_case(args):
     """
     # Build piglot problem
     config = parse_config_file(args.config)
-    objective = parse_objective(config["objective"], parse_parameters(config), config["output"])
+    objective = read_objective(config["objective"], parse_parameters(config), config["output"])
     figs = objective.plot_case(args.case_hash)
     if args.save_fig:
         if len(figs) == 1:
@@ -81,7 +82,7 @@ def plot_current(args):
     """
     plt.ion()
     config = parse_config_file(args.config)
-    objective = parse_objective(config["objective"], parse_parameters(config), config["output"])
+    objective = read_objective(config["objective"], parse_parameters(config), config["output"])
     plots = objective.plot_current()
     while True:
         for plot in plots:
@@ -99,7 +100,7 @@ def plot_best(args):
     """
     # Build piglot problem
     config = parse_config_file(args.config)
-    objective = parse_objective(config["objective"], parse_parameters(config), config["output"])
+    objective = read_objective(config["objective"], parse_parameters(config), config["output"])
     figs = objective.plot_best()
     if args.save_fig:
         if len(figs) == 1:
@@ -122,7 +123,7 @@ def plot_history(args):
     """
     # Build piglot problem
     config = parse_config_file(args.config)
-    objective = parse_objective(config["objective"], parse_parameters(config), config["output"])
+    objective = read_objective(config["objective"], parse_parameters(config), config["output"])
     data = objective.get_history()
     fig, axis = plt.subplots()
     for name, (times, values, _, _) in data.items():
@@ -154,7 +155,7 @@ def plot_parameters(args):
     # Build piglot problem
     config = parse_config_file(args.config)
     parameters = parse_parameters(config)
-    objective = parse_objective(config["objective"], parameters, config["output"])
+    objective = read_objective(config["objective"], parameters, config["output"])
     data = objective.get_history()
     fig, axes = plt.subplots(nrows=len(parameters), sharex=True, squeeze=False)
     for idx, param in enumerate(parameters):
@@ -188,7 +189,7 @@ def plot_regret(args):
     """
     # Build piglot problem
     config = parse_config_file(args.config)
-    objective = parse_objective(config["objective"], parse_parameters(config), config["output"])
+    objective = read_objective(config["objective"], parse_parameters(config), config["output"])
     data = objective.get_history()
     fig, axis = plt.subplots()
     for name, (times, values, _, _) in data.items():
@@ -217,7 +218,7 @@ def plot_animation(args):
     """
     # Build piglot problem
     config = parse_config_file(args.config)
-    objective = parse_objective(config["objective"], parse_parameters(config), config["output"])
+    objective = read_objective(config["objective"], parse_parameters(config), config["output"])
     data = objective.get_history()
     # Hacky: we start by just plotting the first case to infer the number of plots per frame
     options = {'reference_limits': True}

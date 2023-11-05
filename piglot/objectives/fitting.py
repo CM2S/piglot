@@ -221,6 +221,57 @@ class FittingSolver:
             output[reference] = [result[case] for case in cases]
         return output
 
+    @staticmethod
+    def read(config: Dict[str, Any], parameters: ParameterSet, output_dir: str) -> FittingSolver:
+        """Read a solver for fitting objectives from a configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Terms from the configuration dictionary.
+        parameters : ParameterSet
+            Set of parameters for this problem.
+        output_dir : str
+            Path to the output directory.
+
+        Returns
+        -------
+        FittingSolver
+            Solver for fitting objectives.
+        """
+        # Read the solver
+        if not 'solver' in config:
+            raise ValueError("Missing solver for fitting objective.")
+        solver = read_solver(config['solver'], parameters, output_dir)
+        # Read the references
+        if not 'references' in config:
+            raise ValueError("Missing references for fitting objective.")
+        references: Dict[Reference, List[str]] = {}
+        for reference_name, reference_config in config.pop('references').items():
+            reference = Reference.read(reference_name, reference_config)
+            # Map the reference to the solver cases
+            references[reference] = []
+            for field_name in solver.get_output_fields():
+                if field_name == reference.prediction:
+                    references[reference].append(field_name)
+            # Sanitise reference: check if it is associated to at least one case
+            if len(references[reference]) == 0:
+                raise ValueError(f"Reference '{reference_name}' is not associated to any case.")
+        # Read the (optional) loss
+        loss = None
+        if 'loss' in config:
+            loss = parse_loss(output_dir, config['loss'])
+            # Assign the default loss to references without a specific loss
+            for reference in references:
+                if reference.loss is None:
+                    reference.loss = loss
+        # Ensure all references have a loss
+        for reference in references:
+            if reference.loss is None:
+                raise ValueError(f"Missing loss for reference '{reference.filename}'")
+        # Return the solver
+        return FittingSolver(solver, references)
+
 
 class FittingSingleObjective(SingleObjective):
     """Scalar fitting objective function."""
@@ -229,12 +280,10 @@ class FittingSingleObjective(SingleObjective):
             self,
             parameters: ParameterSet,
             solver: FittingSolver,
-            loss: Loss,
             output_dir: str,
         ) -> None:
         super().__init__(parameters, output_dir)
         self.solver = solver
-        self.loss = loss
 
     def prepare(self) -> None:
         """Prepare the objective for optimisation."""
@@ -265,57 +314,30 @@ class FittingSingleObjective(SingleObjective):
             loss += reference.weight * np.mean(losses)
         return loss
 
+    @staticmethod
+    def read(
+            config: Dict[str, Any],
+            parameters: ParameterSet,
+            output_dir: str,
+        ) -> FittingSingleObjective:
+        """Read a fitting objective from a configuration dictionary.
 
-def read_fitting_objective(
-        config: Dict[str, Any],
-        parameters: ParameterSet,
-        output_dir: str,
-    ) -> Objective:
-    """Read a fitting objective from a configuration dictionary.
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Terms from the configuration dictionary.
+        parameters : ParameterSet
+            Set of parameters for this problem.
+        output_dir : str
+            Path to the output directory.
 
-    Parameters
-    ----------
-    config : Dict[str, Any]
-        Terms from the configuration dictionary.
-    parameters : ParameterSet
-        Set of parameters for this problem.
-    output_dir : str
-        Path to the output directory.
-
-    Returns
-    -------
-    Objective
-        Objective function to optimise.
-    """
-    # Read the solver
-    if not 'solver' in config:
-        raise ValueError("Missing solver for fitting objective.")
-    solver = read_solver(config['solver'], parameters, output_dir)
-    # Read the references
-    if not 'references' in config:
-        raise ValueError("Missing references for fitting objective.")
-    references: Dict[Reference, List[str]] = {}
-    for reference_name, reference_config in config.pop('references').items():
-        reference = Reference.read(reference_name, reference_config)
-        # Map the reference to the solver cases
-        references[reference] = []
-        for field_name in solver.get_output_fields():
-            if field_name == reference.prediction:
-                references[reference].append(field_name)
-        # Sanitise reference: check if it is associated to at least one case
-        if len(references[reference]) == 0:
-            raise ValueError(f"Reference '{reference_name}' is not associated to any case.")
-    # Read the (optional) loss
-    loss = None
-    if 'loss' in config:
-        loss = parse_loss(output_dir, config['loss'])
-        # Assign the default loss to references without a specific loss
-        for reference in references:
-            if reference.loss is None:
-                reference.loss = loss
-    # Ensure all references have a loss
-    for reference in references:
-        if reference.loss is None:
-            raise ValueError(f"Missing loss for reference '{reference.filename}'")
-    # Return the objective
-    return FittingSingleObjective(parameters, FittingSolver(solver, references), loss, output_dir)
+        Returns
+        -------
+        Objective
+            Objective function to optimise.
+        """
+        return FittingSingleObjective(
+            parameters,
+            FittingSolver.read(config, parameters, output_dir),
+            output_dir,
+        )

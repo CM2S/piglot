@@ -6,7 +6,7 @@ import shutil
 from yaml import safe_dump
 from piglot.yaml_parser import parse_parameters, parse_optimiser, parse_config_file
 from piglot.yaml_parser import parse_objective, parse_stop_criteria
-from piglot.objectives.fitting import read_fitting_objective
+from piglot.objectives import read_objective
 
 
 
@@ -49,10 +49,7 @@ def main():
     # Build piglot problem
     parameters = parse_parameters(config)
     optimiser = parse_optimiser(config["optimiser"])
-    if config["objective"]["name"] == "fitting":
-        objective = read_fitting_objective(config["objective"], parameters, output_dir)
-    else:
-        objective = parse_objective(config["objective"], parameters, output_dir)
+    objective = read_objective(config["objective"], parameters, output_dir)
     stop = parse_stop_criteria(config)
     # Run the optimisation
     _, best_params = optimiser.optimise(objective, config["iters"], parameters,
