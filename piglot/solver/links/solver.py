@@ -7,7 +7,7 @@ import subprocess
 from multiprocessing.pool import ThreadPool as Pool
 import numpy as np
 from piglot.parameter import ParameterSet
-from piglot.solver.solver import Solver, Case, CaseResult, OutputField
+from piglot.solver.solver import Solver, Case, CaseResult, OutputField, OutputResult
 from piglot.solver.links.fields import links_fields_reader, LinksInputData
 from piglot.utils.solver_utils import has_keyword
 
@@ -131,6 +131,20 @@ class LinksSolver(Solver):
             shutil.rmtree(tmp_dir)
         # Build output dict
         return dict(zip(self.cases, results))
+
+    def get_current_response(self) -> Dict[str, OutputResult]:
+        """Get the responses from a given output field for all cases.
+
+        Returns
+        -------
+        Dict[str, OutputResult]
+            Output responses.
+        """
+        fields = self.get_output_fields()
+        return {
+            name: field.get(case.input_data.get_current(self.tmp_dir))
+            for name, (case, field) in fields.items()
+        }
 
     @staticmethod
     def read(config: Dict[str, Any], parameters: ParameterSet, output_dir: str) -> Solver:

@@ -78,13 +78,18 @@ class OutputField(ABC):
         """
 
     @abstractmethod
-    def get(self, input_data: InputData) -> np.ndarray:
+    def get(self, input_data: InputData) -> OutputResult:
         """Read the output data from the simulation.
 
         Parameters
         ----------
         input_data : InputData
             Container for the solver input data.
+
+        Returns
+        -------
+        OutputResult
+            Output result for this field.
         """
 
     @staticmethod
@@ -316,6 +321,37 @@ class Solver(ABC):
                     raise ValueError(f"Duplicate output field '{name}'.")
                 output_fields[name] = (case, field)
         return output_fields
+
+    def get_output_response(self, param_hash: str) -> Dict[str, OutputResult]:
+        """Get the responses from all output fields for a given case.
+
+        Parameters
+        ----------
+        param_hash : str
+            Hash of the case to load.
+
+        Returns
+        -------
+        Dict[str, OutputResult]
+            Output responses.
+        """
+        responses = {}
+        for case in self.cases:
+            # Read the case result
+            result = CaseResult.read(os.path.join(self.cases_hist, f'{case.name()}-{param_hash}'))
+            for name, response in result.responses.items():
+                responses[name] = response
+        return responses
+
+    @abstractmethod
+    def get_current_response(self) -> Dict[str, OutputResult]:
+        """Get the responses from a given output field for all cases.
+
+        Returns
+        -------
+        Dict[str, OutputResult]
+            Output responses.
+        """
 
     @abstractmethod
     def _solve(

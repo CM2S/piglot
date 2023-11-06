@@ -3,13 +3,14 @@ from __future__ import annotations
 from typing import Dict, Any, List
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 from piglot.yaml_parser import parse_loss
 from piglot.losses.loss import Loss
 from piglot.parameter import ParameterSet
 from piglot.solver import read_solver
-from piglot.solver.solver import Solver, OutputResult, Case, OutputField
+from piglot.solver.solver import Solver, OutputResult
 from piglot.utils.reduce_response import reduce_response
-from piglot.objective import Objective, SingleObjective
+from piglot.objective import DynamicPlotter, SingleObjective
 
 
 class Reference:
@@ -182,6 +183,60 @@ class Reference:
         )
 
 
+class CurrentPlot(DynamicPlotter):
+    """Container for dynamically-updating plots."""
+
+    def __init__(self, solver: Solver, references: Dict[Reference, List[str]]) -> None:
+        """Constructor for dynamically-updating plots.
+
+        Parameters
+        ----------
+        solver : Solver
+            Solver to build the plot for.
+        references : Dict[Reference, List[str]]
+            References to plot.
+        """
+        self.solver = solver
+        self.references = references
+        self.figs = {}
+        self.preds = {}
+        # Get current solver data
+        result = solver.get_current_response()
+        # Plot each reference
+        for reference, names in references.items():
+            fig, axis = plt.subplots()
+            axis.plot(reference.get_time(), reference.get_data(),
+                      label='Reference', ls='dashed', c='black', marker='x')
+            # Plot predictions
+            for name in names:
+                self.preds[name], = axis.plot(result[name].get_time(), result[name].get_data(),
+                                              label=f'Prediction ({name})', c='red')
+            axis.set_title(reference.filename)
+            axis.grid()
+            axis.legend()
+            self.figs[reference] = (fig, axis)
+        plt.show()
+        for fig, _ in self.figs.values():
+            fig.canvas.draw()
+            fig.canvas.flush_events()
+
+    def update(self) -> None:
+        """Update the plot with the most recent data"""
+        result = self.solver.get_current_response()
+        for reference, names in self.references.items():
+            for name in names:
+                try:
+                    self.preds[name].set_xdata(result[name].get_time())
+                    self.preds[name].set_ydata(result[name].get_data())
+                except (FileNotFoundError, IndexError):
+                    pass
+            fig, axis = self.figs[reference]
+            axis.relim()
+            axis.autoscale_view()
+            fig.canvas.draw()
+            fig.canvas.flush_events()
+
+
 class FittingSolver:
     """Interface class between fitting objectives and solvers."""
 
@@ -220,6 +275,58 @@ class FittingSolver:
         for reference, cases in self.references.items():
             output[reference] = [result[case] for case in cases]
         return output
+
+    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
+        """Plot a given function call given the parameter hash
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+        options : Dict[str, Any], optional
+            Options for the plot, by default None
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        # Check if we need to preserve the reference axis limits
+        reference_limits = options is not None and options.get('reference_limits', False)
+        append_title = ''
+        if options is not None and 'append_title' in options:
+            append_title = f' ({options["append_title"]})'
+        figures = []
+        # Load all responses
+        responses = self.solver.get_output_response(case_hash)
+        # Plot each reference
+        for reference, names in self.references.items():
+            # Build figure, index axes and plot response
+            fig, axis = plt.subplots()
+            axis.plot(reference.get_time(), reference.get_data(),
+                      label='Reference', ls='dashed', c='black', marker='x')
+            xlim, ylim = axis.get_xlim(), axis.get_ylim()
+            for name in names:
+                axis.plot(responses[name].get_time(), responses[name].get_data(),
+                          c='red', label='Prediction')
+            if reference_limits:
+                axis.set_xlim(xlim)
+                axis.set_ylim(ylim)
+            axis.set_title(reference.filename + append_title)
+            axis.grid()
+            axis.legend()
+            figures.append(fig)
+        return figures
+
+    def plot_current(self) -> List[DynamicPlotter]:
+        """Plot the currently running function call
+
+        Returns
+        -------
+        List[DynamicPlotter]
+            List of instances of a updatable plots
+        """
+        return [CurrentPlot(self.solver, self.references)]
 
     @staticmethod
     def read(config: Dict[str, Any], parameters: ParameterSet, output_dir: str) -> FittingSolver:
@@ -313,6 +420,33 @@ class FittingSingleObjective(SingleObjective):
             losses = [reference.compute_loss(result) for result in results]
             loss += reference.weight * np.mean(losses)
         return loss
+
+    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
+        """Plot a given function call given the parameter hash
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+        options : Dict[str, Any], optional
+            Options for the plot, by default None
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        return self.solver.plot_case(case_hash, options)
+    
+    def plot_current(self) -> List[DynamicPlotter]:
+        """Plot the currently running function call
+
+        Returns
+        -------
+        List[DynamicPlotter]
+            List of instances of a updatable plots
+        """
+        return self.solver.plot_current()
 
     @staticmethod
     def read(

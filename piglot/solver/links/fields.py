@@ -64,6 +64,21 @@ class LinksInputData(InputData):
             Name of the input data.
         """
         return os.path.basename(self.input_file)
+    
+    def get_current(self, target_dir: str) -> LinksInputData:
+        """Get the current input data.
+
+        Parameters
+        ----------
+        target_dir : str
+            Target directory to copy the input file.
+
+        Returns
+        -------
+        LinksInputData
+            Current input data.
+        """
+        return LinksInputData(os.path.join(target_dir, os.path.basename(self.input_file)))
 
 
 class Reaction(OutputField):
@@ -113,7 +128,7 @@ class Reaction(OutputField):
             raise RuntimeError("Reactions requested on an input file without NODE_GROUPS.")
         # TODO: check group number and dimensions
 
-    def get(self, input_data: LinksInputData) -> np.ndarray:
+    def get(self, input_data: LinksInputData) -> OutputResult:
         """Reads reactions from a Links analysis.
 
         Parameters
@@ -132,7 +147,7 @@ class Reaction(OutputField):
         reac_filename = os.path.join(output_dir, f'{casename}.reac')
         # Ensure the file exists
         if not os.path.exists(reac_filename):
-            return np.empty((0, 2))
+            return OutputResult(np.empty(0), np.empty(0))
         data = np.genfromtxt(reac_filename)
         # Filter-out the requested group
         data_group = data[data[:,0] == self.group, 1:]
@@ -254,7 +269,7 @@ class OutFile(OutputField):
         # Check if single or double precision output
         self.separator = 24 if has_keyword(input_file, "DOUBLE_PRECISION_OUTPUT") else 16
 
-    def get(self, input_data: LinksInputData) -> np.ndarray:
+    def get(self, input_data: LinksInputData) -> OutputResult:
         """Get a parameter from the .out file.
 
         Parameters
