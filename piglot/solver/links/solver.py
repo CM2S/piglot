@@ -1,5 +1,5 @@
 """Module for Links solver."""
-from typing import Dict, Any
+from typing import Dict, Any, Type
 import os
 import time
 import shutil
@@ -7,9 +7,9 @@ import subprocess
 from multiprocessing.pool import ThreadPool as Pool
 import numpy as np
 from piglot.parameter import ParameterSet
-from piglot.solver.solver import Solver, Case, CaseResult, OutputField, OutputResult
+from piglot.solver.solver import Solver, Case, CaseResult, OutputField, OutputResult, InputData
 from piglot.solver.links.fields import links_fields_reader, LinksInputData
-from piglot.utils.solver_utils import has_keyword
+from piglot.utils.solver_utils import has_keyword, load_module_from_file
 
 
 
@@ -171,6 +171,17 @@ class LinksSolver(Solver):
         # Read the parallelism and temporary directory (if present)
         parallel = int(config.get('parallel', 1))
         tmp_dir = os.path.join(output_dir, config.get('tmp_dir', 'tmp'))
+        # Read generator, if any
+        input_data_class: Type[InputData] = LinksInputData
+        if 'generator' in config:
+            if 'script' not in config['generator']:
+                raise ValueError("Missing 'script' in generator configuration.")
+            if 'class' not in config['generator']:
+                raise ValueError("Missing 'class' in generator configuration.")
+            input_data_class = load_module_from_file(
+                config['generator']['script'],
+                config['generator']['class'],
+            )
         # Read the cases
         if not 'cases' in config:
             raise ValueError("Missing 'cases' in solver configuration.")
@@ -182,6 +193,6 @@ class LinksSolver(Solver):
                 field_name: links_fields_reader(field_config)
                 for field_name, field_config in case_config['fields'].items()
             }
-            cases.append(Case(LinksInputData(case_name), fields))
+            cases.append(Case(input_data_class(case_name), fields))
         # Return the solver
         return LinksSolver(cases, parameters, output_dir, links_bin, parallel, tmp_dir)
