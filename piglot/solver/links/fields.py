@@ -7,6 +7,7 @@ import pandas as pd
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import InputData, OutputField, OutputResult
 from piglot.utils.solver_utils import get_case_name, has_keyword, find_keyword, write_parameters
+from piglot.utils.solver_utils import has_parameter
 
 
 class LinksInputData(InputData):
@@ -52,7 +53,7 @@ class LinksInputData(InputData):
             Parameter set for this problem.
         """
         for parameter in parameters:
-            if not has_keyword(self.input_file, f'<{parameter.name}>'):
+            if not has_parameter(self.input_file, f'<{parameter.name}>'):
                 raise RuntimeError(f"Parameter '{parameter.name}' not found in input file.")
 
     def name(self) -> str:

@@ -437,14 +437,14 @@ class FittingSingleObjective(SingleObjective):
             List of figures with the plot
         """
         return self.solver.plot_case(case_hash, options)
-    
+
     def plot_current(self) -> List[DynamicPlotter]:
         """Plot the currently running function call
 
         Returns
         -------
         List[DynamicPlotter]
-            List of instances of a updatable plots
+            List of instances of updatable plots
         """
         return self.solver.plot_current()
 

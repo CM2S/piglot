@@ -1,7 +1,7 @@
 """Module for solvers"""
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Dict, Tuple, Any, Type, Callable
+from typing import List, Dict, Tuple, Any
 from abc import ABC, abstractmethod
 import os
 import time
@@ -34,7 +34,6 @@ class InputData(ABC):
             Input data prepared for the simulation.
         """
 
-    @abstractmethod
     def check(self, parameters: ParameterSet) -> None:
         """Check if the input data is valid according to the given parameters.
 

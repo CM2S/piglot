@@ -119,6 +119,28 @@ def has_keyword(input_file: str, keyword: str) -> bool:
     return False
 
 
+def has_parameter(input_file: str, parameter: str) -> bool:
+    """Checks whether an input file contains a given parameter.
+
+    Parameters
+    ----------
+    input_file : str
+        Path for the input file.
+    parameter : str
+        parameter to locate.
+
+    Returns
+    -------
+    bool
+        Whether the input file contains the parameter or not.
+    """
+    with open(input_file, 'r', encoding='utf8') as file:
+        for line in file:
+            if parameter in line.lstrip():
+                return True
+    return False
+
+
 def find_keyword(file: str, keyword: str) -> str:
     """Finds the first line where a keyword is defined.
 
