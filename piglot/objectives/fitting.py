@@ -11,6 +11,7 @@ from piglot.solver import read_solver
 from piglot.solver.solver import Solver, OutputResult
 from piglot.utils.reduce_response import reduce_response
 from piglot.objective import DynamicPlotter, SingleObjective
+from piglot.objective import SingleCompositeObjective, MSEComposition
 
 
 class Reference:
@@ -403,19 +404,19 @@ class FittingSingleObjective(SingleObjective):
         self.solver.prepare()
 
     def _objective(self, values: np.ndarray, concurrent: bool=False) -> float:
-        """Objective computation for analytical functions
+        """Objective computation for fitting objectives.
 
         Parameters
         ----------
         values : np.ndarray
-            Set of parameters to evaluate the objective for
+            Set of parameters to evaluate the objective for.
         concurrent : bool, optional
-            Whether this call may be concurrent to others, by default False
+            Whether this call may be concurrent to others, by default False.
 
         Returns
         -------
         float
-            Objective value
+            Objective value.
         """
         # Run the solver
         output = self.solver.solve(values, concurrent)
@@ -475,7 +476,110 @@ class FittingSingleObjective(SingleObjective):
         Objective
             Objective function to optimise.
         """
+        # Inject default loss for scalar objectives
+        if not 'loss' in config:
+            config['loss'] = 'scalar_vector'
         return FittingSingleObjective(
+            parameters,
+            FittingSolver.read(config, parameters, output_dir),
+            output_dir,
+        )
+
+
+class FittingCompositeSingleObjective(SingleCompositeObjective):
+    """Composite fitting objective function."""
+
+    def __init__(
+            self,
+            parameters: ParameterSet,
+            solver: FittingSolver,
+            output_dir: str,
+        ) -> None:
+        super().__init__(parameters, MSEComposition(), output_dir)
+        self.solver = solver
+
+    def prepare(self) -> None:
+        """Prepare the objective for optimisation."""
+        super().prepare()
+        self.solver.prepare()
+
+    def _inner_objective(self, values: np.ndarray, concurrent: bool=False) -> np.ndarray:
+        """Inner objective computation for composite fitting objectives.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Set of parameters to evaluate the objective for.
+        concurrent : bool, optional
+            Whether this call may be concurrent to others, by default False.
+
+        Returns
+        -------
+        np.ndarray
+            Objective value.
+        """
+        # Run the solver
+        output = self.solver.solve(values, concurrent)
+        # Compute the loss
+        loss = np.array([])
+        for reference, results in output.items():
+            losses = np.array([reference.compute_loss(result) for result in results])
+            loss = np.append(loss, reference.weight * np.mean(losses, axis=0))
+        return loss
+
+    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
+        """Plot a given function call given the parameter hash
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+        options : Dict[str, Any], optional
+            Options for the plot, by default None
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        return self.solver.plot_case(case_hash, options)
+
+    def plot_current(self) -> List[DynamicPlotter]:
+        """Plot the currently running function call
+
+        Returns
+        -------
+        List[DynamicPlotter]
+            List of instances of updatable plots
+        """
+        return self.solver.plot_current()
+
+    @staticmethod
+    def read(
+            config: Dict[str, Any],
+            parameters: ParameterSet,
+            output_dir: str,
+        ) -> FittingCompositeSingleObjective:
+        """Read a fitting objective from a configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Terms from the configuration dictionary.
+        parameters : ParameterSet
+            Set of parameters for this problem.
+        output_dir : str
+            Path to the output directory.
+
+        Returns
+        -------
+        Objective
+            Objective function to optimise.
+        """
+        # Inject default loss for composite scalar objectives
+        if not 'loss' in config:
+            config['loss'] = 'vector'
+        return FittingCompositeSingleObjective(
             parameters,
             FittingSolver.read(config, parameters, output_dir),
             output_dir,

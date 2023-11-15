@@ -4,7 +4,7 @@ from piglot.parameter import ParameterSet
 from piglot.objective import Objective
 from piglot.objectives.analytical import AnalyticalObjective
 from piglot.objectives.synthetic import SyntheticObjective, SyntheticCompositeObjective
-from piglot.objectives.fitting import FittingSingleObjective
+from piglot.objectives.fitting import FittingSingleObjective, FittingCompositeSingleObjective
 from piglot.objectives.design import DesignSingleObjective
 
 
@@ -13,6 +13,7 @@ AVAILABLE_OBJECTIVES: Dict[str, Type[Objective]] = {
     'test_function': SyntheticObjective,
     'test_function_cf': SyntheticCompositeObjective,
     'fitting': FittingSingleObjective,
+    'fitting_cf': FittingCompositeSingleObjective,
     'design': DesignSingleObjective,
 }
 
