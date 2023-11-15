@@ -208,10 +208,6 @@ class SingleObjective(Objective):
         """Prepare output directories for the optimsation"""
         super().prepare()
         if self.output_dir:
-            # Prepare output directories
-            if os.path.isdir(self.output_dir):
-                shutil.rmtree(self.output_dir)
-            os.mkdir(self.output_dir)
             # Build header for function calls file
             with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
                 file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}\t{"Loss":>15}')
@@ -328,10 +324,6 @@ class SingleCompositeObjective(Objective):
         """Prepare output directories for the optimsation"""
         super().prepare()
         if self.output_dir:
-            # Prepare output directories
-            if os.path.isdir(self.output_dir):
-                shutil.rmtree(self.output_dir)
-            os.mkdir(self.output_dir)
             # Build header for function calls file
             with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
                 file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}\t{"Loss":>15}\t')
@@ -453,10 +445,6 @@ class MultiFidelitySingleObjective(Objective):
         """Prepare output directories for the optimsation"""
         super().prepare()
         if self.output_dir:
-            # Prepare output directories
-            if os.path.isdir(self.output_dir):
-                shutil.rmtree(self.output_dir)
-            os.mkdir(self.output_dir)
             # Build header for function calls file
             with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
                 file.write(f'{"Start Time /s":>15}\t')
@@ -630,10 +618,6 @@ class MultiFidelityCompositeObjective(Objective):
         """Prepare output directories for the optimsation"""
         super().prepare()
         if self.output_dir:
-            # Prepare output directories
-            if os.path.isdir(self.output_dir):
-                shutil.rmtree(self.output_dir)
-            os.mkdir(self.output_dir)
             # Build header for function calls file
             with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
                 file.write(f'{"Start Time /s":>15}\t')
