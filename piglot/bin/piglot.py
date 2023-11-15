@@ -52,10 +52,14 @@ def main():
     objective = read_objective(config["objective"], parameters, output_dir)
     stop = parse_stop_criteria(config)
     # Run the optimisation
-    _, best_params = optimiser.optimise(objective, config["iters"], parameters,
-                                        output=output_dir,
-                                        verbose=not config["quiet"],
-                                        stop_criteria=stop)
+    _, best_params = optimiser.optimise(
+        objective,
+        config["iters"],
+        parameters,
+        output_dir,
+        verbose=not config["quiet"],
+        stop_criteria=stop,
+    )
     # Re-run the best case
     if 'skip_last_run' not in config:
         objective(parameters.normalise(best_params))

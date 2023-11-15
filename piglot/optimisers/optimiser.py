@@ -177,7 +177,7 @@ class Optimiser(ABC):
         self.pbar = None
         self.objective = None
         self.stop_criteria = None
-        self.output = None
+        self.output_dir = None
         self.best_value = None
         self.best_solution = None
         self.begin_time = None
@@ -199,8 +199,8 @@ class Optimiser(ABC):
             objective: Objective,
             n_iter: int,
             parameters: ParameterSet,
+            output_dir: str,
             stop_criteria: StoppingCriteria=StoppingCriteria(),
-            output: str=None,
             verbose: bool=True,
         ) -> Tuple[float, np.ndarray]:
         """
@@ -214,10 +214,10 @@ class Optimiser(ABC):
             Maximum number of iterations
         parameters : ParameterSet
             Set of parameters to optimise
+        output_dir : str
+            Whether to write output to the output directory, by default None
         stop_criteria : StoppingCriteria
             List of stopping criteria, by default none attributed
-        output : bool
-            Whether to write output to the output directory, by default None
         verbose : bool
             Whether to output progress status, by default True
 
@@ -236,7 +236,7 @@ class Optimiser(ABC):
         self.parameters = parameters
         self.objective = objective
         self.stop_criteria = stop_criteria
-        self.output = output
+        self.output_dir = output_dir
         self.iters_no_improv = 0
         # Build initial shot and bounds
         n_dim = len(self.parameters)
@@ -247,16 +247,15 @@ class Optimiser(ABC):
         self.best_value = np.nan
         self.best_solution = None
         # Prepare history output files
-        if output is not None:
-            with open(os.path.join(self.output, "history"), 'w', encoding='utf8') as file:
-                file.write(f'{"Iteration":>10}\t')
-                file.write(f'{"Time /s":>15}\t')
-                file.write(f'{"Best Loss":>15}\t')
-                file.write(f'{"Current Loss":>15}\t')
-                for par in self.parameters:
-                    file.write(f'{par.name:>15}\t')
-                file.write('\tOptimiser info')
-                file.write('\n')
+        with open(os.path.join(self.output_dir, "history"), 'w', encoding='utf8') as file:
+            file.write(f'{"Iteration":>10}\t')
+            file.write(f'{"Time /s":>15}\t')
+            file.write(f'{"Best Loss":>15}\t')
+            file.write(f'{"Current Loss":>15}\t')
+            for par in self.parameters:
+                file.write(f'{par.name:>15}\t')
+            file.write('\tOptimiser info')
+            file.write('\n')
         # Prepare optimiser
         objective.prepare()
         # Optimise
@@ -335,7 +334,7 @@ class Optimiser(ABC):
         denorm_curr = self.parameters.denormalise(curr_solution)
         denorm_best = self.parameters.denormalise(self.best_solution)
         # Update progress file
-        with open(os.path.join(self.output, "progress"), 'w', encoding='utf8') as file:
+        with open(os.path.join(self.output_dir, "progress"), 'w', encoding='utf8') as file:
             file.write(f'Iteration: {i_iter}\n')
             file.write(f'Function calls: {self.objective.func_calls}\n')
             file.write(f'Best loss: {self.best_value}\n')
@@ -346,7 +345,7 @@ class Optimiser(ABC):
                 file.write(f'\t{par.name}: {denorm_best[i]}\n')
             file.write(f'\nElapsed time: {pretty_time(elapsed)}\n')
         # Update history file
-        with open(os.path.join(self.output, "history"), 'a', encoding='utf8') as file:
+        with open(os.path.join(self.output_dir, "history"), 'a', encoding='utf8') as file:
             file.write(f'{i_iter:>10}\t')
             file.write(f'{elapsed:>15.8e}\t')
             file.write(f'{self.best_value:>15.8e}\t')
@@ -398,8 +397,7 @@ class Optimiser(ABC):
             if i_iter > 0:
                 self.pbar.update()
         # Update progress in output files
-        if self.output:
-            self.__update_progress_files(i_iter, curr_solution, curr_value, extra_info)
+        self.__update_progress_files(i_iter, curr_solution, curr_value, extra_info)
         # Convergence criterion
         return i_iter > self.n_iter or self.stop_criteria.check_criteria(
             curr_value,
