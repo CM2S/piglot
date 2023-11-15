@@ -46,7 +46,7 @@ class Reference:
     def prepare(self) -> None:
         """Prepare the reference data."""
         if self.has_filtering():
-            print("Filtering reference ...", end='')
+            print(f"Filtering reference {self.filename} ...", end='')
             num, error, (x, y) = reduce_response(self.data[:,0], self.data[:,1], self.filter_tol)
             self.data = np.array([x, y]).T
             print(f" done (from {self.orig_data.shape[0]} to {num} points, error = {error:.2e})")
