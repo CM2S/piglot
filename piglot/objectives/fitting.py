@@ -1,6 +1,6 @@
 """Module for curve fitting objectives"""
 from __future__ import annotations
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Union
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -19,7 +19,7 @@ class Reference:
     def __init__(
             self,
             filename: str,
-            prediction: str,
+            prediction: Union[str, List[str]],
             x_col: int=1,
             y_col: int=2,
             skip_header: int=0,
@@ -32,6 +32,11 @@ class Reference:
             loss: Loss=None,
             weight: float=1.0,
         ):
+        # Sanitise prediction field
+        if isinstance(prediction, str):
+            prediction = [prediction]
+        elif not isinstance(prediction, list):
+            raise ValueError(f"Invalid prediction '{prediction}' for reference '{filename}'.")
         self.filename = filename
         self.prediction = prediction
         self.data = np.genfromtxt(filename, skip_header=skip_header)[:,[x_col - 1, y_col - 1]]
@@ -359,7 +364,7 @@ class FittingSolver:
             # Map the reference to the solver cases
             references[reference] = []
             for field_name in solver.get_output_fields():
-                if field_name == reference.prediction:
+                if field_name in reference.prediction:
                     references[reference].append(field_name)
             # Sanitise reference: check if it is associated to at least one case
             if len(references[reference]) == 0:
