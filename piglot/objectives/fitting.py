@@ -138,13 +138,13 @@ class Reference:
 
         Returns
         -------
-        float
+        Any
             Loss value.
         """
         return self.loss(
             self.get_time(),
-            self.get_data(),
             results.get_time(),
+            self.get_data(),
             results.get_data(),
         )
 
