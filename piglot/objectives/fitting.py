@@ -662,7 +662,7 @@ class StochasticFittingSingleObjective(StochasticSingleObjective):
         for reference, results in output.items():
             losses = [reference.compute_loss(result) for result in results]
             loss += reference.weight * np.mean(losses)
-            variance += reference.weight * np.var(losses)
+            variance += reference.weight * np.var(losses) / len(losses)
         return loss, variance
 
     def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
