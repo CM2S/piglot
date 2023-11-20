@@ -231,7 +231,8 @@ def plot_animation(args):
     data = objective.get_history()
     # Hacky: we start by just plotting the first case to infer the number of plots per frame
     options = {'reference_limits': True}
-    first_figs = objective.plot_case(data[list(data.keys())[0]][3][0], {'reference_limits': True})
+    data_first = data[list(data.keys())[0]]
+    first_figs = objective.plot_case(data_first['hashes'][0], {'reference_limits': True})
     num_plots = len(first_figs)
     for fig in first_figs:
         plt.close(fig)
@@ -240,7 +241,7 @@ def plot_animation(args):
         # Export all frames to the temporary directory
         files = {}
         for obj_name, data_dict in data.items():
-            param_hashes = data_dict['params']
+            param_hashes = data_dict['hashes']
             files[obj_name] = [[] for _ in range(num_plots)]
             for frame, param_hash in enumerate(param_hashes):
                 options = {

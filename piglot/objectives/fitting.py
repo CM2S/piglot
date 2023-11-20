@@ -680,16 +680,16 @@ class StochasticFittingSingleObjective(StochasticSingleObjective):
         List[Figure]
             List of figures with the plot
         """
+        options_mean = options.copy()
+        options_mean['mean_std'] = True
+        options_mean['append_title'] = 'Mean, median and standard deviation'
+        options_conf = options.copy()
+        options_conf['confidence'] = True
+        options_conf['append_title'] = 'Mean confidence interval 95%'
         figs = [
             self.solver.plot_case(case_hash, options),
-            self.solver.plot_case(case_hash, {
-                'mean_std': True,
-                'append_title': 'Mean, median and standard deviation',
-            }),
-            self.solver.plot_case(case_hash, {
-                'confidence': True,
-                'append_title': 'Mean confidence interval 95%',
-            }),
+            self.solver.plot_case(case_hash, options_mean),
+            self.solver.plot_case(case_hash, options_conf),
         ]
         return [fig for fig_list in figs for fig in fig_list]
 
