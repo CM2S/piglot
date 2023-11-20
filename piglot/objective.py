@@ -180,12 +180,12 @@ class Objective(ABC):
         """
         raise NotImplementedError("Current case plotting not implemented for this objective")
 
-    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]:
+    def get_history(self) -> Dict[str, Dict[str, Any]]:
         """Get the objective history
 
         Returns
         -------
-        Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]
+        Dict[str, Dict[str, Any]]
             Dictionary of objective history
         """
         raise NotImplementedError("Objective history not implemented for this objective")
@@ -284,13 +284,13 @@ class SingleObjective(Objective):
         print(f"Hash: {call_hash}")
         print(f"Loss: {min_series['Loss']:15.8e}")
         return figures
-    
-    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]:
+
+    def get_history(self) -> Dict[str, Dict[str, Any]]:
         """Get the objective history
 
         Returns
         -------
-        Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]
+        Dict[str, Dict[str, Any]]
             Dictionary of objective history
         """
         df = pd.read_table(self.func_calls_file)
@@ -298,7 +298,14 @@ class SingleObjective(Objective):
         x_axis = df["Start Time /s"] + df["Run Time /s"]
         params = df[[param.name for param in self.parameters]]
         param_hash = df["Hash"].to_list()
-        return {"Loss": (x_axis.to_numpy(), df["Loss"].to_numpy(), params.to_numpy(), param_hash)}
+        return {
+            "Loss": {
+                "time": x_axis.to_numpy(),
+                "values": df["Loss"].to_numpy(),
+                "params": params.to_numpy(),
+                "hashes": param_hash,
+            }
+        }
 
 
 
@@ -400,13 +407,13 @@ class SingleCompositeObjective(Objective):
         print(f"Hash: {call_hash}")
         print(f"Loss: {min_series['Loss']:15.8e}")
         return figures
-    
-    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]:
+
+    def get_history(self) -> Dict[str, Dict[str, Any]]:
         """Get the objective history
 
         Returns
         -------
-        Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]
+        Dict[str, Dict[str, Any]]
             Dictionary of objective history
         """
         df = pd.read_table(self.func_calls_file)
@@ -414,7 +421,14 @@ class SingleCompositeObjective(Objective):
         x_axis = df["Start Time /s"] + df["Run Time /s"]
         params = df[[param.name for param in self.parameters]]
         param_hash = df["Hash"].to_list()
-        return {"Loss": (x_axis.to_numpy(), df["Loss"].to_numpy(), params.to_numpy(), param_hash)}
+        return {
+            "Loss": {
+                "time": x_axis.to_numpy(),
+                "values": df["Loss"].to_numpy(),
+                "params": params.to_numpy(),
+                "hashes": param_hash,
+            }
+        }
 
 
 class StochasticSingleObjective(Objective):
@@ -511,13 +525,13 @@ class StochasticSingleObjective(Objective):
         print(f"Hash: {call_hash}")
         print(f"Loss: {min_series['Loss']:15.8e}")
         return figures
-    
-    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]:
+
+    def get_history(self) -> Dict[str, Dict[str, Any]]:
         """Get the objective history
 
         Returns
         -------
-        Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]
+        Dict[str, Dict[str, Any]]
             Dictionary of objective history
         """
         df = pd.read_table(self.func_calls_file)
@@ -525,7 +539,15 @@ class StochasticSingleObjective(Objective):
         x_axis = df["Start Time /s"] + df["Run Time /s"]
         params = df[[param.name for param in self.parameters]]
         param_hash = df["Hash"].to_list()
-        return {"Loss": (x_axis.to_numpy(), df["Loss"].to_numpy(), params.to_numpy(), param_hash)}
+        return {
+            "Loss": {
+                "time": x_axis.to_numpy(),
+                "values": df["Loss"].to_numpy(),
+                "params": params.to_numpy(),
+                "variances": df["Variance"].to_numpy(),
+                "hashes": param_hash,
+            }
+        }
 
 
 
@@ -681,12 +703,12 @@ class MultiFidelitySingleObjective(Objective):
         print(f"Loss: {min_series['Loss']:15.8e}")
         return figures
 
-    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]:
+    def get_history(self) -> Dict[str, Dict[str, Any]]:
         """Get the objective history
 
         Returns
         -------
-        Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]
+        Dict[str, Dict[str, Any]]
             Dictionary of objective history
         """
         result = {}
@@ -853,12 +875,12 @@ class MultiFidelityCompositeObjective(Objective):
         print(f"Loss: {min_series['Loss']:15.8e}")
         return figures
 
-    def get_history(self) -> Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]:
+    def get_history(self) -> Dict[str, Dict[str, Any]]:
         """Get the objective history
 
         Returns
         -------
-        Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]]
+        Dict[str, Dict[str, Any]]
             Dictionary of objective history
         """
         result = {}
