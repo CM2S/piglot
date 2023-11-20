@@ -1,6 +1,8 @@
 """Module for curve fitting objectives"""
 from __future__ import annotations
 from typing import Dict, Any, List, Union, Tuple
+import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -23,6 +25,7 @@ class Reference:
             self,
             filename: str,
             prediction: Union[str, List[str]],
+            output_dir: str,
             x_col: int=1,
             y_col: int=2,
             skip_header: int=0,
@@ -42,6 +45,7 @@ class Reference:
             raise ValueError(f"Invalid prediction '{prediction}' for reference '{filename}'.")
         self.filename = filename
         self.prediction = prediction
+        self.output_dir = output_dir
         self.data = np.genfromtxt(filename, skip_header=skip_header)[:,[x_col - 1, y_col - 1]]
         self.data[:,0] = x_offset + x_scale * self.data[:,0]
         self.data[:,1] = y_offset + y_scale * self.data[:,1]
@@ -55,6 +59,7 @@ class Reference:
         """Prepare the reference data."""
         if self.has_filtering():
             print(f"Filtering reference {self.filename} ...", end='')
+            sys.stdout.flush()
             num, error, (x, y) = reduce_response(self.data[:,0], self.data[:,1], self.filter_tol)
             self.data = np.array([x, y]).T
             print(f" done (from {self.orig_data.shape[0]} to {num} points, error = {error:.2e})")
@@ -65,6 +70,16 @@ class Reference:
                 ax.scatter(self.data[:,0], self.data[:,1], c='r', label="Resampled")
                 ax.legend()
                 plt.show()
+            # Write the filtered reference
+            os.makedirs(os.path.join(self.output_dir, 'filtered_references'), exist_ok=True)
+            np.savetxt(
+                os.path.join(
+                    self.output_dir,
+                    'filtered_references',
+                    os.path.basename(self.filename),
+                ),
+                self.data,
+            )
 
     def num_fields(self) -> int:
         """Get the number of reference fields.
@@ -157,7 +172,7 @@ class Reference:
         )
 
     @staticmethod
-    def read(filename: str, config: Dict[str, Any]) -> Reference:
+    def read(filename: str, config: Dict[str, Any], output_dir: str) -> Reference:
         """Read the reference from the configuration dictionary.
 
         Parameters
@@ -166,6 +181,8 @@ class Reference:
             Path to the reference file.
         config : Dict[str, Any]
             Configuration dictionary.
+        output_dir: str
+            Output directory.
 
         Returns
         -------
@@ -177,6 +194,7 @@ class Reference:
         return Reference(
             filename,
             config['prediction'],
+            output_dir,
             x_col=int(config.get('x_col', 1)),
             y_col=int(config.get('y_col', 2)),
             skip_header=int(config.get('skip_header', 0)),
@@ -397,7 +415,7 @@ class FittingSolver:
             raise ValueError("Missing references for fitting objective.")
         references: Dict[Reference, List[str]] = {}
         for reference_name, reference_config in config.pop('references').items():
-            reference = Reference.read(reference_name, reference_config)
+            reference = Reference.read(reference_name, reference_config, output_dir)
             # Map the reference to the solver cases
             references[reference] = []
             for field_name in solver.get_output_fields():

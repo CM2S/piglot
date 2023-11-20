@@ -81,7 +81,8 @@ def reduce_response(
         Number of points, error, and new grid
     """
 
-    x_new = np.copy(x_old)
+    # Shortcut if we have way too many points
+    x_new = np.linspace(np.min(x_old), np.max(x_old), 1000) if len(x_old) > 1000 else np.copy(x_old)
     y_new = np.interp(x_new, x_old, y_old)
     x_min, x_max = np.min(x_old), np.max(x_old)
 

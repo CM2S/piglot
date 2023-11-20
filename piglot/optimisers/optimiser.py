@@ -232,7 +232,6 @@ class Optimiser(ABC):
         # Sanity check
         self._validate_problem(objective)
         # Initialise optimiser
-        self.pbar = tqdm(total=n_iter, desc=self.name) if verbose else None
         self.n_iter = n_iter
         self.parameters = parameters
         self.objective = objective
@@ -259,6 +258,7 @@ class Optimiser(ABC):
             file.write('\n')
         # Prepare optimiser
         objective.prepare()
+        self.pbar = tqdm(total=n_iter, desc=self.name) if verbose else None
         # Optimise
         self.begin_time = time.perf_counter()
         self._optimise(objective, n_dim, n_iter, bounds, init_shot)
