@@ -9,7 +9,7 @@ from piglot.parameter import ParameterSet
 from piglot.utils.assorted import pretty_time
 from piglot.objective import Objective, SingleObjective, SingleCompositeObjective
 from piglot.objective import MultiFidelitySingleObjective, MultiFidelityCompositeObjective
-from piglot.objective import StochasticSingleObjective
+from piglot.objective import StochasticSingleObjective, StochasticSingleCompositeObjective
 
 
 
@@ -469,6 +469,27 @@ class ScalarStochasticOptimiser(Optimiser):
         """
         if not isinstance(objective, StochasticSingleObjective):
             raise InvalidOptimiserException('Stochastic objective required for this optimiser')
+
+
+
+class CompositeStochasticOptimiser(Optimiser):
+    """Base class for composite stochastic single-objective optimisers"""
+
+    def _validate_problem(self, objective: Objective) -> None:
+        """Validate the combination of optimiser and objective
+
+        Parameters
+        ----------
+        objective : Objective
+            Objective to optimise
+
+        Raises
+        ------
+        InvalidOptimiserException
+            With an invalid combination of optimiser and objective function
+        """
+        if not isinstance(objective, StochasticSingleCompositeObjective):
+            raise InvalidOptimiserException('Stochastic comp.objective required for this optimiser')
 
 
 

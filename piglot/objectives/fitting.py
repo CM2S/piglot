@@ -13,7 +13,7 @@ from piglot.utils.assorted import stats_interp_to_common_grid
 from piglot.utils.reduce_response import reduce_response
 from piglot.objective import DynamicPlotter, SingleObjective
 from piglot.objective import SingleCompositeObjective, MSEComposition
-from piglot.objective import StochasticSingleObjective
+from piglot.objective import StochasticSingleObjective, StochasticSingleCompositeObjective
 
 
 class Reference:
@@ -729,6 +729,123 @@ class StochasticFittingSingleObjective(StochasticSingleObjective):
         if not 'loss' in config:
             config['loss'] = 'scalar_vector'
         return StochasticFittingSingleObjective(
+            parameters,
+            FittingSolver.read(config, parameters, output_dir),
+            output_dir,
+        )
+
+
+class StochasticFittingCompositeSingleObjective(StochasticSingleCompositeObjective):
+    """Composite fitting objective function."""
+
+    def __init__(
+            self,
+            parameters: ParameterSet,
+            solver: FittingSolver,
+            output_dir: str,
+        ) -> None:
+        super().__init__(parameters, MSEComposition(), output_dir)
+        self.solver = solver
+
+    def prepare(self) -> None:
+        """Prepare the objective for optimisation."""
+        super().prepare()
+        self.solver.prepare()
+
+    def _inner_objective(
+            self,
+            values: np.ndarray,
+            concurrent: bool=False,
+        ) -> Tuple[np.ndarray. np.ndarray]:
+        """Inner objective computation for composite fitting objectives.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Set of parameters to evaluate the objective for.
+        concurrent : bool, optional
+            Whether this call may be concurrent to others, by default False.
+
+        Returns
+        -------
+        Tuple[np.ndarray. np.ndarray]
+            Objective value.
+        """
+        # Run the solver
+        output = self.solver.solve(values, concurrent)
+        # Compute the loss
+        loss = np.array([])
+        l_vars = np.array([])
+        for reference, results in output.items():
+            losses = np.array([reference.compute_loss(result) for result in results])
+            loss = np.append(loss, reference.weight * np.mean(losses, axis=0))
+            l_vars = np.append(l_vars, reference.weight * np.var(losses, axis=0) / losses.shape[0])
+        return loss, l_vars
+
+    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
+        """Plot a given function call given the parameter hash
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+        options : Dict[str, Any], optional
+            Options for the plot, by default None
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        options_mean = options.copy()
+        options_mean['mean_std'] = True
+        options_mean['append_title'] = 'Mean, median and standard deviation'
+        options_conf = options.copy()
+        options_conf['confidence'] = True
+        options_conf['append_title'] = 'Mean confidence interval 95%'
+        figs = [
+            self.solver.plot_case(case_hash, options),
+            self.solver.plot_case(case_hash, options_mean),
+            self.solver.plot_case(case_hash, options_conf),
+        ]
+        return [fig for fig_list in figs for fig in fig_list]
+
+    def plot_current(self) -> List[DynamicPlotter]:
+        """Plot the currently running function call
+
+        Returns
+        -------
+        List[DynamicPlotter]
+            List of instances of updatable plots
+        """
+        return self.solver.plot_current()
+
+    @staticmethod
+    def read(
+            config: Dict[str, Any],
+            parameters: ParameterSet,
+            output_dir: str,
+        ) -> StochasticFittingCompositeSingleObjective:
+        """Read a fitting objective from a configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Terms from the configuration dictionary.
+        parameters : ParameterSet
+            Set of parameters for this problem.
+        output_dir : str
+            Path to the output directory.
+
+        Returns
+        -------
+        Objective
+            Objective function to optimise.
+        """
+        # Inject default loss for composite scalar objectives
+        if not 'loss' in config:
+            config['loss'] = 'vector'
+        return StochasticFittingCompositeSingleObjective(
             parameters,
             FittingSolver.read(config, parameters, output_dir),
             output_dir,

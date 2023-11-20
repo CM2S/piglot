@@ -10,6 +10,7 @@ from threading import Lock
 import numpy as np
 import torch
 import pandas as pd
+from scipy.stats import norm
 from matplotlib.figure import Figure
 from piglot.parameter import ParameterSet
 
@@ -499,6 +500,139 @@ class StochasticSingleObjective(Objective):
                     file.write(f'{end_time - begin_time:>15.8e}\t')
                     file.write(f'{value:>15.8e}\t')
                     file.write(f'{variance:>15.8e}')
+                    for i, param in enumerate(self.parameters):
+                        file.write(f"\t{param.denormalise(values[i]):>15.6f}")
+                    file.write(f'\t{self.parameters.hash(values)}\n')
+        return value, variance
+
+    def plot_best(self) -> List[Figure]:
+        """Plot the current best case
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        # Find hash associated with the best case
+        df = pd.read_table(self.func_calls_file)
+        df.columns = df.columns.str.strip()
+        min_series = df.iloc[df["Loss"].idxmin()]
+        call_hash = str(min_series["Hash"])
+        # Use the single case plotting utility
+        figures = self.plot_case(call_hash)
+        # Also display the best case
+        print("Best run:")
+        print(min_series.drop(["Loss", "Hash"]))
+        print(f"Hash: {call_hash}")
+        print(f"Loss: {min_series['Loss']:15.8e}")
+        return figures
+
+    def get_history(self) -> Dict[str, Dict[str, Any]]:
+        """Get the objective history
+
+        Returns
+        -------
+        Dict[str, Dict[str, Any]]
+            Dictionary of objective history
+        """
+        df = pd.read_table(self.func_calls_file)
+        df.columns = df.columns.str.strip()
+        x_axis = df["Start Time /s"] + df["Run Time /s"]
+        params = df[[param.name for param in self.parameters]]
+        param_hash = df["Hash"].to_list()
+        return {
+            "Loss": {
+                "time": x_axis.to_numpy(),
+                "values": df["Loss"].to_numpy(),
+                "params": params.to_numpy(),
+                "variances": df["Variance"].to_numpy(),
+                "hashes": param_hash,
+            }
+        }
+
+
+class StochasticSingleCompositeObjective(Objective):
+    """Abstract class for scalar composite stochastic single-objectives"""
+
+    def __init__(
+            self,
+            parameters: ParameterSet,
+            composition: Composition,
+            output_dir: str=None,
+        ) -> None:
+        super().__init__()
+        self.parameters = parameters
+        self.composition = composition
+        self.output_dir = output_dir
+        self.func_calls = 0
+        self.begin_time = time.perf_counter()
+        self.__mutex = Lock()
+        self.func_calls_file = os.path.join(output_dir, "func_calls") if output_dir else None
+
+    def prepare(self) -> None:
+        """Prepare output directories for the optimsation"""
+        super().prepare()
+        if self.output_dir:
+            # Build header for function calls file
+            with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
+                file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}')
+                file.write(f'\t{"Loss":>15}\t{"Variance":>15}')
+                for param in self.parameters:
+                    file.write(f"\t{param.name:>15}")
+                file.write(f'\t{"Hash":>64}\n')
+
+    @abstractmethod
+    def _inner_objective(
+        self,
+        values: np.ndarray,
+        concurrent: bool=False,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Abstract method for computation of the inner function of the composite objective.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Set of parameters to evaluate the objective for.
+        concurrent : bool, optional
+            Whether this call may be concurrent to others, by default False.
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            Inner function value and variance.
+        """
+
+    def __call__(self, values: np.ndarray, concurrent: bool=False) -> Tuple[np.ndarray, np.ndarray]:
+        """Objective computation for the outside world - also handles output file writing.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Set of parameters to evaluate the objective for.
+        concurrent : bool, optional
+            Whether this call may be concurrent to others, by default False.
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            Objective value and variance.
+        """
+        self.func_calls += 1
+        begin_time = time.perf_counter()
+        value, variance = self._inner_objective(values, concurrent=concurrent)
+        end_time = time.perf_counter()
+        # Compute the objective variance using Monte Carlo (using fixed base samples)
+        biased = [norm.rvs(loc=0, scale=1) for _ in range(1000)]
+        mc_objectives = [self.composition(value + bias * np.sqrt(variance)) for bias in biased]
+        mc_variance = np.var(mc_objectives)
+        # Update function call history file
+        if self.output_dir:
+            with self.__mutex:
+                with open(os.path.join(self.func_calls_file), 'a', encoding='utf8') as file:
+                    file.write(f'{begin_time - self.begin_time:>15.8e}\t')
+                    file.write(f'{end_time - begin_time:>15.8e}\t')
+                    file.write(f'{self.composition(value):>15.8e}\t')
+                    file.write(f'{mc_variance:>15.8e}')
                     for i, param in enumerate(self.parameters):
                         file.write(f"\t{param.denormalise(values[i]):>15.6f}")
                     file.write(f'\t{self.parameters.hash(values)}\n')

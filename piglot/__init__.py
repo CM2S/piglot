@@ -40,6 +40,8 @@ def optimiser(name, *args, **kwargs):
         return piglot.optimisers.BayesianBoTorchStochastic(*args, **kwargs)
     if name == 'botorch_cf':
         return piglot.optimisers.BayesianBoTorchComposite(*args, **kwargs)
+    if name == 'botorch_cf_stochastic':
+        return piglot.optimisers.BayesianBoTorchCompositeStochastic(*args, **kwargs)
     if name == 'botorch_mf':
         return piglot.optimisers.BayesianBoTorchMF(*args, **kwargs)
     if name == 'botorch_mf_cf':

@@ -7,6 +7,7 @@ from piglot.optimisers.bayes_botorch import BayesianBoTorch
 from piglot.optimisers.bayes_botorch_cf import BayesianBoTorchComposite
 from piglot.optimisers.bayes_botorch_mf import BayesianBoTorchMF
 from piglot.optimisers.bayes_botorch_stochastic import BayesianBoTorchStochastic
+from piglot.optimisers.bayes_botorch_cf_stochastic import BayesianBoTorchCompositeStochastic
 from piglot.optimisers.bayes_botorch_mfcf import BayesianBoTorchMultiFidelityComposite
 from piglot.optimisers.direct import DIRECT
 from piglot.optimisers.ga import GA
@@ -34,6 +35,7 @@ def names():
         'botorch_cf',
         'botorch_mf',
         'botorch_stochastic',
+        'botorch_cf_stochastic',
         'botorch_mf_cf',
         'direct',
         'ga',

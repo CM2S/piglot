@@ -6,6 +6,7 @@ from piglot.objectives.analytical import AnalyticalObjective
 from piglot.objectives.synthetic import SyntheticObjective, SyntheticCompositeObjective
 from piglot.objectives.fitting import FittingSingleObjective, FittingCompositeSingleObjective
 from piglot.objectives.fitting import StochasticFittingSingleObjective
+from piglot.objectives.fitting import StochasticFittingCompositeSingleObjective
 from piglot.objectives.design import DesignSingleObjective
 
 
@@ -16,6 +17,7 @@ AVAILABLE_OBJECTIVES: Dict[str, Type[Objective]] = {
     'fitting': FittingSingleObjective,
     'fitting_cf': FittingCompositeSingleObjective,
     'fitting_stochastic': StochasticFittingSingleObjective,
+    'fitting_cf_stochastic': StochasticFittingCompositeSingleObjective,
     'design': DesignSingleObjective,
 }
 
