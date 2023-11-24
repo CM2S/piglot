@@ -3,10 +3,12 @@ from typing import Any, Dict, Type
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import Solver
 from piglot.solver.links.solver import LinksSolver
+from piglot.solver.crate.solver import CRATESolver
 
 
 AVAILABLE_SOLVERS: Dict[str, Type[Solver]] = {
     'links': LinksSolver,
+    'crate': CRATESolver,
 }
 
 
