@@ -14,11 +14,14 @@ import codecs
 import numpy as np
 from odbAccess import *
 
-
-# Function to run the input python script
-
-
 def read_input():
+    """Reads the input file.
+
+    Returns
+    -------
+    variables
+        Variables to use in this problem
+    """
     args = [a for a in sys.argv if a.startswith("input_file=")][0].replace('input_file=', '')
     variables = {}
     with codecs.open(args, "r", encoding='utf-8') as file:
@@ -36,19 +39,29 @@ def read_input():
                 variables[var_name] = var_value
     return variables
 
-
-# Function to define the file name
-
-
 def file_name_func(set_name, variable_name, inp_name):
+    """Defines the txt file name of the extracted data.
+
+    Parameters
+    ----------
+    set_name : str
+        name of the set 
+    variable_name : str
+        name of the field variable
+    inp_name : str
+        name of the input file name
+
+    Returns
+    -------
+    file_name
+        name of the txt file
+    """
     file_name = "{}_{}_{}.txt".format(os.path.splitext(inp_name)[0], set_name, variable_name)
     return file_name
 
-
-# Main function
-
-
 def main():
+    """Main function of the reader.py
+    """
 
     variables = read_input()
 
@@ -100,20 +113,20 @@ def main():
 
                 output_variable = step.frames[0].fieldOutputs[variable]
 
-                # Create a variable that refers to the output variable of the node set.
-                # Se forem tensoes ou deformacoes extrapola para os nos, se forem deslocamentos ou reacoes fica so nos nos
+                # Create a variable that refers to the output variable of the node set. If the
+                # field is S or E it extrapolates the data to the nodes, if the field is U or RF
+                # the data is already on the nodes so it doesn't need to be specified.
                 if i in (0, 1):
-                    location_output_variable = output_variable.getSubset(
-                        region=location, position=ELEMENT_NODAL)
+                    location_output_variable = output_variable.getSubset(region=location,
+                                                                         position=ELEMENT_NODAL)
                 else:
-                    location_output_variable = output_variable.getSubset(
-                        region=location)
+                    location_output_variable = output_variable.getSubset(region=location)
 
                 # Get the component labels
                 component_labels = output_variable.componentLabels
 
-                # Write the column headers dynamically based on the number of nodes and output variable
-                # components
+                # Write the column headers dynamically based on the number of nodes and
+                # output variable components
                 header = "Frame " + " ".join(header_variable % (label, v.nodeLabel)
                                             for v in location_output_variable.values for label in
                                             component_labels) + "\n"
@@ -125,21 +138,18 @@ def main():
                     # Create a variable that refers to the output_variable of the node
                     # set in the current frame.
                     if i in (0, 1):
-                        location_output_variable = output_variable.getSubset(
-                            region=location, position=ELEMENT_NODAL)
+                        location_output_variable = output_variable.getSubset(region=location,
+                                                                             position=ELEMENT_NODAL)
                     else:
-                        location_output_variable = output_variable.getSubset(
-                            region=location)
+                        location_output_variable = output_variable.getSubset(region=location)
 
                     output_file.write("%d " % frame.frameId)
                     for v in location_output_variable.values:
-                        output_file.write(" ".join("%.9f" %
-                                        value for value in v.data))
+                        output_file.write(" ".join("%.9f" % value for value in v.data))
                         output_file.write(" ")
                     output_file.write("\n")
 
     odb.close()
-
 
 # Run the main function
 if __name__ == "__main__":
