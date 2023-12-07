@@ -142,7 +142,8 @@ class FieldsOutput(OutputField):
         }
 
         # X field
-        field_filename = os.path.join(output_dir, f'{input_file}_{self.set_name}_{self.x_field}.txt')
+        field_filename = os.path.join(output_dir,
+                                      f'{input_file}_{self.set_name}_{self.x_field}.txt')
         # Ensure the file exists
         if not os.path.exists(field_filename):
             return OutputResult(np.empty(0), np.empty(0))
