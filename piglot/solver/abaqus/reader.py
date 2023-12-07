@@ -59,10 +59,35 @@ def file_name_func(set_name, variable_name, inp_name):
     file_name = "{}_{}_{}.txt".format(os.path.splitext(inp_name)[0], set_name, variable_name)
     return file_name
 
+def field_location(i, output_variable, location):
+    """It gets the node data of the specified node set.
+
+    Parameters
+    ----------
+    i : int
+        It is an int number, 0 or 1 in the case of the stresses and strains.
+    output_variable : str
+        Its the output variable (S, U, RF, E or LE) of the nodes.
+    location : str
+        Location of the current node set.
+
+    Returns
+    -------
+    location_output_variable
+        Location of the output variable.
+    """
+
+    if i in (0, 1):
+        location_output_variable = output_variable.getSubset(region=location,
+                                                                position=ELEMENT_NODAL)
+    else:
+        location_output_variable = output_variable.getSubset(region=location)
+
+    return location_output_variable
+
 def main():
     """Main function of the reader.py
     """
-
     variables = read_input()
 
     # Data defined by the user
@@ -116,11 +141,7 @@ def main():
                 # Create a variable that refers to the output variable of the node set. If the
                 # field is S or E it extrapolates the data to the nodes, if the field is U or RF
                 # the data is already on the nodes so it doesn't need to be specified.
-                if i in (0, 1):
-                    location_output_variable = output_variable.getSubset(region=location,
-                                                                         position=ELEMENT_NODAL)
-                else:
-                    location_output_variable = output_variable.getSubset(region=location)
+                location_output_variable = field_location(i, output_variable, location)
 
                 # Get the component labels
                 component_labels = output_variable.componentLabels
@@ -137,11 +158,7 @@ def main():
 
                     # Create a variable that refers to the output_variable of the node
                     # set in the current frame.
-                    if i in (0, 1):
-                        location_output_variable = output_variable.getSubset(region=location,
-                                                                             position=ELEMENT_NODAL)
-                    else:
-                        location_output_variable = output_variable.getSubset(region=location)
+                    location_output_variable = field_location(i, output_variable, location)
 
                     output_file.write("%d " % frame.frameId)
                     for v in location_output_variable.values:
