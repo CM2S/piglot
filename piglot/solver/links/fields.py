@@ -52,9 +52,12 @@ class LinksInputData(InputData):
         parameters : ParameterSet
             Parameter set for this problem.
         """
-        for parameter in parameters:
-            if not has_parameter(self.input_file, f'<{parameter.name}>'):
-                raise RuntimeError(f"Parameter '{parameter.name}' not found in input file.")
+        # Generate a dummy set of parameters (to ensure proper handling of output parameters)
+        values = np.array([parameter.inital_value for parameter in parameters])
+        param_dict = parameters.to_dict(values, input_normalised=False)
+        for name in param_dict:
+            if not has_parameter(self.input_file, f'<{name}>'):
+                raise RuntimeError(f"Parameter '{name}' not found in input file.")
 
     def name(self) -> str:
         """Return the name of the input data.
@@ -65,7 +68,7 @@ class LinksInputData(InputData):
             Name of the input data.
         """
         return os.path.basename(self.input_file)
-    
+
     def get_current(self, target_dir: str) -> LinksInputData:
         """Get the current input data.
 

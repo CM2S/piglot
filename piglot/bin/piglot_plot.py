@@ -7,8 +7,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import trapezoid
 from PIL import Image
+import torch
 from piglot.objectives import read_objective
 from piglot.yaml_parser import parse_parameters, parse_config_file
+from piglot.utils.surrogate import get_model
 
 
 def cumulative_regret(values: np.ndarray, x_grid: np.ndarray) -> np.ndarray:
@@ -126,7 +128,9 @@ def plot_history(args):
     objective = read_objective(config["objective"], parse_parameters(config), config["output"])
     data = objective.get_history()
     fig, axis = plt.subplots()
-    for name, (times, values, _, _) in data.items():
+    for name, data_dict in data.items():
+        times = data_dict['time']
+        values = data_dict['values']
         x_values = times if args.time else np.arange(len(times))
         y_values = pick_from_best(values, values) if args.best else values
         axis.plot(x_values, y_values, label=name)
@@ -160,7 +164,10 @@ def plot_parameters(args):
     fig, axes = plt.subplots(nrows=len(parameters), sharex=True, squeeze=False)
     for idx, param in enumerate(parameters):
         axis = axes[idx, 0]
-        for name, (times, values, param_values, _) in data.items():
+        for name, data_dict in data.items():
+            times = data_dict['time']
+            values = data_dict['values']
+            param_values = data_dict['params']
             x_values = times if args.time else np.arange(len(times))
             params = param_values[:,idx]
             y_values = pick_from_best(values, params) if args.best else params
@@ -192,7 +199,9 @@ def plot_regret(args):
     objective = read_objective(config["objective"], parse_parameters(config), config["output"])
     data = objective.get_history()
     fig, axis = plt.subplots()
-    for name, (times, values, _, _) in data.items():
+    for name, data_dict in data.items():
+        times = data_dict['time']
+        values = data_dict['values']
         x_axis = times if args.time else np.arange(len(times))
         axis.plot(x_axis, cumulative_regret(values, x_axis), label=name)
     if args.log:
@@ -222,7 +231,8 @@ def plot_animation(args):
     data = objective.get_history()
     # Hacky: we start by just plotting the first case to infer the number of plots per frame
     options = {'reference_limits': True}
-    first_figs = objective.plot_case(data[list(data.keys())[0]][3][0], {'reference_limits': True})
+    data_first = data[list(data.keys())[0]]
+    first_figs = objective.plot_case(data_first['hashes'][0], {'reference_limits': True})
     num_plots = len(first_figs)
     for fig in first_figs:
         plt.close(fig)
@@ -230,7 +240,8 @@ def plot_animation(args):
     with TemporaryDirectory() as tmp_dir:
         # Export all frames to the temporary directory
         files = {}
-        for obj_name, (_, _, _, param_hashes) in data.items():
+        for obj_name, data_dict in data.items():
+            param_hashes = data_dict['hashes']
             files[obj_name] = [[] for _ in range(num_plots)]
             for frame, param_hash in enumerate(param_hashes):
                 options = {
@@ -256,6 +267,50 @@ def plot_animation(args):
                     loop=0,
                 )
 
+
+def plot_gp(args):
+    """Driver for plotting a Gaussian process regression for the available data.
+
+    Parameters
+    ----------
+    args : dict
+        Passed arguments.
+    """
+    # Build piglot problem
+    config = parse_config_file(args.config)
+    parameters = parse_parameters(config)
+    if len(parameters) != 1:
+        raise ValueError("Can only plot a Gaussian process regression for a single parameter.")
+    objective = read_objective(config["objective"], parameters, config["output"])
+    data = objective.get_history()
+    fig, axis = plt.subplots()
+    x_min = min(par.lbound for par in parameters)
+    x_max = max(par.ubound for par in parameters)
+    x = torch.linspace(x_min, x_max, 1000)
+    for name, data_dict in data.items():
+        values = data_dict['values']
+        param_values = data_dict['params']
+        variances = data_dict['variances'] if 'variances' in data_dict else None
+        model = get_model(param_values, values, variances)
+        with torch.no_grad():
+            posterior = model.posterior(x.unsqueeze(1))
+            mean = posterior.mean.squeeze()
+            variance = posterior.variance.squeeze()
+        axis.plot(x, mean, label=f'{name}: Mean')
+        axis.fill_between(x, mean - variance.sqrt(), mean + variance.sqrt(), alpha=0.5,
+                          label=f'{name}: Std. dev.')
+        if 'variances' in data_dict:
+            axis.errorbar(param_values, values, yerr=np.sqrt(variances), color='black', fmt='o')
+        else:
+            axis.scatter(param_values, values, color='black')
+        axis.set_xlim(x_min, x_max)
+    axis.legend()
+    axis.grid()
+    fig.tight_layout()
+    if args.save_fig:
+        fig.savefig(args.save_fig)
+    else:
+        plt.show()
 
 
 def main():
@@ -454,6 +509,32 @@ def main():
         help=("Path to save the generated figure. If used, graphical output is skipped."),
     )
     sp_animation.set_defaults(func=plot_animation)
+
+    # Gaussian process plotting
+    sp_gp = subparsers.add_parser(
+        'gp',
+        help='plot a Gaussian process regression for the available data',
+        description=("Plot a Gaussian process regression for the available data. This must be "
+                     "executed in the same path as the running piglot instance."),
+    )
+    sp_gp.add_argument(
+        'config',
+        type=str,
+        help="Path for the used or generated configuration file.",
+    )
+    sp_gp.add_argument(
+        '--save_fig',
+        default=None,
+        type=str,
+        help=("Path to save the generated figure. If used, graphical output is skipped."),
+    )
+    sp_gp.add_argument(
+        '--max_calls',
+        default=None,
+        type=int,
+        help=("Max number of calls to plot."),
+    )
+    sp_gp.set_defaults(func=plot_gp)
 
     args = parser.parse_args()
     args.func(args)

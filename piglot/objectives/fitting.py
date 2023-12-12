@@ -1,6 +1,8 @@
 """Module for curve fitting objectives"""
 from __future__ import annotations
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Union, Tuple
+import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -9,8 +11,11 @@ from piglot.losses.loss import Loss
 from piglot.parameter import ParameterSet
 from piglot.solver import read_solver
 from piglot.solver.solver import Solver, OutputResult
+from piglot.utils.assorted import stats_interp_to_common_grid
 from piglot.utils.reduce_response import reduce_response
 from piglot.objective import DynamicPlotter, SingleObjective
+from piglot.objective import SingleCompositeObjective, MSEComposition
+from piglot.objective import StochasticSingleObjective, StochasticSingleCompositeObjective
 
 
 class Reference:
@@ -19,7 +24,8 @@ class Reference:
     def __init__(
             self,
             filename: str,
-            prediction: str,
+            prediction: Union[str, List[str]],
+            output_dir: str,
             x_col: int=1,
             y_col: int=2,
             skip_header: int=0,
@@ -32,8 +38,14 @@ class Reference:
             loss: Loss=None,
             weight: float=1.0,
         ):
+        # Sanitise prediction field
+        if isinstance(prediction, str):
+            prediction = [prediction]
+        elif not isinstance(prediction, list):
+            raise ValueError(f"Invalid prediction '{prediction}' for reference '{filename}'.")
         self.filename = filename
         self.prediction = prediction
+        self.output_dir = output_dir
         self.data = np.genfromtxt(filename, skip_header=skip_header)[:,[x_col - 1, y_col - 1]]
         self.data[:,0] = x_offset + x_scale * self.data[:,0]
         self.data[:,1] = y_offset + y_scale * self.data[:,1]
@@ -46,7 +58,8 @@ class Reference:
     def prepare(self) -> None:
         """Prepare the reference data."""
         if self.has_filtering():
-            print("Filtering reference ...", end='')
+            print(f"Filtering reference {self.filename} ...", end='')
+            sys.stdout.flush()
             num, error, (x, y) = reduce_response(self.data[:,0], self.data[:,1], self.filter_tol)
             self.data = np.array([x, y]).T
             print(f" done (from {self.orig_data.shape[0]} to {num} points, error = {error:.2e})")
@@ -57,6 +70,16 @@ class Reference:
                 ax.scatter(self.data[:,0], self.data[:,1], c='r', label="Resampled")
                 ax.legend()
                 plt.show()
+            # Write the filtered reference
+            os.makedirs(os.path.join(self.output_dir, 'filtered_references'), exist_ok=True)
+            np.savetxt(
+                os.path.join(
+                    self.output_dir,
+                    'filtered_references',
+                    os.path.basename(self.filename),
+                ),
+                self.data,
+            )
 
     def num_fields(self) -> int:
         """Get the number of reference fields.
@@ -138,18 +161,18 @@ class Reference:
 
         Returns
         -------
-        float
+        Any
             Loss value.
         """
         return self.loss(
             self.get_time(),
-            self.get_data(),
             results.get_time(),
+            self.get_data(),
             results.get_data(),
         )
 
     @staticmethod
-    def read(filename: str, config: Dict[str, Any]) -> Reference:
+    def read(filename: str, config: Dict[str, Any], output_dir: str) -> Reference:
         """Read the reference from the configuration dictionary.
 
         Parameters
@@ -158,6 +181,8 @@ class Reference:
             Path to the reference file.
         config : Dict[str, Any]
             Configuration dictionary.
+        output_dir: str
+            Output directory.
 
         Returns
         -------
@@ -169,6 +194,7 @@ class Reference:
         return Reference(
             filename,
             config['prediction'],
+            output_dir,
             x_col=int(config.get('x_col', 1)),
             y_col=int(config.get('y_col', 2)),
             skip_header=int(config.get('skip_header', 0)),
@@ -306,9 +332,43 @@ class FittingSolver:
             axis.plot(reference.get_time(), reference.get_data(),
                       label='Reference', ls='dashed', c='black', marker='x')
             xlim, ylim = axis.get_xlim(), axis.get_ylim()
-            for name in names:
-                axis.plot(responses[name].get_time(), responses[name].get_data(),
-                          c='red', label='Prediction')
+            # Plot predictions
+            if options is not None and 'mean_std' in options and options['mean_std']:
+                # Plot the average and standard deviation of the results
+                stats = stats_interp_to_common_grid([
+                    (responses[name].get_time(), responses[name].get_data())
+                    for name in names
+                ])
+                axis.plot(stats['grid'], stats['average'], label='Average', c='red')
+                axis.plot(stats['grid'], stats['median'], label='Median', c='red', ls='dashed')
+                axis.fill_between(
+                    stats['grid'],
+                    stats['average'] - stats['std'],
+                    stats['average'] + stats['std'],
+                    label='Standard deviation',
+                    color='red',
+                    alpha=0.2,
+                )
+            elif options is not None and 'confidence' in options and options['confidence']:
+                # Plot the average and standard deviation of the results
+                stats = stats_interp_to_common_grid([
+                    (responses[name].get_time(), responses[name].get_data())
+                    for name in names
+                ])
+                axis.plot(stats['grid'], stats['average'], label='Average', c='red')
+                axis.fill_between(
+                    stats['grid'],
+                    stats['average'] - stats['confidence'],
+                    stats['average'] + stats['confidence'],
+                    label='Confidence interval',
+                    color='red',
+                    alpha=0.2,
+                )
+            else:
+                # Plot the individual responses
+                for name in names:
+                    axis.plot(responses[name].get_time(), responses[name].get_data(),
+                            label=f'{name}')
             if reference_limits:
                 axis.set_xlim(xlim)
                 axis.set_ylim(ylim)
@@ -355,11 +415,11 @@ class FittingSolver:
             raise ValueError("Missing references for fitting objective.")
         references: Dict[Reference, List[str]] = {}
         for reference_name, reference_config in config.pop('references').items():
-            reference = Reference.read(reference_name, reference_config)
+            reference = Reference.read(reference_name, reference_config, output_dir)
             # Map the reference to the solver cases
             references[reference] = []
             for field_name in solver.get_output_fields():
-                if field_name == reference.prediction:
+                if field_name in reference.prediction:
                     references[reference].append(field_name)
             # Sanitise reference: check if it is associated to at least one case
             if len(references[reference]) == 0:
@@ -398,19 +458,19 @@ class FittingSingleObjective(SingleObjective):
         self.solver.prepare()
 
     def _objective(self, values: np.ndarray, concurrent: bool=False) -> float:
-        """Objective computation for analytical functions
+        """Objective computation for fitting objectives.
 
         Parameters
         ----------
         values : np.ndarray
-            Set of parameters to evaluate the objective for
+            Set of parameters to evaluate the objective for.
         concurrent : bool, optional
-            Whether this call may be concurrent to others, by default False
+            Whether this call may be concurrent to others, by default False.
 
         Returns
         -------
         float
-            Objective value
+            Objective value.
         """
         # Run the solver
         output = self.solver.solve(values, concurrent)
@@ -470,7 +530,340 @@ class FittingSingleObjective(SingleObjective):
         Objective
             Objective function to optimise.
         """
+        # Inject default loss for scalar objectives
+        if not 'loss' in config:
+            config['loss'] = 'scalar_vector'
         return FittingSingleObjective(
+            parameters,
+            FittingSolver.read(config, parameters, output_dir),
+            output_dir,
+        )
+
+
+class FittingCompositeSingleObjective(SingleCompositeObjective):
+    """Composite fitting objective function."""
+
+    def __init__(
+            self,
+            parameters: ParameterSet,
+            solver: FittingSolver,
+            output_dir: str,
+        ) -> None:
+        super().__init__(parameters, MSEComposition(), output_dir)
+        self.solver = solver
+
+    def prepare(self) -> None:
+        """Prepare the objective for optimisation."""
+        super().prepare()
+        self.solver.prepare()
+
+    def _inner_objective(self, values: np.ndarray, concurrent: bool=False) -> np.ndarray:
+        """Inner objective computation for composite fitting objectives.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Set of parameters to evaluate the objective for.
+        concurrent : bool, optional
+            Whether this call may be concurrent to others, by default False.
+
+        Returns
+        -------
+        np.ndarray
+            Objective value.
+        """
+        # Run the solver
+        output = self.solver.solve(values, concurrent)
+        # Compute the loss
+        loss = np.array([])
+        for reference, results in output.items():
+            losses = np.array([reference.compute_loss(result) for result in results])
+            loss = np.append(loss, reference.weight * np.mean(losses, axis=0))
+        return loss
+
+    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
+        """Plot a given function call given the parameter hash
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+        options : Dict[str, Any], optional
+            Options for the plot, by default None
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        return self.solver.plot_case(case_hash, options)
+
+    def plot_current(self) -> List[DynamicPlotter]:
+        """Plot the currently running function call
+
+        Returns
+        -------
+        List[DynamicPlotter]
+            List of instances of updatable plots
+        """
+        return self.solver.plot_current()
+
+    @staticmethod
+    def read(
+            config: Dict[str, Any],
+            parameters: ParameterSet,
+            output_dir: str,
+        ) -> FittingCompositeSingleObjective:
+        """Read a fitting objective from a configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Terms from the configuration dictionary.
+        parameters : ParameterSet
+            Set of parameters for this problem.
+        output_dir : str
+            Path to the output directory.
+
+        Returns
+        -------
+        Objective
+            Objective function to optimise.
+        """
+        # Inject default loss for composite scalar objectives
+        if not 'loss' in config:
+            config['loss'] = 'vector'
+        return FittingCompositeSingleObjective(
+            parameters,
+            FittingSolver.read(config, parameters, output_dir),
+            output_dir,
+        )
+
+
+class StochasticFittingSingleObjective(StochasticSingleObjective):
+    """Scalar fitting objective function."""
+
+    def __init__(
+            self,
+            parameters: ParameterSet,
+            solver: FittingSolver,
+            output_dir: str,
+        ) -> None:
+        super().__init__(parameters, output_dir)
+        self.solver = solver
+
+    def prepare(self) -> None:
+        """Prepare the objective for optimisation."""
+        super().prepare()
+        self.solver.prepare()
+
+    def _objective(self, values: np.ndarray, concurrent: bool=False) -> Tuple[float, float]:
+        """Objective computation for fitting objectives.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Set of parameters to evaluate the objective for.
+        concurrent : bool, optional
+            Whether this call may be concurrent to others, by default False.
+
+        Returns
+        -------
+        Tuple[float, float]
+            Objective value and variance.
+        """
+        # Run the solver
+        output = self.solver.solve(values, concurrent)
+        # Compute the loss
+        loss = 0.0
+        variance = 0.0
+        for reference, results in output.items():
+            losses = [reference.compute_loss(result) for result in results]
+            loss += reference.weight * np.mean(losses)
+            variance += reference.weight * np.var(losses) / len(losses)
+        return loss, variance
+
+    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
+        """Plot a given function call given the parameter hash
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+        options : Dict[str, Any], optional
+            Options for the plot, by default None
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        options_mean = options.copy()
+        options_mean['mean_std'] = True
+        options_mean['append_title'] = 'Mean, median and standard deviation'
+        options_conf = options.copy()
+        options_conf['confidence'] = True
+        options_conf['append_title'] = 'Mean confidence interval 95%'
+        figs = [
+            self.solver.plot_case(case_hash, options),
+            self.solver.plot_case(case_hash, options_mean),
+            self.solver.plot_case(case_hash, options_conf),
+        ]
+        return [fig for fig_list in figs for fig in fig_list]
+
+    def plot_current(self) -> List[DynamicPlotter]:
+        """Plot the currently running function call
+
+        Returns
+        -------
+        List[DynamicPlotter]
+            List of instances of updatable plots
+        """
+        return self.solver.plot_current()
+
+    @staticmethod
+    def read(
+            config: Dict[str, Any],
+            parameters: ParameterSet,
+            output_dir: str,
+        ) -> StochasticFittingSingleObjective:
+        """Read a fitting objective from a configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Terms from the configuration dictionary.
+        parameters : ParameterSet
+            Set of parameters for this problem.
+        output_dir : str
+            Path to the output directory.
+
+        Returns
+        -------
+        Objective
+            Objective function to optimise.
+        """
+        # Inject default loss for scalar objectives
+        if not 'loss' in config:
+            config['loss'] = 'scalar_vector'
+        return StochasticFittingSingleObjective(
+            parameters,
+            FittingSolver.read(config, parameters, output_dir),
+            output_dir,
+        )
+
+
+class StochasticFittingCompositeSingleObjective(StochasticSingleCompositeObjective):
+    """Composite fitting objective function."""
+
+    def __init__(
+            self,
+            parameters: ParameterSet,
+            solver: FittingSolver,
+            output_dir: str,
+        ) -> None:
+        super().__init__(parameters, MSEComposition(), output_dir)
+        self.solver = solver
+
+    def prepare(self) -> None:
+        """Prepare the objective for optimisation."""
+        super().prepare()
+        self.solver.prepare()
+
+    def _inner_objective(
+            self,
+            values: np.ndarray,
+            concurrent: bool=False,
+        ) -> Tuple[np.ndarray. np.ndarray]:
+        """Inner objective computation for composite fitting objectives.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Set of parameters to evaluate the objective for.
+        concurrent : bool, optional
+            Whether this call may be concurrent to others, by default False.
+
+        Returns
+        -------
+        Tuple[np.ndarray. np.ndarray]
+            Objective value.
+        """
+        # Run the solver
+        output = self.solver.solve(values, concurrent)
+        # Compute the loss
+        loss = np.array([])
+        l_vars = np.array([])
+        for reference, results in output.items():
+            losses = np.array([reference.compute_loss(result) for result in results])
+            loss = np.append(loss, reference.weight * np.mean(losses, axis=0))
+            l_vars = np.append(l_vars, reference.weight * np.var(losses, axis=0) / losses.shape[0])
+        return loss, l_vars
+
+    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
+        """Plot a given function call given the parameter hash
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+        options : Dict[str, Any], optional
+            Options for the plot, by default None
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        options_mean = options.copy()
+        options_mean['mean_std'] = True
+        options_mean['append_title'] = 'Mean, median and standard deviation'
+        options_conf = options.copy()
+        options_conf['confidence'] = True
+        options_conf['append_title'] = 'Mean confidence interval 95%'
+        figs = [
+            self.solver.plot_case(case_hash, options),
+            self.solver.plot_case(case_hash, options_mean),
+            self.solver.plot_case(case_hash, options_conf),
+        ]
+        return [fig for fig_list in figs for fig in fig_list]
+
+    def plot_current(self) -> List[DynamicPlotter]:
+        """Plot the currently running function call
+
+        Returns
+        -------
+        List[DynamicPlotter]
+            List of instances of updatable plots
+        """
+        return self.solver.plot_current()
+
+    @staticmethod
+    def read(
+            config: Dict[str, Any],
+            parameters: ParameterSet,
+            output_dir: str,
+        ) -> StochasticFittingCompositeSingleObjective:
+        """Read a fitting objective from a configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Terms from the configuration dictionary.
+        parameters : ParameterSet
+            Set of parameters for this problem.
+        output_dir : str
+            Path to the output directory.
+
+        Returns
+        -------
+        Objective
+            Objective function to optimise.
+        """
+        # Inject default loss for composite scalar objectives
+        if not 'loss' in config:
+            config['loss'] = 'vector'
+        return StochasticFittingCompositeSingleObjective(
             parameters,
             FittingSolver.read(config, parameters, output_dir),
             output_dir,

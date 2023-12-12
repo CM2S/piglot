@@ -88,8 +88,7 @@ class CurrentPlot(DynamicPlotter):
         # Plot each reference
         for name, response in result.items():
             fig, axis = plt.subplots()
-            self.preds[name], = axis.plot(response.get_time(), response.get_data(),
-                                          ls='dashed', c='black', marker='x')
+            self.preds[name], = axis.plot(response.get_time(), response.get_data(), c='red')
             axis.set_title(name)
             axis.grid()
             self.figs[name] = (fig, axis)
@@ -177,7 +176,7 @@ class DesignSolver:
         for name, response in responses.items():
             # Build figure, index axes and plot response
             fig, axis = plt.subplots()
-            axis.plot(response.get_time(), response.get_data(), ls='dashed', c='black', marker='x')
+            axis.plot(response.get_time(), response.get_data(), c='red')
             axis.set_title(name + append_title)
             axis.grid()
             figures.append(fig)
