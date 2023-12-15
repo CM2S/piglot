@@ -1,11 +1,12 @@
 """Pure random search optimiser module."""
+from typing import Tuple, Callable, Optional
 import numpy as np
 from scipy.stats import norm
 try:
     from scipy.stats import qmc
 except ImportError:
     qmc = None
-from piglot.objective import SingleObjective
+from piglot.objective import Objective
 from piglot.optimisers.optimiser import ScalarOptimiser
 
 
@@ -25,12 +26,14 @@ class PureRandomSearch(ScalarOptimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, sampling='uniform', seed=1):
+    def __init__(self, objective: Objective, sampling='uniform', seed=1):
         """
         Constructs all the necessary attributes for the PRS optimiser.
 
         Parameters
         ----------
+        objective : Objective
+            Objective function to optimise.
         sampling : str
             Sampling method to use for the random values. Valid options are:
             - 'uniform': Uniform distribution.
@@ -38,7 +41,7 @@ class PureRandomSearch(ScalarOptimiser):
             decreasing standard deviation throughout the iterative process.
             - 'sobol': Sampling based on the Sobol sequence (requires scipy >= 1.7).
         """
-        super().__init__('PRS')
+        super().__init__('PRS', objective)
         # Check if sampling method is valid
         valid_samples = ['uniform', 'normal', 'sobol']
         if sampling not in valid_samples:
@@ -50,35 +53,36 @@ class PureRandomSearch(ScalarOptimiser):
         self.sampling = sampling
         self.seed = seed
 
-    def _optimise(
+    def _scalar_optimise(
         self,
-        objective: SingleObjective,
+        objective: Callable[[np.ndarray, Optional[bool]], float],
         n_dim: int,
         n_iter: int,
         bound: np.ndarray,
         init_shot: np.ndarray,
-    ):
+    ) -> Tuple[float, np.ndarray]:
         """
+        Abstract method for optimising the objective.
+
         Parameters
         ----------
-        func : callable
-            function to optimize
-        n_dim : integer
-            dimension, i.e., number of parameters to optimize
-        n_iter : integer
-            maximum number of iterations
-        bound : array
-            first column corresponding to the lower bound, and second column to the
-            upper bound
-        init_shot : list
-            initial shot for the optimization problem
+        objective : Callable[[np.ndarray], float]
+            Objective function to optimise.
+        n_dim : int
+            Number of parameters to optimise.
+        n_iter : int
+            Maximum number of iterations.
+        bound : np.ndarray
+            Array where first and second columns correspond to lower and upper bounds, respectively.
+        init_shot : np.ndarray
+            Initial shot for the optimisation problem.
 
         Returns
         -------
-        best_value : float
-            best loss function value
-        best_solution : list
-            best parameter solution
+        float
+            Best observed objective value.
+        np.ndarray
+            Observed optimum of the objective.
         """
         # Define lower and upper bounds
         lower_bounds = bound[:,0]

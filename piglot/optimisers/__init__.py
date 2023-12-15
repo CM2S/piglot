@@ -15,7 +15,6 @@ from piglot.optimisers.lipo_opt import LIPO
 from piglot.optimisers.pso import PSO
 from piglot.optimisers.random_search import PureRandomSearch
 from piglot.optimisers.spsa_adam import SPSA_Adam
-from piglot.optimisers.spsa_adam_cf import SPSA_Adam_Composite
 from piglot.optimisers.spsa import SPSA
 
 
@@ -44,6 +43,5 @@ def names():
         'pso',
         'random',
         'spsa-adam',
-        'spsa-adam_cf',
         'spsa',
     ]

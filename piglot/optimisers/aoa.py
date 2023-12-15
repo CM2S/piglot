@@ -1,6 +1,7 @@
 """AOA optimiser module."""
+from typing import Tuple, Callable, Optional
 import numpy as np
-from piglot.objective import SingleObjective
+from piglot.objective import Objective
 from piglot.optimisers.optimiser import ScalarOptimiser
 
 
@@ -34,13 +35,15 @@ class AOA(ScalarOptimiser):
     _optimise(self, func, n_dim, n_iter, bound, init_shot):
         Solves the optimization problem
     """
-    def __init__(self, n_solutions=10, alpha=5.0, mu=0.5, epsilon=1e-12, seed=1,
-                 MOA_start=0.2, MOA_end=1.0):
+    def __init__(self, objective: Objective, n_solutions=10, alpha=5.0, mu=0.5, epsilon=1e-12,
+                 seed=1, MOA_start=0.2, MOA_end=1.0):
         """
         Constructs all the necessary attributes for the AOA optimiser
 
         Parameters
         ----------
+        objective : Objective
+            Objective function to optimise.
         n_solutions : integer
             population size (number of candidate solutions)
         alpha : float
@@ -57,44 +60,45 @@ class AOA(ScalarOptimiser):
         MOA_end : float
             Math Optimizer Accelerated function end value
         """
-        super().__init__('AOA')
+        super().__init__('AOA', objective)
         self.n_solutions = n_solutions
         self.alpha = alpha
         self.mu = mu
         self.epsilon = epsilon
-        self.rng = np.random.default_rng(1)
+        self.rng = np.random.default_rng(seed)
         self.MOA_start = MOA_start
         self.MOA_end = MOA_end
 
-    def _optimise(
+    def _scalar_optimise(
         self,
-        objective: SingleObjective,
+        objective: Callable[[np.ndarray, Optional[bool]], float],
         n_dim: int,
         n_iter: int,
         bound: np.ndarray,
         init_shot: np.ndarray,
-    ):
+    ) -> Tuple[float, np.ndarray]:
         """
+        Abstract method for optimising the objective.
+
         Parameters
         ----------
-        func : callable
-            function to optimize
-        n_dim : integer
-            dimension, i.e., number of parameters to optimize
-        n_iter : integer
-            maximum number of iterations
-        bound : array
-            first column corresponding to the lower bound, and second column to the
-            upper bound
-        init_shot : list
-            initial shot for the optimization problem
+        objective : Callable[[np.ndarray], float]
+            Objective function to optimise.
+        n_dim : int
+            Number of parameters to optimise.
+        n_iter : int
+            Maximum number of iterations.
+        bound : np.ndarray
+            Array where first and second columns correspond to lower and upper bounds, respectively.
+        init_shot : np.ndarray
+            Initial shot for the optimisation problem.
 
         Returns
         -------
-        best_value : float
-            best loss function value
-        best_solution : list
-            best parameter <solution
+        float
+            Best observed objective value.
+        np.ndarray
+            Observed optimum of the objective.
         """
         if bound is None:
             raise RuntimeError('Need to pass bounds for AOA!')

@@ -1,4 +1,5 @@
 """LIPO optimiser module."""
+from typing import Tuple, Callable, Optional
 import numpy as np
 try:
     from lipo import GlobalOptimizer
@@ -6,7 +7,7 @@ except ImportError:
     # Show a nice exception when this package is used
     from piglot.optimisers.optimiser import missing_method
     GlobalOptimizer = missing_method("LIPO", "lipo")
-from piglot.objective import SingleObjective
+from piglot.objective import Objective
 from piglot.optimisers.optimiser import ScalarOptimiser
 
 
@@ -61,13 +62,15 @@ class LIPO(ScalarOptimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, log_args='auto', flexible_bounds={}, flexible_bound_threshold=-1.0,
-                 epsilon=0.0, seed=None):
+    def __init__(self, objective: Objective, log_args='auto', flexible_bounds={},
+                 flexible_bound_threshold=-1.0, epsilon=0.0, seed=None):
         """
         Constructs all the necessary attributes for the LIPO optimiser
 
         Parameters
         ----------
+        objective : Objective
+            Objective function to optimise.
         log_args : list[str]
             list of arguments to treat in log space, if "auto", then a variable is
             optimized in log space if (default = 'auto'):
@@ -87,7 +90,7 @@ class LIPO(ScalarOptimiser):
         seed : int
             random state
         """
-        super().__init__('LIPO')
+        super().__init__('LIPO', objective)
         self.log_args = log_args
         self.flexible_bounds = flexible_bounds
         self.flexible_bound_threshold = flexible_bound_threshold
@@ -95,35 +98,36 @@ class LIPO(ScalarOptimiser):
         self.epsilon = epsilon
         self.seed = seed
 
-    def _optimise(
+    def _scalar_optimise(
         self,
-        objective: SingleObjective,
+        objective: Callable[[np.ndarray, Optional[bool]], float],
         n_dim: int,
         n_iter: int,
         bound: np.ndarray,
         init_shot: np.ndarray,
-    ):
+    ) -> Tuple[float, np.ndarray]:
         """
+        Abstract method for optimising the objective.
+
         Parameters
         ----------
-        func : callable
-            function to optimize
-        n_dim : integer
-            dimension, i.e., number of parameters to optimize
-        n_iter : integer
-            maximum number of iterations
-        bound : array
-            first column corresponding to the lower bound, and second column to the
-            upper bound
-        init_shot : list
-            initial shot for the optimization problem
+        objective : Callable[[np.ndarray], float]
+            Objective function to optimise.
+        n_dim : int
+            Number of parameters to optimise.
+        n_iter : int
+            Maximum number of iterations.
+        bound : np.ndarray
+            Array where first and second columns correspond to lower and upper bounds, respectively.
+        init_shot : np.ndarray
+            Initial shot for the optimisation problem.
 
         Returns
         -------
-        best_value : float
-            best loss function value
-        best_solution : list
-            best parameter solution
+        float
+            Best observed objective value.
+        np.ndarray
+            Observed optimum of the objective.
         """
         # Set optimization problem as a maximization one
         maximize = True

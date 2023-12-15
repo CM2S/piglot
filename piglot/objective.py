@@ -4,9 +4,10 @@ import os
 import os.path
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 import shutil
 from threading import Lock
+from dataclasses import dataclass
 import numpy as np
 import torch
 import pandas as pd
@@ -191,6 +192,179 @@ class Objective(ABC):
         """
         raise NotImplementedError("Objective history not implemented for this objective")
 
+
+@dataclass
+class ObjectiveResult:
+    """Container for objective results."""
+    values: List[np.ndarray]
+    variances: Optional[List[np.ndarray]] = None
+
+    @staticmethod
+    def scalarise(result: ObjectiveResult) -> float:
+        """Scalarise the result.
+
+        Parameters
+        ----------
+        result : ObjectiveResult
+            Result to scalarise.
+
+        Returns
+        -------
+        float
+            Scalarised result.
+        """
+        return np.mean([np.mean(val) for val in result.values])
+
+    @staticmethod
+    def scalarise_stochastic(result: ObjectiveResult) -> Tuple[float, float]:
+        """Scalarise the result.
+
+        Parameters
+        ----------
+        result : ObjectiveResult
+            Result to scalarise.
+
+        Returns
+        -------
+        Tuple[float, float]
+            Scalarised mean and variance.
+        """
+        return (
+            np.mean([np.mean(val) for val in result.values]),
+            np.sum([np.var(val) for val in result.values]),
+        )
+
+
+class GenericObjective(Objective):
+    """Class for generic objectives."""
+
+    def __init__(
+            self,
+            parameters: ParameterSet,
+            stochastic: bool=False,
+            composition: Composition=None,
+            output_dir: str=None,
+        ) -> None:
+        super().__init__()
+        self.parameters = parameters
+        self.output_dir = output_dir
+        self.stochastic = stochastic
+        self.composition = composition
+        self.func_calls = 0
+        self.begin_time = time.perf_counter()
+        self.__mutex = Lock()
+        self.func_calls_file = os.path.join(output_dir, "func_calls") if output_dir else None
+
+    def prepare(self) -> None:
+        """Prepare output directories for the optimsation."""
+        super().prepare()
+        if self.output_dir:
+            # Build header for function calls file
+            with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
+                file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}')
+                file.write(f'\t{"Objective":>15}')
+                if self.stochastic:
+                    file.write(f'\t{"Variance":>15}')
+                for param in self.parameters:
+                    file.write(f"\t{param.name:>15}")
+                file.write(f'\t{"Hash":>64}\n')
+
+    @abstractmethod
+    def _objective(self, values: np.ndarray, concurrent: bool=False) -> ObjectiveResult:
+        """Abstract method for objective computation.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Set of parameters to evaluate the objective for.
+        concurrent : bool, optional
+            Whether this call may be concurrent to others, by default False.
+
+        Returns
+        -------
+        ObjectiveResult
+            Objective result.
+        """
+
+    def __call__(self, values: np.ndarray, concurrent: bool=False) -> ObjectiveResult:
+        """Objective computation for the outside world. Also handles output file writing.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Set of parameters to evaluate the objective for.
+        concurrent : bool, optional
+            Whether this call may be concurrent to others, by default False.
+
+        Returns
+        -------
+        ObjectiveResult
+            Objective result.
+        """
+        # Evaluate objective
+        self.func_calls += 1
+        begin_time = time.perf_counter()
+        objective_result = self._objective(values, concurrent=concurrent)
+        end_time = time.perf_counter()
+        # Update function call history file
+        if self.output_dir:
+            with self.__mutex:
+                with open(os.path.join(self.func_calls_file), 'a', encoding='utf8') as file:
+                    file.write(f'{begin_time - self.begin_time:>15.8e}\t')
+                    file.write(f'{end_time - begin_time:>15.8e}\t')
+                    if self.stochastic:
+                        value, variance = objective_result.scalarise_stochastic()
+                        file.write(f'{value:>15.8e}\t{variance:>15.8e}')
+                    else:
+                        file.write(f'{objective_result.scalarise():>15.8e}')
+                    for i, param in enumerate(self.parameters):
+                        file.write(f"\t{param.denormalise(values[i]):>15.6f}")
+                    file.write(f'\t{self.parameters.hash(values)}\n')
+        return objective_result
+
+    def plot_best(self) -> List[Figure]:
+        """Plot the current best case.
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot.
+        """
+        # Find hash associated with the best case
+        df = pd.read_table(self.func_calls_file)
+        df.columns = df.columns.str.strip()
+        min_series = df.iloc[df["Objective"].idxmin()]
+        call_hash = str(min_series["Hash"])
+        # Use the single case plotting utility
+        figures = self.plot_case(call_hash)
+        # Also display the best case
+        print("Best run:")
+        print(min_series.drop(["Objective", "Hash"]))
+        print(f"Hash: {call_hash}")
+        print(f"Objective: {min_series['Objective']:15.8e}")
+        return figures
+
+    def get_history(self) -> Dict[str, Dict[str, Any]]:
+        """Get the objective history.
+
+        Returns
+        -------
+        Dict[str, Dict[str, Any]]
+            Dictionary of objective history.
+        """
+        df = pd.read_table(self.func_calls_file)
+        df.columns = df.columns.str.strip()
+        x_axis = df["Start Time /s"] + df["Run Time /s"]
+        params = df[[param.name for param in self.parameters]]
+        param_hash = df["Hash"].to_list()
+        return {
+            "Objective": {
+                "time": x_axis.to_numpy(),
+                "values": df["Objective"].to_numpy(),
+                "params": params.to_numpy(),
+                "hashes": param_hash,
+            }
+        }
 
 
 class SingleObjective(Objective):

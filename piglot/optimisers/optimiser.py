@@ -2,14 +2,12 @@
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Tuple, Callable, Optional
 import numpy as np
 from tqdm import tqdm
 from piglot.parameter import ParameterSet
 from piglot.utils.assorted import pretty_time
-from piglot.objective import Objective, SingleObjective, SingleCompositeObjective
-from piglot.objective import MultiFidelitySingleObjective, MultiFidelityCompositeObjective
-from piglot.objective import StochasticSingleObjective, StochasticSingleCompositeObjective
+from piglot.objective import Objective, GenericObjective
 
 
 
@@ -169,14 +167,14 @@ class Optimiser(ABC):
         evaluates the optimiser progress
     """
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, objective: Objective) -> None:
         self.name = name
+        self.objective = objective
         self.parameters = None
         self.i_iter = None
         self.n_iter = None
         self.iters_no_improv = None
         self.pbar = None
-        self.objective = None
         self.stop_criteria = None
         self.output_dir = None
         self.best_value = None
@@ -197,7 +195,6 @@ class Optimiser(ABC):
 
     def optimise(
             self,
-            objective: Objective,
             n_iter: int,
             parameters: ParameterSet,
             output_dir: str,
@@ -230,11 +227,10 @@ class Optimiser(ABC):
             Observed optimum of the objective
         """
         # Sanity check
-        self._validate_problem(objective)
+        self._validate_problem(self.objective)
         # Initialise optimiser
         self.n_iter = n_iter
         self.parameters = parameters
-        self.objective = objective
         self.stop_criteria = stop_criteria
         self.output_dir = output_dir
         self.iters_no_improv = 0
@@ -257,11 +253,11 @@ class Optimiser(ABC):
             file.write('\tOptimiser info')
             file.write('\n')
         # Prepare optimiser
-        objective.prepare()
+        self.objective.prepare()
         self.pbar = tqdm(total=n_iter, desc=self.name) if verbose else None
         # Optimise
         self.begin_time = time.perf_counter()
-        self._optimise(objective, n_dim, n_iter, bounds, init_shot)
+        self._optimise(n_dim, n_iter, bounds, init_shot)
         elapsed = time.perf_counter() - self.begin_time
         # Denormalise best solution
         new_solution = self.parameters.denormalise(self.best_solution)
@@ -280,7 +276,6 @@ class Optimiser(ABC):
     @abstractmethod
     def _optimise(
         self,
-        objective: Objective,
         n_dim: int,
         n_iter: int,
         bound: np.ndarray,
@@ -291,8 +286,6 @@ class Optimiser(ABC):
 
         Parameters
         ----------
-        objective : Objective
-            Objective function to optimise
         n_dim : int
             Number of parameters to optimise
         n_iter : int
@@ -410,23 +403,99 @@ class Optimiser(ABC):
 
 
 class ScalarOptimiser(Optimiser):
-    """Base class for scalar single-objective optimisers"""
+    """Base class for scalar optimisers."""
 
     def _validate_problem(self, objective: Objective) -> None:
-        """Validate the combination of optimiser and objective
+        """Validate the combination of optimiser and objective.
 
         Parameters
         ----------
         objective : Objective
-            Objective to optimise
+            Objective to optimise.
 
         Raises
         ------
         InvalidOptimiserException
-            With an invalid combination of optimiser and objective function
+            With an invalid combination of optimiser and objective function.
         """
-        if not isinstance(objective, SingleObjective):
-            raise InvalidOptimiserException('Scalar objective required for this optimiser')
+        if not isinstance(objective, GenericObjective):
+            raise InvalidOptimiserException('Generic objective required for this optimiser')
+        if objective.composition is not None:
+            raise InvalidOptimiserException('This optimiser does not support composition')
+        if objective.stochastic:
+            raise InvalidOptimiserException('This optimiser does not support stochasticity')
+
+    @abstractmethod
+    def _scalar_optimise(
+        self,
+        objective: Callable[[np.ndarray, Optional[bool]], float],
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ) -> Tuple[float, np.ndarray]:
+        """
+        Abstract method for optimising the objective.
+
+        Parameters
+        ----------
+        objective : Callable[[np.ndarray], float]
+            Objective function to optimise.
+        n_dim : int
+            Number of parameters to optimise.
+        n_iter : int
+            Maximum number of iterations.
+        bound : np.ndarray
+            Array where first and second columns correspond to lower and upper bounds, respectively.
+        init_shot : np.ndarray
+            Initial shot for the optimisation problem.
+
+        Returns
+        -------
+        float
+            Best observed objective value.
+        np.ndarray
+            Observed optimum of the objective.
+        """
+
+    def _optimise(
+        self,
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ) -> Tuple[float, np.ndarray]:
+        """
+        Abstract method for optimising the objective.
+
+        Parameters
+        ----------
+        objective : Objective
+            Objective function to optimise.
+        n_dim : int
+            Number of parameters to optimise.
+        n_iter : int
+            Maximum number of iterations.
+        bound : np.ndarray
+            Array where first and second columns correspond to lower and upper bounds, respectively.
+        init_shot : np.ndarray
+            Initial shot for the optimisation problem.
+
+        Returns
+        -------
+        float
+            Best observed objective value.
+        np.ndarray
+            Observed optimum of the objective.
+        """
+        # Optimise the scalarised objective
+        self._scalar_optimise(
+            lambda x, concurrent=False: self.objective(x, concurrent=concurrent).scalarise(),
+            n_dim,
+            n_iter,
+            bound,
+            init_shot,
+        )
 
 
 

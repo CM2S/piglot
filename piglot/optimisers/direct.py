@@ -1,7 +1,8 @@
 """DIRECT optimiser module."""
+from typing import Tuple, Callable, Optional
 import copy
 import numpy as np
-from piglot.objective import SingleObjective
+from piglot.objective import Objective
 from piglot.optimisers.optimiser import ScalarOptimiser
 
 
@@ -53,15 +54,17 @@ class DIRECT(ScalarOptimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, epsilon=0):
-        """Constructs all necessary attributes for the SPSA optimiser.
+    def __init__(self, objective: Objective, epsilon=0):
+        """Constructs all necessary attributes for the DIRECT optimiser.
 
         Parameters
         ----------
+        objective : Objective
+            Objective function to optimise.
         epsilon : float, optional
             Model parameter, refer to documentation, by default 0.
         """
-        super().__init__('DIRECT')
+        super().__init__('DIRECT', objective)
         self.epsilon = epsilon
         self.K = 0
 
@@ -207,36 +210,36 @@ class DIRECT(ScalarOptimiser):
                 final_potential.append(j)
         return final_potential
 
-    def _optimise(
+    def _scalar_optimise(
         self,
-        objective: SingleObjective,
+        objective: Callable[[np.ndarray, Optional[bool]], float],
         n_dim: int,
         n_iter: int,
         bound: np.ndarray,
         init_shot: np.ndarray,
-    ):
-        """Solves the optimisation problem.
+    ) -> Tuple[float, np.ndarray]:
+        """
+        Abstract method for optimising the objective.
 
         Parameters
         ----------
-        func : callable
-            Function to optimise
-        n_dim : integer
-            Dimension, i.e., number of parameter to optimise
-        n_iter : integer
-            Maximum number of iterations
-        bound : array
-            2D array with upper and lower bounds. First column refers to lower bounds,
-            whilst the second refers to the upper bounds.
-        init_shot : array
+        objective : Callable[[np.ndarray], float]
+            Objective function to optimise.
+        n_dim : int
+            Number of parameters to optimise.
+        n_iter : int
+            Maximum number of iterations.
+        bound : np.ndarray
+            Array where first and second columns correspond to lower and upper bounds, respectively.
+        init_shot : np.ndarray
             Initial shot for the optimisation problem.
 
         Returns
         -------
-        best_value : float
-            Best loss function value
-        best_solution : array
-            Best parameters
+        float
+            Best observed objective value.
+        np.ndarray
+            Observed optimum of the objective.
         """
         # Initialise starting cube
         self.K = 0

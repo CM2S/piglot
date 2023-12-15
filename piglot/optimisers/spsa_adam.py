@@ -1,7 +1,8 @@
 """Hybrid SPSA-Adam optimiser module."""
+from typing import Tuple, Callable, Optional
 import numpy as np
 from scipy.stats import bernoulli
-from piglot.objective import SingleObjective
+from piglot.objective import Objective
 from piglot.optimisers.optimiser import ScalarOptimiser, boundary_check
 
 
@@ -19,12 +20,14 @@ class SPSA_Adam(ScalarOptimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, alpha=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8, gamma=0.101,
-                 prob=0.5, c=None, seed=1):
+    def __init__(self, objective: Objective, alpha=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8,
+                 gamma=0.101, prob=0.5, c=None, seed=1):
         """Constructs all necessary attributes for the SPSA-Adam optimiser.
 
         Parameters
         ----------
+        objective : Objective
+            Objective function to optimise.
         alpha : float, optional
             Model parameter, refer to documentation, by default 0.01
         beta1 : float, optional
@@ -41,7 +44,7 @@ class SPSA_Adam(ScalarOptimiser):
             Model parameter, refer to documentation, by default None
             If None, this parameter is defined according to internal heuristics.
         """
-        super().__init__('AdamSPSA')
+        super().__init__('AdamSPSA', objective)
         self.alpha = alpha
         self.beta1 = beta1
         self.beta2 = beta2
@@ -52,41 +55,36 @@ class SPSA_Adam(ScalarOptimiser):
         self.seed = seed
 
 
-    def _optimise(
+    def _scalar_optimise(
         self,
-        objective: SingleObjective,
+        objective: Callable[[np.ndarray, Optional[bool]], float],
         n_dim: int,
         n_iter: int,
         bound: np.ndarray,
         init_shot: np.ndarray,
-    ):
-        """Solves the optimisation problem.
+    ) -> Tuple[float, np.ndarray]:
+        """
+        Abstract method for optimising the objective.
 
         Parameters
         ----------
-        func : callable
-            Function to optimise
-        n_dim : integer
-            Dimension, i.e., number of parameter to optimise
-        n_iter : integer
-            Maximum number of iterations
-        bound : array
-            2D array with upper and lower bounds. First column refers to lower bounds,
-            whilst the second refers to the upper bounds.
-        init_shot : array
+        objective : Callable[[np.ndarray], float]
+            Objective function to optimise.
+        n_dim : int
+            Number of parameters to optimise.
+        n_iter : int
+            Maximum number of iterations.
+        bound : np.ndarray
+            Array where first and second columns correspond to lower and upper bounds, respectively.
+        init_shot : np.ndarray
             Initial shot for the optimisation problem.
 
         Returns
         -------
-        best_value : float
-            Best loss function value
-        best_solution : array
-            Best parameters
-
-        Raises
-        ------
-        RuntimeError
-            If an initial shot is not passed.
+        float
+            Best observed objective value.
+        np.ndarray
+            Observed optimum of the objective.
         """
         if init_shot is None:
             raise RuntimeError('Need to pass an initial shot for SPSA!')

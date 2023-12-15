@@ -1,4 +1,5 @@
 """PSO optimiser module."""
+from typing import Tuple, Callable, Optional
 import logging
 from collections import deque
 import numpy as np
@@ -9,7 +10,7 @@ except ImportError:
     # Show a nice exception when this package is used
     from piglot.optimisers.optimiser import missing_method
     GlobalBestPSO = missing_method("PSO", "pyswarms")
-from piglot.objective import SingleObjective
+from piglot.objective import Objective
 from piglot.optimisers.optimiser import ScalarOptimiser
 
 
@@ -212,14 +213,16 @@ class PSO(ScalarOptimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, n_part, options, oh_strategy=None, bh_strategy='periodic',
-                 velocity_clamp=None, vh_strategy='unmodified', center=1.0,
+    def __init__(self, objective: Objective, n_part, options, oh_strategy=None,
+                 bh_strategy='periodic', velocity_clamp=None, vh_strategy='unmodified', center=1.0,
                  ftol_iter=1, n_processes=None):
         """
         Constructs all the necessary attributes for the PSO optimiser
 
         Parameters
         ----------
+        objective : Objective
+            Objective function to optimise.
         n_part : int
             number of particles in the swarm.
         options : dict with keys :code:`{'c1', 'c2', 'w'}`
@@ -250,7 +253,7 @@ class PSO(ScalarOptimiser):
             number of processes to use for parallel particle evaluation (default: None =
             no parallelization)
         """
-        super().__init__('PSO')
+        super().__init__('PSO', objective)
         self.n_part = n_part
         self.options = options
         self.oh_strategy = oh_strategy
@@ -262,35 +265,36 @@ class PSO(ScalarOptimiser):
         self.n_processes = n_processes
         self.rng = np.random.default_rng(1)
 
-    def _optimise(
+    def _scalar_optimise(
         self,
-        objective: SingleObjective,
+        objective: Callable[[np.ndarray, Optional[bool]], float],
         n_dim: int,
         n_iter: int,
         bound: np.ndarray,
         init_shot: np.ndarray,
-    ):
+    ) -> Tuple[float, np.ndarray]:
         """
+        Abstract method for optimising the objective.
+
         Parameters
         ----------
-        func : callable
-            function to optimize
-        n_dim : integer
-            dimension, i.e., number of parameters to optimize
-        n_iter : integer
-            maximum number of iterations
-        bound : array
-            first column corresponding to the lower bound, and second column to the
-            upper bound
-        init_shot : list
-            initial shot for the optimization problem
+        objective : Callable[[np.ndarray], float]
+            Objective function to optimise.
+        n_dim : int
+            Number of parameters to optimise.
+        n_iter : int
+            Maximum number of iterations.
+        bound : np.ndarray
+            Array where first and second columns correspond to lower and upper bounds, respectively.
+        init_shot : np.ndarray
+            Initial shot for the optimisation problem.
 
         Returns
         -------
-        best_value : float
-            best loss function value
-        best_solution : list
-            best parameter solution
+        float
+            Best observed objective value.
+        np.ndarray
+            Observed optimum of the objective.
         """
         if bound is not None:
             new_bound = tuple(map(tuple, np.stack((bound[:,0], bound[:,1]))))

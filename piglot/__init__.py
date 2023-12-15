@@ -58,8 +58,6 @@ def optimiser(name, *args, **kwargs):
         return piglot.optimisers.PureRandomSearch(*args, **kwargs)
     if name == 'spsa-adam':
         return piglot.optimisers.SPSA_Adam(*args, **kwargs)
-    if name == 'spsa-adam_cf':
-        return piglot.optimisers.SPSA_Adam_Composite(*args, **kwargs)
     if name == 'spsa':
         return piglot.optimisers.SPSA(*args, **kwargs)
     raise NameError("Internal error: loss function not implemented!")

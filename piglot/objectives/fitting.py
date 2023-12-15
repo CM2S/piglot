@@ -774,7 +774,7 @@ class StochasticFittingCompositeSingleObjective(StochasticSingleCompositeObjecti
             self,
             values: np.ndarray,
             concurrent: bool=False,
-        ) -> Tuple[np.ndarray. np.ndarray]:
+        ) -> Tuple[np.ndarray, np.ndarray]:
         """Inner objective computation for composite fitting objectives.
 
         Parameters
