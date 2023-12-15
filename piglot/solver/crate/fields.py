@@ -7,7 +7,7 @@ import pandas as pd
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import InputData, OutputField, OutputResult
 from piglot.utils.solver_utils import get_case_name, write_parameters
-from piglot.utils.solver_utils import has_parameter
+from piglot.utils.solver_utils import has_parameter, has_keyword
 
 
 
@@ -94,6 +94,7 @@ class hresFile(OutputField):
             self,
             y_field: Union[str, int],
             x_field: str="LoadFactor",
+            use_offline: bool=False,
         ):
         """Constructor for .out file reader
 
@@ -103,6 +104,9 @@ class hresFile(OutputField):
             Field to read from the output file. Can be a single column index or name.
         x_field : str, optional
             Field to use as index in the resulting DataFrame, by default "LoadFactor".
+        use_offline : bool, optional
+            Whether to use the offline-stage, by default False
+        
 
         Raises
         ------
@@ -113,6 +117,7 @@ class hresFile(OutputField):
         self.y_field = y_field
         # Homogenised .hres output file
         self.x_field = x_field
+        self.use_offline = use_offline
         self.separator = 16
 
     def check(self, input_data: CRATEInputData) -> None:
@@ -122,8 +127,15 @@ class hresFile(OutputField):
         ----------
         input_data : CRATEInputData
             Input data for this case.
+
         """
-        pass
+        # Check if Minimize_Output is present if use_offline is True
+        input_file = input_data.input_file
+        if self.use_offline:
+            if not has_keyword(input_file, "Minimize_Output"):
+                raise RuntimeError("use_offline is True, but Minimize_Output keyword is missing "
+                                                                       "from the CRATE input file.")
+
 
     def get(self, input_data: CRATEInputData) -> OutputResult:
         """Get a parameter from the .hres file.
@@ -178,7 +190,9 @@ class hresFile(OutputField):
         y_field = config['y_field']
         # Read the x field (if passed)
         x_field = config.get('x_field', 'LoadFactor')
-        return hresFile(y_field, x_field)
+        # Read the offline flag (if passed)
+        use_offline = config.get('use_offline', False)
+        return hresFile(y_field, x_field, use_offline)
 
 
 

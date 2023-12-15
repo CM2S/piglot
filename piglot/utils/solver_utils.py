@@ -168,6 +168,28 @@ def find_keyword(file: str, keyword: str) -> str:
     raise RuntimeError(f"Keyword {keyword} not found!")
 
 
+def replace_keyword(file: str, keyword: str, value: str) -> None:
+    """Replaces a keyword in a file.
+
+    Parameters
+    ----------
+    file : str
+        Path for the input file.
+    keyword : str
+        Keyword to locate.
+    value : str
+        Value to replace the keyword with.
+    """
+    with open(file, 'r', encoding='utf8') as fin:
+        with open(file + '.tmp', 'w', encoding='utf8') as fout:
+            for line in fin:
+                if line.lstrip().startswith(keyword):
+                    line = value
+                fout.write(line)
+    os.remove(file)
+    os.rename(file + '.tmp', file)
+
+
 def load_module_from_file(filename: str, attribute) -> object:
     """Loads a module from a given file.
 

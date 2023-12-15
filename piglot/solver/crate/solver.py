@@ -9,7 +9,7 @@ import numpy as np
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import Solver, Case, CaseResult, OutputField, OutputResult, InputData
 from piglot.solver.crate.fields import crate_fields_reader, CRATEInputData
-from piglot.utils.solver_utils import has_keyword, load_module_from_file
+from piglot.utils.solver_utils import has_keyword, load_module_from_file, replace_keyword
 
 
 
@@ -66,12 +66,26 @@ class CRATESolver(Solver):
         CaseResult
             Results for this case
         """
+        # Check if using the existing offline-stage has been required
+        for field in case.fields.values():
+            try:
+                use_offline = field.use_offline
+            except:
+                use_offline = False
         # Copy input file replacing parameters by passed value
         input_data = case.input_data.prepare(values, self.parameters, tmp_dir=tmp_dir)
         input_file = input_data.input_file
         case_name, _ = os.path.splitext(os.path.basename(input_file))
         # Run CRATE (we don't use high precision timers here to keep track of the start time)
         begin_time = time.time()
+        # Copy offline-stage if needed
+        copy_offline = False
+        if os.path.isdir(os.path.splitext(input_file)[0]) and use_offline:
+            shutil.copytree(os.path.join(tmp_dir, 'offline_stage'), 
+                            os.path.join(os.path.splitext(input_file)[0], 'offline_stage'))
+        if not os.path.isdir(os.path.splitext(input_file)[0]) and use_offline:
+            replace_keyword(input_file, 'Minimize_Output', '#Minimize_Output')
+            copy_offline = True
         process_result = subprocess.run(
             ['python3', self.crate_bin, input_file],
             stdout=subprocess.DEVNULL,
@@ -83,8 +97,18 @@ class CRATESolver(Solver):
         screen_file = os.path.join(os.path.splitext(input_file)[0], f'{case_name}.screen')
         failed_case = (process_result.returncode != 0 or
                        not has_keyword(screen_file, "Program Completed"))
+        # Copy offline stage for tmp dir
+        if copy_offline:
+            offline_dir = os.path.join(os.path.splitext(input_file)[0], 'offline_stage')
+            shutil.copytree(offline_dir, os.path.join(tmp_dir, 'offline_stage'))
+            shutil.rmtree(os.path.splitext(input_file)[0])
+            os.mkdir(os.path.splitext(input_file)[0])
         # Read results from output directories
         responses = {name: field.get(input_data) for name, field in case.fields.items()}
+        # Delete temporary case directory if needed
+        os.remove(input_file)
+        if not use_offline:
+            shutil.rmtree(os.path.splitext(input_file)[0])
         return CaseResult(
             begin_time,
             end_time - begin_time,
@@ -116,9 +140,8 @@ class CRATESolver(Solver):
         """
         # Ensure tmp directory is clean
         tmp_dir = f'{self.tmp_dir}_{self.parameters.hash(values)}' if concurrent else self.tmp_dir
-        if os.path.isdir(tmp_dir):
-            shutil.rmtree(tmp_dir)
-        os.mkdir(tmp_dir)
+        if not os.path.isdir(tmp_dir):
+            os.mkdir(tmp_dir)
         # Run cases (in parallel if specified)
         def run_case(case: Case) -> CaseResult:
             return self._run_case(values, case, tmp_dir)
