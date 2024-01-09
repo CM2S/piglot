@@ -1,9 +1,11 @@
 """Module for curve fitting objectives"""
 from __future__ import annotations
 from typing import Dict, Any, List, Union, Tuple
+from abc import abstractmethod, ABC
 import os
 import sys
 import numpy as np
+import torch
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from piglot.yaml_parser import parse_loss
@@ -12,10 +14,121 @@ from piglot.parameter import ParameterSet
 from piglot.solver import read_solver
 from piglot.solver.solver import Solver, OutputResult
 from piglot.utils.assorted import stats_interp_to_common_grid
-from piglot.utils.reduce_response import reduce_response
-from piglot.objective import DynamicPlotter, SingleObjective
+from piglot.utils.responses import Transformer, reduce_response, interpolate_response
+from piglot.objective import DynamicPlotter, SingleObjective, GenericObjective, ObjectiveResult
+from piglot.objective import Composition
 from piglot.objective import SingleCompositeObjective, MSEComposition
 from piglot.objective import StochasticSingleObjective, StochasticSingleCompositeObjective
+
+
+class Reduction(ABC):
+    """Abstract class for reduction functions with gradients."""
+
+    @abstractmethod
+    def reduce(self, inner: np.ndarray) -> np.ndarray:
+        """Abstract method for computing the reduction of numpy arrays.
+
+        Parameters
+        ----------
+        inner : np.ndarray
+            Reduction input.
+
+        Returns
+        -------
+        np.ndarray
+            Reduction result.
+        """
+
+    @abstractmethod
+    def reduce_torch(self, inner: torch.Tensor) -> torch.Tensor:
+        """Abstract method for computing the reduction of torch tensors with gradients.
+
+        Parameters
+        ----------
+        inner : torch.Tensor
+            Reduction input.
+
+        Returns
+        -------
+        torch.Tensor
+            Reduction result (with gradients).
+        """
+
+
+class MSE(Reduction):
+    """Mean squared error reduction function."""
+
+    def reduce(self, inner: np.ndarray) -> np.ndarray:
+        """Compute the mean squared error.
+
+        Parameters
+        ----------
+        inner : np.ndarray
+            Reduction input.
+
+        Returns
+        -------
+        np.ndarray
+            Reduction result.
+        """
+        return np.mean(np.square(inner), axis=-1)
+
+    def reduce_torch(self, inner: torch.Tensor) -> torch.Tensor:
+        """Compute the mean squared error.
+
+        Parameters
+        ----------
+        inner : torch.Tensor
+            Reduction input.
+
+        Returns
+        -------
+        torch.Tensor
+            Reduction result (with gradients).
+        """
+        return torch.mean(torch.square(inner), dim=-1)
+
+
+AVAILABLE_REDUCTIONS = {
+    'mse': MSE,
+}
+
+
+class CompositionFromReduction(Composition):
+    """Optimisation composition function from a reduction function."""
+
+    def __init__(self, reduction: Reduction):
+        self.reduction = reduction
+
+    def composition(self, inner: np.ndarray) -> float:
+        """Compute the MSE outer function of the composition
+
+        Parameters
+        ----------
+        inner : np.ndarray
+            Return value from the inner function
+
+        Returns
+        -------
+        float
+            Scalar composition result
+        """
+        return self.reduction.reduce(inner)
+
+    def composition_torch(self, inner: torch.Tensor) -> torch.Tensor:
+        """Compute the MSE outer function of the composition with gradients
+
+        Parameters
+        ----------
+        inner : torch.Tensor
+            Return value from the inner function
+
+        Returns
+        -------
+        torch.Tensor
+            Scalar composition result
+        """
+        return self.reduction.reduce_torch(inner)
 
 
 class Reference:
@@ -29,13 +142,9 @@ class Reference:
             x_col: int=1,
             y_col: int=2,
             skip_header: int=0,
-            x_scale: float=1.0,
-            y_scale: float=1.0,
-            x_offset: float=0.0,
-            y_offset: float=0.0,
+            transformer: Transformer=None,
             filter_tol: float=0.0,
             show: bool=False,
-            loss: Loss=None,
             weight: float=1.0,
         ):
         # Sanitise prediction field
@@ -46,28 +155,37 @@ class Reference:
         self.filename = filename
         self.prediction = prediction
         self.output_dir = output_dir
-        self.data = np.genfromtxt(filename, skip_header=skip_header)[:,[x_col - 1, y_col - 1]]
-        self.data[:,0] = x_offset + x_scale * self.data[:,0]
-        self.data[:,1] = y_offset + y_scale * self.data[:,1]
-        self.orig_data = np.copy(self.data)
+        self.transformer = transformer
         self.filter_tol = filter_tol
         self.show = show
-        self.loss = loss
         self.weight = weight
+        # Load the data right away
+        data = np.genfromtxt(filename, skip_header=skip_header)[:,[x_col - 1, y_col - 1]]
+        self.x_data = data[:,0]
+        self.y_data = data[:,1]
+        # Apply the transformer
+        if self.transformer is not None:
+            self.x_data, self.y_data = self.transformer(self.x_data, self.y_data)
+        self.x_orig = np.copy(self.x_data)
+        self.y_orig = np.copy(self.y_data)
 
     def prepare(self) -> None:
         """Prepare the reference data."""
         if self.has_filtering():
+            # Little progress report: ensure we flush after the initial message
             print(f"Filtering reference {self.filename} ...", end='')
             sys.stdout.flush()
-            num, error, (x, y) = reduce_response(self.data[:,0], self.data[:,1], self.filter_tol)
-            self.data = np.array([x, y]).T
-            print(f" done (from {self.orig_data.shape[0]} to {num} points, error = {error:.2e})")
+            num, error, (self.x_data, self.y_data) = reduce_response(
+                self.x_data,
+                self.y_data,
+                self.filter_tol,
+            )
+            print(f" done (from {len(self.x_orig)} to {num} points, error = {error:.2e})")
             if self.show:
                 _, ax = plt.subplots()
-                ax.plot(self.orig_data[:,0], self.orig_data[:,1], label="Reference")
-                ax.plot(self.data[:,0], self.data[:,1], c='r', ls='dashed')
-                ax.scatter(self.data[:,0], self.data[:,1], c='r', label="Resampled")
+                ax.plot(self.x_orig, self.y_orig, label="Reference")
+                ax.plot(self.x_data, self.y_data, c='r', ls='dashed')
+                ax.scatter(self.x_data, self.y_data, c='r', label="Resampled")
                 ax.legend()
                 plt.show()
             # Write the filtered reference
@@ -78,18 +196,8 @@ class Reference:
                     'filtered_references',
                     os.path.basename(self.filename),
                 ),
-                self.data,
+                np.stack((self.x_data, self.y_data), axis=1),
             )
-
-    def num_fields(self) -> int:
-        """Get the number of reference fields.
-
-        Returns
-        -------
-        int
-            Number of reference fields.
-        """
-        return self.data.shape[1] - 1
 
     def has_filtering(self) -> bool:
         """Check if the reference has filtering.
@@ -109,22 +217,17 @@ class Reference:
         np.ndarray
             Time column.
         """
-        return self.data[:, 0]
+        return self.x_data
 
-    def get_data(self, field_idx: int=0) -> np.ndarray:
+    def get_data(self) -> np.ndarray:
         """Get the data column of the reference.
-
-        Parameters
-        ----------
-        field_idx : int
-            Index of the field to output.
 
         Returns
         -------
         np.ndarray
             Data column.
         """
-        return self.data[:, field_idx + 1]
+        return self.y_data
 
     def get_orig_time(self) -> np.ndarray:
         """Get the original time column of the reference.
@@ -134,42 +237,40 @@ class Reference:
         np.ndarray
             Original time column.
         """
-        return self.orig_data[:, 0]
+        return self.x_orig
 
-    def get_orig_data(self, field_idx: int=0) -> np.ndarray:
+    def get_orig_data(self) -> np.ndarray:
         """Get the original data column of the reference.
-
-        Parameters
-        ----------
-        field_idx : int
-            Index of the field to output.
 
         Returns
         -------
         np.ndarray
             Original data column.
         """
-        return self.orig_data[:, field_idx + 1]
+        return self.y_orig
 
-    def compute_loss(self, results: OutputResult) -> Any:
-        """Compute the loss for the given results.
+    def compute_errors(self, results: OutputResult) -> np.ndarray:
+        """Compute the pointwise normalised errors for the given results.
 
         Parameters
         ----------
         results : OutputResult
-            Results to compute the loss for.
+            Results to compute the errors for.
 
         Returns
         -------
-        Any
-            Loss value.
+        np.ndarray
+            Error for each reference point
         """
-        return self.loss(
-            self.get_time(),
+        # Interpolate response to the reference grid
+        resp_interp = interpolate_response(
             results.get_time(),
-            self.get_data(),
             results.get_data(),
+            self.get_time(),
         )
+        # Compute normalised error
+        factor = np.mean(np.abs(self.get_data()))
+        return (resp_interp - self.get_data()) / factor
 
     @staticmethod
     def read(filename: str, config: Dict[str, Any], output_dir: str) -> Reference:
@@ -198,13 +299,9 @@ class Reference:
             x_col=int(config.get('x_col', 1)),
             y_col=int(config.get('y_col', 2)),
             skip_header=int(config.get('skip_header', 0)),
-            x_scale=float(config.get('x_scale', 1.0)),
-            y_scale=float(config.get('y_scale', 1.0)),
-            x_offset=float(config.get('x_offset', 0.0)),
-            y_offset=float(config.get('y_offset', 0.0)),
+            transformer=Transformer.read(config.get('transformer', {})),
             filter_tol=float(config.get('filter_tol', 0.0)),
             show=bool(config.get('show', False)),
-            loss=parse_loss(filename, config['loss']) if 'loss' in config else None,
             weight=float(config.get('weight', 1.0)),
         )
 
@@ -424,20 +521,160 @@ class FittingSolver:
             # Sanitise reference: check if it is associated to at least one case
             if len(references[reference]) == 0:
                 raise ValueError(f"Reference '{reference_name}' is not associated to any case.")
-        # Read the (optional) loss
-        loss = None
-        if 'loss' in config:
-            loss = parse_loss(output_dir, config['loss'])
-            # Assign the default loss to references without a specific loss
-            for reference in references:
-                if reference.loss is None:
-                    reference.loss = loss
-        # Ensure all references have a loss
-        for reference in references:
-            if reference.loss is None:
-                raise ValueError(f"Missing loss for reference '{reference.filename}'")
         # Return the solver
         return FittingSolver(solver, references)
+
+
+class FittingObjective(GenericObjective):
+    """Scalar fitting objective function."""
+
+    def __init__(
+            self,
+            parameters: ParameterSet,
+            solver: FittingSolver,
+            output_dir: str,
+            reduction: Reduction,
+            stochastic: bool=False,
+            composite: bool=False,
+        ) -> None:
+        super().__init__(
+            parameters,
+            stochastic,
+            composition=CompositionFromReduction(reduction) if composite else None,
+            output_dir=output_dir,
+        )
+        self.reduction = reduction
+        self.composite = composite
+        self.solver = solver
+
+    def prepare(self) -> None:
+        """Prepare the objective for optimisation."""
+        super().prepare()
+        self.solver.prepare()
+
+    def _objective(self, values: np.ndarray, concurrent: bool=False) -> ObjectiveResult:
+        """Abstract method for objective computation.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Set of parameters to evaluate the objective for.
+        concurrent : bool, optional
+            Whether this call may be concurrent to others, by default False.
+
+        Returns
+        -------
+        ObjectiveResult
+            Objective result.
+        """
+        # Run the solver
+        output = self.solver.solve(values, concurrent)
+        # Compute the loss
+        losses = []
+        variances = []
+        for reference, results in output.items():
+            # Compute the errors for each result and apply reduction according to the objective type
+            errors = np.array([reference.compute_errors(result) for result in results])
+            if not self.composite:
+                errors = self.reduction.reduce(errors)
+            loss = np.mean(errors, axis=0)
+            variance = np.var(errors, axis=0) / errors.shape[0]
+            # if self.composition is None:
+            #     errors = np.mean(np.square(errors), axis=1)
+            # loss = np.mean(errors, axis=0)
+            # variance = np.var(errors, axis=0) / errors.shape[0]
+            # if self.composition is not None:
+            #     # In the composite case, the values passed to the optimiser should be the mean and
+            #     # variance of the errors for each reference point. The final loss value is then
+            #     # computed inside the optimiser using the supplied composition function
+            #     loss = np.mean(errors, axis=0)
+            #     variance = np.var(errors, axis=0) / errors.shape[0]
+            # else:
+            #     # On the scalar case, we use the mean and variance of the individual losses for each
+            #     # case. The default loss uses a MSE metric, so we need to square the errors before
+            #     # computing these quantities
+            #     loss = np.mean(np.mean(np.square(errors), axis=1), axis=0)
+            #     variance = np.var(np.mean(np.square(errors), axis=1), axis=0) / errors.shape[0]
+            losses.append(reference.weight * loss)
+            variances.append(reference.weight * variance)
+        return ObjectiveResult(losses, variances if self.stochastic else None)
+
+    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
+        """Plot a given function call given the parameter hash.
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot.
+        options : Dict[str, Any], optional
+            Options for the plot, by default None.
+
+        Returns
+        -------
+        List[Figure]
+            List of figures with the plot
+        """
+        if not self.stochastic:
+            return self.solver.plot_case(case_hash, options)
+        options_mean = options.copy()
+        options_mean['mean_std'] = True
+        options_mean['append_title'] = 'Mean, median and standard deviation'
+        options_conf = options.copy()
+        options_conf['confidence'] = True
+        options_conf['append_title'] = 'Mean confidence interval 95%'
+        figs = [
+            self.solver.plot_case(case_hash, options),
+            self.solver.plot_case(case_hash, options_mean),
+            self.solver.plot_case(case_hash, options_conf),
+        ]
+        return [fig for fig_list in figs for fig in fig_list]
+
+    def plot_current(self) -> List[DynamicPlotter]:
+        """Plot the currently running function call.
+
+        Returns
+        -------
+        List[DynamicPlotter]
+            List of instances of updatable plots.
+        """
+        return self.solver.plot_current()
+    
+
+    @staticmethod
+    def read(
+            config: Dict[str, Any],
+            parameters: ParameterSet,
+            output_dir: str,
+        ) -> FittingObjective:
+        """Read a fitting objective from a configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Terms from the configuration dictionary.
+        parameters : ParameterSet
+            Set of parameters for this problem.
+        output_dir : str
+            Path to the output directory.
+
+        Returns
+        -------
+        Objective
+            Objective function to optimise.
+        """
+        # Parse the reduction
+        if not 'reduction' in config:
+            config['reduction'] = 'mse'
+        elif config['reduction'] not in AVAILABLE_REDUCTIONS:
+            raise ValueError(f"Invalid reduction '{config['reduction']}' for fitting objective.")
+        return FittingObjective(
+            parameters,
+            FittingSolver.read(config, parameters, output_dir),
+            output_dir,
+            AVAILABLE_REDUCTIONS[config['reduction']](),
+            stochastic=bool(config.get('stochastic', False)),
+            composite=bool(config.get('composite', False)),
+        )
 
 
 class FittingSingleObjective(SingleObjective):

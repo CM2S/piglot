@@ -1,6 +1,5 @@
 """Main optimiser classes for using BoTorch with piglot"""
-from typing import Tuple, List
-from abc import abstractmethod
+from typing import Tuple, List, Union
 from multiprocessing.pool import ThreadPool as Pool
 import warnings
 import numpy as np
@@ -25,6 +24,15 @@ from piglot.optimisers.optimiser import Optimiser
 
 
 def fit_mll_pytorch_loop(mll: ExactMarginalLogLikelihood, n_iters: int=100) -> None:
+    """Fit a GP model using a PyTorch optimisation loop.
+
+    Parameters
+    ----------
+    mll : ExactMarginalLogLikelihood
+        Marginal log-likelihood to optimise.
+    n_iters : int, optional
+        Number of iterations to optimise for, by default 100
+    """
     mll.train()
     mll.model.likelihood.train()
     optimizer = torch.optim.Adam(mll.model.parameters(), lr=0.1)
@@ -38,28 +46,8 @@ def fit_mll_pytorch_loop(mll: ExactMarginalLogLikelihood, n_iters: int=100) -> N
     mll.model.likelihood.eval()
 
 
-def build_model(std_dataset: BayesDataset, fixed_noise: bool) -> Model:
-    # Fetch data
-    params = std_dataset.params
-    values = std_dataset.values
-    variances = std_dataset.variances
-    # Clamp variances to prevent warnings from GPyTorch
-    variances = torch.clamp_min(variances, 1e-6)
-    # Initialise model instance depending on noise setting
-    model = (
-        FixedNoiseGP(params, values, variances) if fixed_noise else SingleTaskGP(params, values)
-    )
-    # Fit the GP (in case of trouble, fall back to an Adam-based optimiser)
-    mll = ExactMarginalLogLikelihood(model.likelihood, model)
-    try:
-        fit_gpytorch_mll(mll)
-    except botorch.exceptions.ModelFittingError:
-        warnings.warn('Optimisation of the MLL failed, falling back to PyTorch optimiser')
-        fit_mll_pytorch_loop(mll)
-    return model
-
-
 class BayesianBoTorch(Optimiser):
+    """Driver for optimisation using BoTorch."""
 
     def __init__(
         self,
@@ -91,10 +79,49 @@ class BayesianBoTorch(Optimiser):
             raise RuntimeError(f"Unkown acquisition function {self.acquisition}")
         if not self.acquisition.startswith('q') and self.q != 1:
             raise RuntimeError("Can only use q != 1 for quasi-Monte Carlo acquisitions")
-        self._acq_func = self._build_acquisition_scalar
-        if self.objective.composition:
-            self._acq_func = self._build_acquisition_composite
         torch.set_num_threads(1)
+
+
+    def _validate_problem(self, objective: Objective) -> None:
+        """Validate the combination of optimiser and objective
+
+        Parameters
+        ----------
+        objective : Objective
+            Objective to optimise
+        """
+
+
+    def _acq_func(
+        self,
+        dataset: BayesDataset,
+        model: Model,
+        n_dim: int,
+    ) -> Tuple[AcquisitionFunction, int, int]:
+        if self.objective.composition:
+            return self._build_acquisition_composite(dataset, model, n_dim)
+        return self._build_acquisition_scalar(dataset, model, n_dim)
+
+
+    def _build_model(self, std_dataset: BayesDataset) -> Model:
+        # Fetch data
+        params = std_dataset.params
+        values = std_dataset.values
+        variances = std_dataset.variances
+        # Clamp variances to prevent warnings from GPyTorch
+        variances = torch.clamp_min(variances, 1e-6)
+        # Initialise model instance depending on noise setting
+        model = (
+            SingleTaskGP(params, values) if self.noisy else FixedNoiseGP(params, values, variances)
+        )
+        # Fit the GP (in case of trouble, fall back to an Adam-based optimiser)
+        mll = ExactMarginalLogLikelihood(model.likelihood, model)
+        try:
+            fit_gpytorch_mll(mll)
+        except botorch.exceptions.ModelFittingError:
+            warnings.warn('Optimisation of the MLL failed, falling back to PyTorch optimiser')
+            fit_mll_pytorch_loop(mll)
+        return model
 
 
     def _get_candidates(
@@ -106,7 +133,7 @@ class BayesianBoTorch(Optimiser):
 
         # Build model on unit-cube and standardised data
         std_dataset = dataset.standardised()
-        model = build_model(std_dataset, not self.noisy)
+        model = self._build_model(std_dataset)
 
         # Evaluate GP performance with the test dataset
         cv_error = None
@@ -136,20 +163,19 @@ class BayesianBoTorch(Optimiser):
             },
         )
 
-        # Re-map to original space (and remove fidelity if needed)
+        # Re-map to original space
         for i in range(self.q):
             candidates[i,:] = dataset.denormalise(candidates[i,:])
         return candidates.cpu().numpy(), cv_error
 
 
     def _eval_candidates(self, candidates: np.ndarray) -> List[ObjectiveResult]:
+        # Single candidate case
         if self.q == 1:
-            # Single candidate case
-            results = [self.objective(candidate) for candidate in candidates]
-        else:
-            # Multi-candidate: run cases in parallel
-            with Pool(self.q) as pool:
-                results = pool.map(lambda x: self.objective(x, concurrent=True), candidates)
+            return [self.objective(candidate) for candidate in candidates]
+        # Multi-candidate: run cases in parallel
+        with Pool(self.q) as pool:
+            results = pool.map(lambda x: self.objective(x, concurrent=True), candidates)
         return results
 
 
@@ -166,9 +192,9 @@ class BayesianBoTorch(Optimiser):
 
     def _result_to_dataset(self, result: ObjectiveResult) -> Tuple[np.ndarray, np.ndarray]:
         if self.objective.composition:
-            values = np.concatenate(result.value)
+            values = np.concatenate(result.values)
             if self.objective.stochastic:
-                variances = np.concatenate(result.variance)
+                variances = np.concatenate(result.variances)
             else:
                 variances = np.zeros_like(values)
         else:
@@ -180,10 +206,12 @@ class BayesianBoTorch(Optimiser):
         return values, variances
 
 
-    def _value_to_scalar(self, value: torch.Tensor) -> float:
+    def _value_to_scalar(self, value: Union[np.ndarray, torch.Tensor]) -> float:
         if self.objective.composition:
-            return self.objective.composition.composition_torch(value).item()
-        return value
+            if isinstance(value, np.ndarray):
+                return self.objective.composition.composition(value)
+            return self.objective.composition.composition_torch(value)
+        return value.item()
 
 
     def _build_acquisition_scalar(
@@ -232,9 +260,9 @@ class BayesianBoTorch(Optimiser):
         num_restarts = 12
         raw_samples = max(256, 16 * n_dim * n_dim)
         # Build composite MC objective
-        mask, y_avg, y_std = dataset.get_obervation_stats()
+        _, y_avg, y_std = dataset.get_obervation_stats()
         mc_objective = GenericMCObjective(
-            lambda x: -self.objective.composition.composition_torch(x * y_std[mask] + y_avg[mask])
+            lambda x: -self.objective.composition.composition_torch(x * y_std + y_avg)
         )
         # Delegate acquisition building
         best = torch.max(dataset.values).item()
@@ -317,7 +345,7 @@ class BayesianBoTorch(Optimiser):
 
         # Find current best point to return to the driver
         best_params, best_result = dataset.min(self._value_to_scalar)
-        self._progress_check(0, best_result, best_params)
+        self._progress_check(0, self._value_to_scalar(best_result), best_params)
 
         # Optimisation loop
         for i_iter in range(n_iter):
@@ -344,4 +372,4 @@ class BayesianBoTorch(Optimiser):
 
         # Return optimisation result
         best_params, best_result = dataset.min(self._value_to_scalar)
-        return best_params, best_result
+        return best_params, self._value_to_scalar(best_result)

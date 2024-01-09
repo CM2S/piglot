@@ -19,7 +19,7 @@ from piglot.utils.assorted import pretty_time, reverse_pretty_time
 from piglot.objective import SingleObjective, SingleCompositeObjective, MSEComposition
 from piglot.objective import DynamicPlotter
 from piglot.losses.loss import Loss
-from piglot.utils.reduce_response import reduce_response
+from piglot.utils.responses import reduce_response
 
 
 def write_parameters(param_value, source, dest):

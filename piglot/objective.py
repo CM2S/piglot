@@ -82,7 +82,7 @@ class MSEComposition(Composition):
         float
             Scalar composition result
         """
-        return np.mean(np.square(inner))
+        return np.mean(np.square(inner), axis=-1)
 
     def composition_torch(self, inner: torch.Tensor) -> torch.Tensor:
         """Compute the MSE outer function of the composition with gradients
@@ -199,30 +199,18 @@ class ObjectiveResult:
     values: List[np.ndarray]
     variances: Optional[List[np.ndarray]] = None
 
-    @staticmethod
-    def scalarise(result: ObjectiveResult) -> float:
+    def scalarise(self) -> float:
         """Scalarise the result.
-
-        Parameters
-        ----------
-        result : ObjectiveResult
-            Result to scalarise.
 
         Returns
         -------
         float
             Scalarised result.
         """
-        return np.mean([np.mean(val) for val in result.values])
+        return np.mean([np.mean(val) for val in self.values])
 
-    @staticmethod
-    def scalarise_stochastic(result: ObjectiveResult) -> Tuple[float, float]:
+    def scalarise_stochastic(self) -> Tuple[float, float]:
         """Scalarise the result.
-
-        Parameters
-        ----------
-        result : ObjectiveResult
-            Result to scalarise.
 
         Returns
         -------
@@ -230,8 +218,8 @@ class ObjectiveResult:
             Scalarised mean and variance.
         """
         return (
-            np.mean([np.mean(val) for val in result.values]),
-            np.sum([np.var(val) for val in result.values]),
+            np.mean([np.mean(val) for val in self.values]),
+            np.sum([np.var(val) for val in self.values]),
         )
 
 
