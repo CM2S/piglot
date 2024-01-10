@@ -7,65 +7,71 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from piglot.parameter import ParameterSet
-from piglot.objective import SingleObjective
+from piglot.objective import GenericObjective, ObjectiveResult
 
 
 
-class AnalyticalObjective(SingleObjective):
-    """Objective function derived from an analytical expression"""
+class AnalyticalObjective(GenericObjective):
+    """Objective function derived from an analytical expression."""
 
     def __init__(self, parameters: ParameterSet, expression: str, output_dir: str = None) -> None:
-        super().__init__(parameters, output_dir)
+        super().__init__(
+            parameters,
+            stochastic=False,
+            composition=None,
+            output_dir=output_dir,
+        )
         symbs = sympy.symbols([param.name for param in parameters])
         self.parameters = parameters
         self.expression = sympy.lambdify(symbs, expression)
 
-    def _objective(self, values: np.ndarray, concurrent: bool=False) -> float:
-        """Objective computation for analytical functions
+    def _objective(self, values: np.ndarray, concurrent: bool=False) -> ObjectiveResult:
+        """Objective computation for analytical functions.
 
         Parameters
         ----------
         values : np.ndarray
-            Set of parameters to evaluate the objective for
+            Set of parameters to evaluate the objective for.
         concurrent : bool, optional
-            Whether this call may be concurrent to others, by default False
+            Whether this call may be concurrent to others, by default False.
 
         Returns
         -------
-        float
-            Objective value
+        ObjectiveResult
+            Objective result.
         """
-        return self.expression(**self.parameters.to_dict(values))
+        value = self.expression(**self.parameters.to_dict(values))
+        return ObjectiveResult([np.array([value])])
 
     def _objective_denorm(self, values: np.ndarray) -> float:
-        """Objective computation for analytical functions (denormalised parameters)
+        """Objective computation for analytical functions (denormalised parameters).
 
         Parameters
         ----------
         values : np.ndarray
-            Set of parameters to evaluate the objective for (denormalised)
+            Set of parameters to evaluate the objective for (denormalised).
 
         Returns
         -------
         float
-            Objective value
+            Objective value.
         """
         return self.expression(**self.parameters.to_dict(values, input_normalised=False))
-    
+
     def _plot_1d(self, values: np.ndarray, append_title: str) -> Figure:
-        """Plot the objective in 1D
+        """Plot the objective in 1D.
 
         Parameters
         ----------
         values : np.ndarray
-            Parameter values to plot for
+            Parameter values to plot for.
         append_title : str
-            String to append to the title
+            String to append to the title.
 
         Returns
         -------
         Figure
-            Figure with the plot
+            Figure with the plot.
         """
         fig, axis = plt.subplots()
         x = np.linspace(self.parameters[0].lbound, self.parameters[0].ubound, 1000)
@@ -79,16 +85,16 @@ class AnalyticalObjective(SingleObjective):
         axis.grid()
         axis.set_title(append_title)
         return fig
-    
+
     def _plot_2d(self, values: np.ndarray, append_title: str) -> Figure:
-        """Plot the objective in 2D
+        """Plot the objective in 2D.
 
         Parameters
         ----------
         values : np.ndarray
-            Parameter values to plot for
+            Parameter values to plot for.
         append_title : str
-            String to append to the title
+            String to append to the title.
 
         Returns
         -------
@@ -114,21 +120,21 @@ class AnalyticalObjective(SingleObjective):
         axis.set_title(append_title)
         fig.tight_layout()
         return fig
-    
+
     def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
-        """Plot a given function call given the parameter hash
+        """Plot a given function call given the parameter hash.
 
         Parameters
         ----------
         case_hash : str, optional
-            Parameter hash for the case to plot
+            Parameter hash for the case to plot.
         options : Dict[str, Any], optional
-            Options to pass to the plotting function, by default None
+            Options to pass to the plotting function, by default None.
 
         Returns
         -------
         List[Figure]
-            List of figures with the plot
+            List of figures with the plot.
         """
         # Find parameters associated with the hash
         df = pd.read_table(self.func_calls_file)
