@@ -579,22 +579,7 @@ class FittingObjective(GenericObjective):
                 errors = self.reduction.reduce(errors)
             loss = np.mean(errors, axis=0)
             variance = np.var(errors, axis=0) / errors.shape[0]
-            # if self.composition is None:
-            #     errors = np.mean(np.square(errors), axis=1)
-            # loss = np.mean(errors, axis=0)
-            # variance = np.var(errors, axis=0) / errors.shape[0]
-            # if self.composition is not None:
-            #     # In the composite case, the values passed to the optimiser should be the mean and
-            #     # variance of the errors for each reference point. The final loss value is then
-            #     # computed inside the optimiser using the supplied composition function
-            #     loss = np.mean(errors, axis=0)
-            #     variance = np.var(errors, axis=0) / errors.shape[0]
-            # else:
-            #     # On the scalar case, we use the mean and variance of the individual losses for each
-            #     # case. The default loss uses a MSE metric, so we need to square the errors before
-            #     # computing these quantities
-            #     loss = np.mean(np.mean(np.square(errors), axis=1), axis=0)
-            #     variance = np.var(np.mean(np.square(errors), axis=1), axis=0) / errors.shape[0]
+            # Collect the weighted losses and variances
             losses.append(reference.weight * loss)
             variances.append(reference.weight * variance)
         return ObjectiveResult(losses, variances if self.stochastic else None)
@@ -616,6 +601,8 @@ class FittingObjective(GenericObjective):
         """
         if not self.stochastic:
             return self.solver.plot_case(case_hash, options)
+        if options is None:
+            options = {}
         options_mean = options.copy()
         options_mean['mean_std'] = True
         options_mean['append_title'] = 'Mean, median and standard deviation'

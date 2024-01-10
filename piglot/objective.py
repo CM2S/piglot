@@ -199,28 +199,44 @@ class ObjectiveResult:
     values: List[np.ndarray]
     variances: Optional[List[np.ndarray]] = None
 
-    def scalarise(self) -> float:
+    def scalarise(self, composition: Composition=None) -> float:
         """Scalarise the result.
+
+        Parameters
+        ----------
+        composition : Composition, optional
+            Composition functional to use, by default None.
 
         Returns
         -------
         float
             Scalarised result.
         """
-        return np.mean([np.mean(val) for val in self.values])
+        if composition is not None:
+            return composition(np.concatenate(self.values))
+        return np.mean(self.values)
 
-    def scalarise_stochastic(self) -> Tuple[float, float]:
+    def scalarise_stochastic(self, composition: Composition=None) -> Tuple[float, float]:
         """Scalarise the result.
+
+        Parameters
+        ----------
+        composition : Composition, optional
+            Composition functional to use, by default None.
 
         Returns
         -------
         Tuple[float, float]
             Scalarised mean and variance.
         """
-        return (
-            np.mean([np.mean(val) for val in self.values]),
-            np.sum([np.var(val) for val in self.values]),
-        )
+        if composition is not None:
+            values = np.concatenate(self.values)
+            variances = np.concatenate(self.variances)
+            # Compute the objective variance using Monte Carlo (using fixed base samples)
+            biased = [norm.rvs(loc=0, scale=1) for _ in range(1000)]
+            mc_objectives = [composition(values + bias * np.sqrt(variances)) for bias in biased]
+            return composition(values), np.var(mc_objectives)
+        return np.mean(self.values), np.sum(self.variances)
 
 
 class GenericObjective(Objective):
@@ -301,10 +317,10 @@ class GenericObjective(Objective):
                     file.write(f'{begin_time - self.begin_time:>15.8e}\t')
                     file.write(f'{end_time - begin_time:>15.8e}\t')
                     if self.stochastic:
-                        value, variance = objective_result.scalarise_stochastic()
+                        value, variance = objective_result.scalarise_stochastic(self.composition)
                         file.write(f'{value:>15.8e}\t{variance:>15.8e}')
                     else:
-                        file.write(f'{objective_result.scalarise():>15.8e}')
+                        file.write(f'{objective_result.scalarise(self.composition):>15.8e}')
                     for i, param in enumerate(self.parameters):
                         file.write(f"\t{param.denormalise(values[i]):>15.6f}")
                     file.write(f'\t{self.parameters.hash(values)}\n')
