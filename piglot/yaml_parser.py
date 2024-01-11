@@ -10,8 +10,6 @@ from yaml.scanner import ScannerError
 import piglot
 from piglot.parameter import ParameterSet, DualParameterSet
 from piglot.optimisers.optimiser import StoppingCriteria
-from piglot.objective import MultiFidelitySingleObjective
-from piglot.objective import MultiFidelityCompositeObjective
 
 
 def optional_dict(d, field, default, conv):
