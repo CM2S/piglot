@@ -7,26 +7,32 @@ import torch
 import botorch.test_functions.synthetic
 from botorch.test_functions.synthetic import SyntheticTestFunction
 from piglot.parameter import ParameterSet
-from piglot.objective import SingleObjective, SingleCompositeObjective, MSEComposition
+from piglot.objective import GenericObjective, ObjectiveResult, Composition
+from piglot.objectives.compositions import AVAILABLE_COMPOSITIONS
 
 
-class SyntheticObjective(SingleObjective):
-    """Objective function derived from a synthetic test function"""
+class SyntheticObjective(GenericObjective):
+    """Objective function derived from a synthetic test function."""
 
     def __init__(
             self,
             parameters: ParameterSet,
             name: str,
             output_dir: str,
-            *args,
-            transform: str = None,
+            transform: str=None,
+            composition: Composition=None,
             **kwargs,
         ) -> None:
-        super().__init__(parameters, output_dir)
+        super().__init__(
+            parameters,
+            stochastic=False,
+            composition=composition,
+            output_dir=output_dir,
+        )
         test_functions = self.get_test_functions()
         if name not in test_functions:
             raise RuntimeError(f'Unknown function {name}. Must be in {list(test_functions.keys())}')
-        self.func = test_functions[name](*args, **kwargs)
+        self.func = test_functions[name](**kwargs)
         self.transform = lambda x, y: x
         if transform == 'mse_composition':
             self.transform = lambda v, func: torch.square(torch.tensor([v - func.optimal_value]))
@@ -35,12 +41,12 @@ class SyntheticObjective(SingleObjective):
 
     @staticmethod
     def get_test_functions() -> Dict[str, Type[SyntheticTestFunction]]:
-        """Return available test functions
+        """Return available test functions.
 
         Returns
         -------
         Dict[str, Type[SyntheticTestFunction]]
-            Available test functions
+            Available test functions.
         """
         return {
             'ackley': botorch.test_functions.synthetic.Ackley,
@@ -65,25 +71,29 @@ class SyntheticObjective(SingleObjective):
             'three_hump_camel': botorch.test_functions.synthetic.ThreeHumpCamel,
         }
 
-    def _objective(self, values: np.ndarray, concurrent: bool=False) -> float:
-        """Objective computation for analytical functions
+    def _objective(self, values: np.ndarray, concurrent: bool=False) -> ObjectiveResult:
+        """Objective computation for analytical functions.
 
         Parameters
         ----------
         values : np.ndarray
-            Set of parameters to evaluate the objective for
+            Set of parameters to evaluate the objective for.
         parallel : bool, optional
-            Whether this call may be concurrent to others, by default False
+            Whether this call may be concurrent to others, by default False.
 
         Returns
         -------
-        float
-            Objective value
+        ObjectiveResult
+            Objective value.
         """
         params = torch.tensor(self.parameters.denormalise(values))
         value = self.func.evaluate_true(params)
-        value = value if self.transform is None else self.transform(value, self.func)
-        return float(value.item())
+        if self.composition is not None:
+            value -= self.func.optimal_value
+        elif self.transform is None:
+            value = self.transform(value, self.func)
+        value = float(value.item())
+        return ObjectiveResult([np.array([value])])
 
     @staticmethod
     def read(
@@ -111,73 +121,17 @@ class SyntheticObjective(SingleObjective):
         if not 'function' in config:
             raise RuntimeError("Missing test function")
         function = config.pop('function')
-        return SyntheticObjective(parameters, function, output_dir, **config)
-
-
-class SyntheticCompositeObjective(SingleCompositeObjective):
-    """Objective function derived from a composite synthetic test function"""
-
-    def __init__(
-            self,
-            parameters: ParameterSet,
-            name: str,
-            output_dir: str,
-            *args,
-            **kwargs,
-        ) -> None:
-        super().__init__(parameters, MSEComposition(), output_dir)
-        test_functions = SyntheticObjective.get_test_functions()
-        if name not in test_functions:
-            raise RuntimeError(f'Unknown function {name}. Must be in {list(test_functions.keys())}')
-        self.func = test_functions[name](*args, **kwargs)
-        with open(os.path.join(output_dir, 'optimum_value'), 'w', encoding='utf8') as file:
-            file.write(f'{self.func.optimal_value}')
-
-    def _inner_objective(self, values: np.ndarray, concurrent: bool=False) -> np.ndarray:
-        """Objective computation for composite modified analytical functions
-
-        Parameters
-        ----------
-        values : np.ndarray
-            Current parameters to evaluate the loss.
-        parallel : bool
-            Whether this run may be concurrent to another one (so use unique file names)
-
-        Returns
-        -------
-        float
-            Objective value
-        """
-        params = torch.tensor(self.parameters.denormalise(values))
-        value = self.func.evaluate_true(params) - self.func.optimal_value
-        if len(value.shape) < 1:
-            value = value.unsqueeze(0)
-        return value.numpy()
-
-    @staticmethod
-    def read(
-            config: Dict[str, Any],
-            parameters: ParameterSet,
-            output_dir: str,
-        ) -> SyntheticCompositeObjective:
-        """Read the objective from a configuration dictionary.
-
-        Parameters
-        ----------
-        config : Dict[str, Any]
-            Terms from the configuration dictionary.
-        parameters : ParameterSet
-            Set of parameters for this problem.
-        output_dir : str
-            Path to the output directory.
-
-        Returns
-        -------
-        SyntheticCompositeObjective
-            Objective function to optimise.
-        """
-        # Check for mandatory arguments
-        if not 'function' in config:
-            raise RuntimeError("Missing test function")
-        function = config.pop('function')
-        return SyntheticCompositeObjective(parameters, function, output_dir, **config)
+        # Optional arguments
+        composition = None
+        composition_name = config.pop('composition', None)
+        if composition_name is not None:
+            if composition_name not in AVAILABLE_COMPOSITIONS:
+                raise RuntimeError(f'Unknown composition {composition_name}.')
+            composition = AVAILABLE_COMPOSITIONS[composition_name]()
+        return SyntheticObjective(
+            parameters,
+            function,
+            output_dir,
+            composition=composition,
+            **config,
+        )
