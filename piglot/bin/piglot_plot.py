@@ -8,8 +8,9 @@ import matplotlib.pyplot as plt
 from scipy.integrate import trapezoid
 from PIL import Image
 import torch
+from piglot.parameter import read_parameters
 from piglot.objectives import read_objective
-from piglot.yaml_parser import parse_parameters, parse_config_file
+from piglot.yaml_parser import parse_config_file
 from piglot.utils.surrogate import get_model
 
 
@@ -61,7 +62,7 @@ def plot_case(args):
     """
     # Build piglot problem
     config = parse_config_file(args.config)
-    objective = read_objective(config["objective"], parse_parameters(config), config["output"])
+    objective = read_objective(config["objective"], read_parameters(config), config["output"])
     figs = objective.plot_case(args.case_hash)
     if args.save_fig:
         if len(figs) == 1:
@@ -84,7 +85,7 @@ def plot_current(args):
     """
     plt.ion()
     config = parse_config_file(args.config)
-    objective = read_objective(config["objective"], parse_parameters(config), config["output"])
+    objective = read_objective(config["objective"], read_parameters(config), config["output"])
     plots = objective.plot_current()
     while True:
         for plot in plots:
@@ -102,7 +103,7 @@ def plot_best(args):
     """
     # Build piglot problem
     config = parse_config_file(args.config)
-    objective = read_objective(config["objective"], parse_parameters(config), config["output"])
+    objective = read_objective(config["objective"], read_parameters(config), config["output"])
     figs = objective.plot_best()
     if args.save_fig:
         if len(figs) == 1:
@@ -125,7 +126,7 @@ def plot_history(args):
     """
     # Build piglot problem
     config = parse_config_file(args.config)
-    objective = read_objective(config["objective"], parse_parameters(config), config["output"])
+    objective = read_objective(config["objective"], read_parameters(config), config["output"])
     data = objective.get_history()
     fig, axis = plt.subplots()
     for name, data_dict in data.items():
@@ -158,7 +159,7 @@ def plot_parameters(args):
     """
     # Build piglot problem
     config = parse_config_file(args.config)
-    parameters = parse_parameters(config)
+    parameters = read_parameters(config)
     objective = read_objective(config["objective"], parameters, config["output"])
     data = objective.get_history()
     fig, axes = plt.subplots(nrows=len(parameters), sharex=True, squeeze=False)
@@ -196,7 +197,7 @@ def plot_regret(args):
     """
     # Build piglot problem
     config = parse_config_file(args.config)
-    objective = read_objective(config["objective"], parse_parameters(config), config["output"])
+    objective = read_objective(config["objective"], read_parameters(config), config["output"])
     data = objective.get_history()
     fig, axis = plt.subplots()
     for name, data_dict in data.items():
@@ -227,7 +228,7 @@ def plot_animation(args):
     """
     # Build piglot problem
     config = parse_config_file(args.config)
-    objective = read_objective(config["objective"], parse_parameters(config), config["output"])
+    objective = read_objective(config["objective"], read_parameters(config), config["output"])
     data = objective.get_history()
     # Hacky: we start by just plotting the first case to infer the number of plots per frame
     options = {'reference_limits': True}
@@ -278,7 +279,7 @@ def plot_gp(args):
     """
     # Build piglot problem
     config = parse_config_file(args.config)
-    parameters = parse_parameters(config)
+    parameters = read_parameters(config)
     if len(parameters) != 1:
         raise ValueError("Can only plot a Gaussian process regression for a single parameter.")
     objective = read_objective(config["objective"], parameters, config["output"])

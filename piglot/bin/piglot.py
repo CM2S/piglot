@@ -4,10 +4,11 @@ import os.path
 import argparse
 import shutil
 from yaml import safe_dump
-from piglot.yaml_parser import parse_parameters, parse_config_file
-from piglot.yaml_parser import parse_stop_criteria
+from piglot.yaml_parser import parse_config_file
 from piglot.objectives import read_objective
 from piglot.optimisers import read_optimiser
+from piglot.parameter import read_parameters
+from piglot.optimisers.optimiser import StoppingCriteria
 
 
 def parse_args():
@@ -47,10 +48,10 @@ def main():
     with open(os.path.join(output_dir, "config"), 'w', encoding='utf8') as file:
         safe_dump(config, file)
     # Build piglot problem
-    parameters = parse_parameters(config)
+    parameters = read_parameters(config)
     objective = read_objective(config["objective"], parameters, output_dir)
     optimiser = read_optimiser(config["optimiser"], objective)
-    stop = parse_stop_criteria(config)
+    stop = StoppingCriteria.read(config)
     # Run the optimisation
     _, best_params = optimiser.optimise(
         config["iters"],

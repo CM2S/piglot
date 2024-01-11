@@ -1,8 +1,9 @@
 """Main optimiser module"""
+from __future__ import annotations
+from typing import Dict, Any, Tuple, Callable, Optional
 import os
 import time
 from abc import ABC, abstractmethod
-from typing import Tuple, Callable, Optional
 import numpy as np
 from tqdm import tqdm
 from piglot.parameter import ParameterSet
@@ -12,19 +13,19 @@ from piglot.objective import Objective, GenericObjective
 
 
 def boundary_check(arg, bounds):
-    """Check if the values are within the bounds and correct them if not
+    """Check if the values are within the bounds and correct them if not.
 
     Parameters
     ----------
     arg : array
-        Values to check
+        Values to check.
     bounds : array
-        Lower and upper bounds
+        Lower and upper bounds.
 
     Returns
     -------
     array
-        Corrected values
+        Corrected values.
     """
     arg = np.where(arg > bounds[:,1], bounds[:,1], arg)
     arg = np.where(arg < bounds[:,0], bounds[:,0], arg)
@@ -32,29 +33,29 @@ def boundary_check(arg, bounds):
 
 
 def missing_method(name, package):
-    """Class generator for missing packages
+    """Class generator for missing packages.
 
     Parameters
     ----------
     name : str
-        Name of the missing method
+        Name of the missing method.
     package : str
-        Name of the package to install
+        Name of the package to install.
     """
     def err_func(name, package):
-        """Raise an error for this missing method
+        """Raise an error for this missing method.
 
         Parameters
         ----------
         name : str
-            Name of the missing method
+            Name of the missing method.
         package : str
-            Name of the package to install
+            Name of the package to install.
 
         Raises
         ------
         ImportError
-            Every time it is called
+            Every time it is called.
         """
         raise ImportError(f"{name} is not available. You need to install package {package}!")
 
@@ -68,23 +69,23 @@ def missing_method(name, package):
 
 class StoppingCriteria:
     """
-    Implements different stopping criteria
+    Implements different stopping criteria.
 
     Attributes
     ----------
     conv_tol : float
-        Stop the optimiser if the loss becomes small than this value
+        Stop the optimiser if the loss becomes small than this value.
     max_iters_no_improv : int
-        Stop the optimiser if the loss does not improve after this number of iterations in a row
+        Stop the optimiser if the loss does not improve after this number of iterations in a row.
     max_func_calls : int
-        Stop the optimiser after this number of function calls
+        Stop the optimiser after this number of function calls.
     max_timeout : float
-        Stop the optimiser after this elapsed time (in seconds)
+        Stop the optimiser after this elapsed time (in seconds).
 
     Methods
     -------
     check_criteria(loss_value, iters_no_improv, func_calls):
-        check the status of the stopping criteria
+        check the status of the stopping criteria.
     """
     def __init__(
             self,
@@ -94,18 +95,18 @@ class StoppingCriteria:
             max_timeout: float=None,
         ):
         """
-        Constructs all the necessary attributes for the stopping criteria
+        Constructs all the necessary attributes for the stopping criteria.
 
         Parameters
         ----------
         conv_tol : float
-            Stop the optimiser if the loss becomes small than this value
+            Stop the optimiser if the loss becomes small than this value.
         max_iters_no_improv : int
-            Stop the optimiser if the loss does not improve after this number of iterations in a row
+            Stop the optimiser if the loss does not improve after this number of iterations.
         max_func_calls : int
-            Stop the optimiser after this number of function calls
+            Stop the optimiser after this number of function calls.
         max_timeout : float
-            Stop the optimiser after this elapsed time (in seconds)
+            Stop the optimiser after this elapsed time (in seconds).
         """
         self.conv_tol = conv_tol
         self.max_iters_no_improv = max_iters_no_improv
@@ -120,23 +121,23 @@ class StoppingCriteria:
             elapsed: float,
         ) -> bool:
         """
-        Check the status of the stopping criteria
+        Check the status of the stopping criteria.
 
         Parameters
         ----------
         loss_value : float
-            Current loss value
+            Current loss value.
         iters_no_improv : int
-            Current number of iterations without improvement
+            Current number of iterations without improvement.
         func_calls : int
-            Current number of function calls
+            Current number of function calls.
         elapsed : float
-            Elapsed time in seconds
+            Elapsed time in seconds.
 
         Returns
         -------
         bool
-            Whether any of the criteria are satisfied
+            Whether any of the criteria are satisfied.
         """
         conv = self.conv_tol is not None and loss_value < self.conv_tol
         func = self.max_func_calls is not None and func_calls > self.max_func_calls
@@ -144,27 +145,48 @@ class StoppingCriteria:
         timr = self.max_timeout is not None and elapsed > self.max_timeout
         return conv or impr or func or timr
 
+    @staticmethod
+    def read(config: Dict[str, Any]) -> StoppingCriteria:
+        """Read the stopping criteria from the configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Configuration dictionary.
+
+        Returns
+        -------
+        StoppingCriteria
+            Stopping criteria.
+        """
+        return StoppingCriteria(
+            conv_tol=config.get('conv_tol'),
+            max_iters_no_improv=config.get('max_iters_no_improv'),
+            max_func_calls=config.get('max_func_calls'),
+            max_timeout=config.get('max_timeout'),
+        )
+
 
 
 class InvalidOptimiserException(Exception):
-    """Exception signaling invalid combination of optimiser and objective function"""
+    """Exception signaling invalid combination of optimiser and objective function."""
 
 
 
 class Optimiser(ABC):
     """
-    Interface for implementing different optimization algorithms
+    Interface for implementing different optimization algorithms.
 
     Methods
     -------
     _init_optimiser(n_iter, parameters, pbar, loss, stop_criteria):
-        constructs the attributes for the optimiser
+        constructs the attributes for the optimiser.
     optimise(loss, n_iter, parameters, stop_criteria = StoppingCriteria()):
-        initiates optimiser
+        initiates optimiser.
     _optimise(self, func, n_dim, n_iter, bound, init_shot):
-        performs the optimization
+        performs the optimization.
     _progress_check(self, i_iter, curr_value, curr_solution):
-        evaluates the optimiser progress
+        evaluates the optimiser progress.
     """
 
     def __init__(self, name: str, objective: Objective) -> None:
@@ -184,12 +206,12 @@ class Optimiser(ABC):
 
     @abstractmethod
     def _validate_problem(self, objective: Objective) -> None:
-        """Validate the combination of optimiser and objective
+        """Validate the combination of optimiser and objective.
 
         Parameters
         ----------
         objective : Objective
-            Objective to optimise
+            Objective to optimise.
         """
 
 
@@ -202,29 +224,29 @@ class Optimiser(ABC):
             verbose: bool=True,
         ) -> Tuple[float, np.ndarray]:
         """
-        Optimiser for the outside world
+        Optimiser for the outside world.
 
         Parameters
         ----------
         objective : Objective
-            Objective function to optimise
+            Objective function to optimise.
         n_iter : int
-            Maximum number of iterations
+            Maximum number of iterations.
         parameters : ParameterSet
-            Set of parameters to optimise
+            Set of parameters to optimise.
         output_dir : str
-            Whether to write output to the output directory, by default None
+            Whether to write output to the output directory, by default None.
         stop_criteria : StoppingCriteria
-            List of stopping criteria, by default none attributed
+            List of stopping criteria, by default none attributed.
         verbose : bool
-            Whether to output progress status, by default True
+            Whether to output progress status, by default True.
 
         Returns
         -------
         float
-            Best observed objective value
+            Best observed objective value.
         np.ndarray
-            Observed optimum of the objective
+            Observed optimum of the objective.
         """
         # Sanity check
         self._validate_problem(self.objective)
@@ -282,25 +304,25 @@ class Optimiser(ABC):
         init_shot: np.ndarray,
     ) -> Tuple[float, np.ndarray]:
         """
-        Abstract method for optimising the objective
+        Abstract method for optimising the objective.
 
         Parameters
         ----------
         n_dim : int
-            Number of parameters to optimise
+            Number of parameters to optimise.
         n_iter : int
-            Maximum number of iterations
+            Maximum number of iterations.
         bound : np.ndarray
-            Array where first and second columns correspond to lower and upper bounds, respectively
+            Array where first and second columns correspond to lower and upper bounds, respectively.
         init_shot : np.ndarray
-            Initial shot for the optimisation problem
+            Initial shot for the optimisation problem.
 
         Returns
         -------
         float
-            Best observed objective value
+            Best observed objective value.
         np.ndarray
-            Observed optimum of the objective
+            Observed optimum of the objective.
         """
 
 
@@ -311,18 +333,18 @@ class Optimiser(ABC):
             curr_value: np.ndarray,
             extra_info: str,
         ) -> None:
-        """Update progress on output files
+        """Update progress on output files.
 
         Parameters
         ----------
         i_iter : int
-            Current iteration number
+            Current iteration number.
         curr_value : float
-            Current objective value
+            Current objective value.
         curr_solution : float
-            Current objective minimiser
+            Current objective minimiser.
         extra_info : str
-            Additional information to pass to user
+            Additional information to pass to user.
         """
         elapsed = time.perf_counter() - self.begin_time
         denorm_curr = self.parameters.denormalise(curr_solution)
@@ -358,23 +380,23 @@ class Optimiser(ABC):
             extra_info: str=None,
         ) -> bool:
         """
-        Report the optimiser progress and check for termination
+        Report the optimiser progress and check for termination.
 
         Parameters
         ----------
         i_iter : int
-            Current iteration number
+            Current iteration number.
         curr_value : float
-            Current objective value
+            Current objective value.
         curr_solution : float
-            Current objective minimiser
+            Current objective minimiser.
         extra_info : str
-            Additional information to pass to user
+            Additional information to pass to user.
 
         Returns
         -------
         bool
-            Whether any of the stopping criteria is satisfied
+            Whether any of the stopping criteria is satisfied.
         """
         # Update new value to best value
         self.i_iter = i_iter
@@ -489,115 +511,10 @@ class ScalarOptimiser(Optimiser):
             Observed optimum of the objective.
         """
         # Optimise the scalarised objective
-        self._scalar_optimise(
+        return self._scalar_optimise(
             lambda x, concurrent=False: self.objective(x, concurrent=concurrent).scalarise(),
             n_dim,
             n_iter,
             bound,
             init_shot,
         )
-
-
-
-class CompositeOptimiser(Optimiser):
-    """Base class for composite single-objective optimisers"""
-
-    def _validate_problem(self, objective: Objective) -> None:
-        """Validate the combination of optimiser and objective
-
-        Parameters
-        ----------
-        objective : Objective
-            Objective to optimise
-
-        Raises
-        ------
-        InvalidOptimiserException
-            With an invalid combination of optimiser and objective function
-        """
-        if not isinstance(objective, SingleCompositeObjective):
-            raise InvalidOptimiserException('Composite objective required for this optimiser')
-
-
-
-class ScalarStochasticOptimiser(Optimiser):
-    """Base class for scalar stochastic single-objective optimisers"""
-
-    def _validate_problem(self, objective: Objective) -> None:
-        """Validate the combination of optimiser and objective
-
-        Parameters
-        ----------
-        objective : Objective
-            Objective to optimise
-
-        Raises
-        ------
-        InvalidOptimiserException
-            With an invalid combination of optimiser and objective function
-        """
-        if not isinstance(objective, StochasticSingleObjective):
-            raise InvalidOptimiserException('Stochastic objective required for this optimiser')
-
-
-
-class CompositeStochasticOptimiser(Optimiser):
-    """Base class for composite stochastic single-objective optimisers"""
-
-    def _validate_problem(self, objective: Objective) -> None:
-        """Validate the combination of optimiser and objective
-
-        Parameters
-        ----------
-        objective : Objective
-            Objective to optimise
-
-        Raises
-        ------
-        InvalidOptimiserException
-            With an invalid combination of optimiser and objective function
-        """
-        if not isinstance(objective, StochasticSingleCompositeObjective):
-            raise InvalidOptimiserException('Stochastic comp.objective required for this optimiser')
-
-
-
-class ScalarMultiFidelityOptimiser(Optimiser):
-    """Base class for scalar single-objective multi-fidelity optimisers"""
-
-    def _validate_problem(self, objective: Objective) -> None:
-        """Validate the combination of optimiser and objective
-
-        Parameters
-        ----------
-        objective : Objective
-            Objective to optimise
-
-        Raises
-        ------
-        InvalidOptimiserException
-            With an invalid combination of optimiser and objective function
-        """
-        if not isinstance(objective, MultiFidelitySingleObjective):
-            raise InvalidOptimiserException('Multi-fidelity objective required for this optimiser')
-
-
-
-class CompositeMultiFidelityOptimiser(Optimiser):
-    """Base class for composite single-objective multi-fidelity optimisers"""
-
-    def _validate_problem(self, objective: Objective) -> None:
-        """Validate the combination of optimiser and objective
-
-        Parameters
-        ----------
-        objective : Objective
-            Objective to optimise
-
-        Raises
-        ------
-        InvalidOptimiserException
-            With an invalid combination of optimiser and objective function
-        """
-        if not isinstance(objective, MultiFidelityCompositeObjective):
-            raise InvalidOptimiserException('Multi-fidelity objective required for this optimiser')

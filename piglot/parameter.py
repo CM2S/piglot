@@ -1,7 +1,11 @@
 """Optimisation parameter module."""
-from typing import Iterator
+from typing import Iterator, Dict, Any
+import os
 from hashlib import sha256
 import numpy as np
+import pandas as pd
+import sympy
+from piglot.yaml_parser import parse_config_file
 
 
 class Parameter:
@@ -110,7 +114,7 @@ class ParameterSet:
     def __len__(self) -> int:
         """Length of the parameter set."""
         return len(self.parameters)
-    
+
     def __getitem__(self, key) -> Parameter:
         """Get a parameter by name."""
         return self.parameters[key]
@@ -233,7 +237,7 @@ class DualParameterSet(ParameterSet):
 
     def __init__(self):
         """Constructor for a dual parameter set."""
-        self.parameters = []
+        super().__init__()
         self.output_parameters = []
 
     def add_output(self, name, mapping):
@@ -266,8 +270,7 @@ class DualParameterSet(ParameterSet):
         name : str
             Name of the internal parameter to clone.
         """
-        mapping = lambda **vals_dict: vals_dict[name]
-        self.output_parameters.append(OutputParameter(name, mapping))
+        self.output_parameters.append(OutputParameter(name, lambda **vals_dict: vals_dict[name]))
 
     def to_output(self, values, input_normalised=True):
         """Compute the output parameters' values given an array of internal inputs.
@@ -305,3 +308,40 @@ class DualParameterSet(ParameterSet):
         data = dict(zip([p.name for p in self.output_parameters],
                         self.to_output(values, input_normalised)))
         return data
+
+
+def read_parameters(config: Dict[str, Any]) -> ParameterSet:
+    """Parse the parameters from the configuration dictionary.
+
+    Parameters
+    ----------
+    config : Dict[str, Any]
+        Configuration dictionary.
+
+    Returns
+    -------
+    ParameterSet
+        Parameter set for this problem.
+    """
+    # Read the parameters
+    if not 'parameters' in config:
+        raise ValueError("Missing parameters from configuration file.")
+    parameters = DualParameterSet() if 'output_parameters' in config else ParameterSet()
+    for name, spec in config['parameters'].items():
+        int_spec = [float(s) for s in spec]
+        parameters.add(name, *int_spec)
+    if "output_parameters" in config:
+        symbs = sympy.symbols(list(config['parameters'].keys()))
+        for name, spec in config["output_parameters"].items():
+            parameters.add_output(name, sympy.lambdify(symbs, spec))
+    # Fetch initial shot from another run
+    if 'init_shot_from' in config:
+        source = parse_config_file(config['init_shot_from'])
+        func_calls_file = os.path.join(source['output'], 'func_calls')
+        df = pd.read_table(func_calls_file)
+        df.columns = df.columns.str.strip()
+        min_series = df.iloc[df['Objective'].idxmin()]
+        for param in parameters:
+            if param.name in min_series.index:
+                param.inital_value = min_series[param.name]
+    return parameters
