@@ -4,8 +4,8 @@ import os.path
 import argparse
 import shutil
 from yaml import safe_dump
-from piglot.yaml_parser import parse_parameters, parse_optimiser, parse_config_file
-from piglot.yaml_parser import parse_objective, parse_stop_criteria
+from piglot.yaml_parser import parse_parameters, parse_config_file
+from piglot.yaml_parser import parse_stop_criteria
 from piglot.objectives import read_objective
 from piglot.optimisers import read_optimiser
 
