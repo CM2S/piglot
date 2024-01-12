@@ -1,7 +1,7 @@
 """Module for optimisers."""
 from typing import Any, Dict, Type, Union
 from piglot.objective import Objective
-from piglot.optimisers.optimiser import Optimiser
+from piglot.optimiser import Optimiser
 from piglot.optimisers.aoa import AOA
 from piglot.optimisers.botorch.bayes import BayesianBoTorch
 from piglot.optimisers.direct import DIRECT

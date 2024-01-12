@@ -20,7 +20,7 @@ from botorch.acquisition.knowledge_gradient import qKnowledgeGradient
 from botorch.sampling import SobolQMCNormalSampler
 from piglot.objective import Objective, GenericObjective, ObjectiveResult
 from piglot.optimisers.botorch.dataset import BayesDataset
-from piglot.optimisers.optimiser import Optimiser
+from piglot.optimiser import Optimiser
 
 
 def fit_mll_pytorch_loop(mll: ExactMarginalLogLikelihood, n_iters: int=100) -> None:

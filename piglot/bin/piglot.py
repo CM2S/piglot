@@ -4,11 +4,11 @@ import os.path
 import argparse
 import shutil
 from yaml import safe_dump
-from piglot.yaml_parser import parse_config_file
 from piglot.objectives import read_objective
 from piglot.optimisers import read_optimiser
 from piglot.parameter import read_parameters
-from piglot.optimisers.optimiser import StoppingCriteria
+from piglot.optimiser import StoppingCriteria
+from piglot.utils.yaml_parser import parse_config_file
 
 
 def parse_args():

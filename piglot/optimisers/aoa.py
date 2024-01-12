@@ -2,7 +2,7 @@
 from typing import Tuple, Callable, Optional
 import numpy as np
 from piglot.objective import Objective
-from piglot.optimisers.optimiser import ScalarOptimiser
+from piglot.optimiser import ScalarOptimiser
 
 
 class AOA(ScalarOptimiser):

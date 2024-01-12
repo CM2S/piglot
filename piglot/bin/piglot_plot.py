@@ -10,8 +10,8 @@ from PIL import Image
 import torch
 from piglot.parameter import read_parameters
 from piglot.objectives import read_objective
-from piglot.yaml_parser import parse_config_file
 from piglot.utils.surrogate import get_model
+from piglot.utils.yaml_parser import parse_config_file
 
 
 def cumulative_regret(values: np.ndarray, x_grid: np.ndarray) -> np.ndarray:

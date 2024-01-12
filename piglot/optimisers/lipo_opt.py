@@ -5,10 +5,10 @@ try:
     from lipo import GlobalOptimizer
 except ImportError:
     # Show a nice exception when this package is used
-    from piglot.optimisers.optimiser import missing_method
+    from piglot.optimiser import missing_method
     GlobalOptimizer = missing_method("LIPO", "lipo")
 from piglot.objective import Objective
-from piglot.optimisers.optimiser import ScalarOptimiser
+from piglot.optimiser import ScalarOptimiser
 
 
 class GlobalOptimizerMod(GlobalOptimizer):

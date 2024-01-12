@@ -6,10 +6,10 @@ try:
     from geneticalgorithm import geneticalgorithm
 except ImportError:
     # Show a nice exception when this package is used
-    from piglot.optimisers.optimiser import missing_method
+    from piglot.optimiser import missing_method
     geneticalgorithm = missing_method("Genetic algorithm", "geneticalgorithm")
 from piglot.objective import Objective
-from piglot.optimisers.optimiser import ScalarOptimiser
+from piglot.optimiser import ScalarOptimiser
 
 
 class geneticalgorithmMod(geneticalgorithm):

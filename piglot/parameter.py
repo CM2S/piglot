@@ -5,7 +5,7 @@ from hashlib import sha256
 import numpy as np
 import pandas as pd
 import sympy
-from piglot.yaml_parser import parse_config_file
+from piglot.utils.yaml_parser import parse_config_file
 
 
 class Parameter:

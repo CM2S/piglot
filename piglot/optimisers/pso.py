@@ -8,10 +8,10 @@ try:
     from pyswarms.backend.operators import compute_pbest
 except ImportError:
     # Show a nice exception when this package is used
-    from piglot.optimisers.optimiser import missing_method
+    from piglot.optimiser import missing_method
     GlobalBestPSO = missing_method("PSO", "pyswarms")
 from piglot.objective import Objective
-from piglot.optimisers.optimiser import ScalarOptimiser
+from piglot.optimiser import ScalarOptimiser
 
 
 class GlobalBestPSOMod(GlobalBestPSO):

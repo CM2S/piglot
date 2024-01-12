@@ -7,7 +7,7 @@ try:
 except ImportError:
     qmc = None
 from piglot.objective import Objective
-from piglot.optimisers.optimiser import ScalarOptimiser
+from piglot.optimiser import ScalarOptimiser
 
 
 class PureRandomSearch(ScalarOptimiser):
