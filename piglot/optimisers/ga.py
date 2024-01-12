@@ -1,6 +1,7 @@
 """Genetic Algorithm optimiser module."""
 from typing import Tuple, Callable, Optional
 import sys
+import time
 import numpy as np
 try:
     from geneticalgorithm import geneticalgorithm
@@ -145,12 +146,6 @@ class geneticalgorithmMod(geneticalgorithm):
         #sys.stdout.write('\n\n Objective function:\n %s\n' % (self.best_function))
         #sys.stdout.flush()
         re=np.array(self.report)
-        if self.convergence_curve==True:
-            plt.plot(re)
-            plt.xlabel('Iteration')
-            plt.ylabel('Objective function')
-            plt.title('Genetic Algorithm')
-            plt.show()
         if self.stop_mniwi==True:
             sys.stdout.write('\nWarning: GA is terminated due to the'+\
                              ' maximum number of iterations without improvement was met!')

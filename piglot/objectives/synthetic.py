@@ -90,7 +90,7 @@ class SyntheticObjective(GenericObjective):
         value = self.func.evaluate_true(params)
         if self.composition is not None:
             value -= self.func.optimal_value
-        elif self.transform is None:
+        elif self.transform is not None:
             value = self.transform(value, self.func)
         value = float(value.item())
         return ObjectiveResult([np.array([value])])
