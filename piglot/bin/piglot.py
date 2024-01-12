@@ -35,7 +35,6 @@ def parse_args():
     return parser.parse_args()
 
 
-
 def main():
     """Entry point for piglot."""
     args = parse_args()
@@ -63,7 +62,6 @@ def main():
     # Re-run the best case
     if 'skip_last_run' not in config:
         objective(parameters.normalise(best_params))
-
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 """Module for reducing the number of points in a response function"""
 from __future__ import annotations
-from typing import Tuple, Dict, Any, Union
+from typing import Tuple, Dict, Any
 import numpy as np
 import scipy.optimize
 
@@ -10,13 +10,13 @@ class Transformer:
 
     def __init__(
             self,
-            x_scale: float=1.0,
-            y_scale: float=1.0,
-            x_offset: float=0.0,
-            y_offset: float=0.0,
-            x_min: float=-np.inf,
-            x_max: float=np.inf,
-        ) -> None:
+            x_scale: float = 1.0,
+            y_scale: float = 1.0,
+            x_offset: float = 0.0,
+            y_offset: float = 0.0,
+            x_min: float = -np.inf,
+            x_max: float = np.inf,
+            ) -> None:
         self.x_scale = x_scale
         self.y_scale = y_scale
         self.x_offset = x_offset
@@ -99,7 +99,7 @@ def errors_interps(
         y_new: np.ndarray,
         x_ref: np.ndarray,
         y_ref: np.ndarray,
-    ) -> np.ndarray:
+        ) -> np.ndarray:
     """Compute the error associated with removing each point from the grid
 
     Parameters
@@ -131,7 +131,7 @@ def reduce_response(
         x_old: np.ndarray,
         y_old: np.ndarray,
         tol: float,
-    ) -> Tuple[int, float, Tuple[np.ndarray, np.ndarray]]:
+        ) -> Tuple[int, float, Tuple[np.ndarray, np.ndarray]]:
     """Reduce the number of points in a response function
 
     Parameters
@@ -170,7 +170,7 @@ def reduce_response(
         # Compute the error after removing this point
         y_new = np.interp(x_new, x_old, y_old)
         y_interp = np.interp(x_old, x_new, y_new)
-        y_error =  np.trapz(np.square(y_old - y_interp), x_old) / np.trapz(np.square(y_old), x_old)
+        y_error = np.trapz(np.square(y_old - y_interp), x_old) / np.trapz(np.square(y_old), x_old)
         # Check if we have reached the tolerance
         if y_error >= tol:
             x_new = x_bk
@@ -185,7 +185,7 @@ def reduce_response(
     x_new = np.concatenate([np.array([x_min]), np.sort(result.x), np.array([x_max])])
     y_new = np.interp(x_new, x_old, y_old)
     y_interp = np.interp(x_old, x_new, y_new)
-    y_error =  np.trapz(np.square(y_old - y_interp), x_old) / np.trapz(np.square(y_old), x_old)
+    y_error = np.trapz(np.square(y_old - y_interp), x_old) / np.trapz(np.square(y_old), x_old)
 
     return n_points, y_error, (x_new, y_new)
 
@@ -194,7 +194,7 @@ def interpolate_response(
         x_resp: np.ndarray,
         y_resp: np.ndarray,
         x_grid: np.ndarray,
-    ) -> np.ndarray:
+        ) -> np.ndarray:
     """Interpolate a response function.
 
     Parameters

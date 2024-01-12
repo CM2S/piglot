@@ -83,7 +83,7 @@ def filter_close_points(data: np.ndarray, tol: float) -> np.ndarray:
 
 def stats_interp_to_common_grid(
         responses: List[Tuple[np.ndarray, np.ndarray]],
-    ) -> Dict[str, np.ndarray]:
+        ) -> Dict[str, np.ndarray]:
     """Interpolate a set of response to a common grid and compute several statistics.
 
     Parameters

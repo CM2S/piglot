@@ -85,8 +85,8 @@ class PureRandomSearch(ScalarOptimiser):
             Observed optimum of the objective.
         """
         # Define lower and upper bounds
-        lower_bounds = bound[:,0]
-        upper_bounds = bound[:,1]
+        lower_bounds = bound[:, 0]
+        upper_bounds = bound[:, 1]
 
         # Compute loss function value given the initial shot
         best_solution = init_shot
@@ -109,11 +109,11 @@ class PureRandomSearch(ScalarOptimiser):
                 new_solution = lower_bounds + sampler.random(n_dim) \
                                             * (upper_bounds - lower_bounds)
             elif self.sampling == 'normal':
-                sigma = (upper_bounds - lower_bounds) / (2 + (100.0 * (i+1)) / n_iter)
+                sigma = (upper_bounds - lower_bounds) / (2 + (100.0 * (i + 1)) / n_iter)
                 new_solution = norm.rvs(loc=best_solution, scale=sigma, size=n_dim,
                                         random_state=i)
-                new_solution = np.where(new_solution > bound[:,1], bound[:,1], new_solution)
-                new_solution = np.where(new_solution < bound[:,0], bound[:,0], new_solution)
+                new_solution = np.where(new_solution > bound[:, 1], bound[:, 1], new_solution)
+                new_solution = np.where(new_solution < bound[:, 0], bound[:, 0], new_solution)
             elif self.sampling == 'sobol':
                 new_solution = lower_bounds + np.squeeze(sampler.random()) \
                                             * (upper_bounds - lower_bounds)

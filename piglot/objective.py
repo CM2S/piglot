@@ -64,7 +64,6 @@ class Composition(ABC):
         return self.composition(inner)
 
 
-
 class MSEComposition(Composition):
     """Mean squared error outer composite function with gradients"""
 
@@ -99,14 +98,12 @@ class MSEComposition(Composition):
         return torch.mean(torch.square(inner), dim=-1)
 
 
-
 class DynamicPlotter(ABC):
     """Abstract class for dynamically-updating plots"""
 
     @abstractmethod
     def update(self) -> None:
         """Update the plot with the most recent data"""
-
 
 
 class Objective(ABC):
@@ -125,7 +122,7 @@ class Objective(ABC):
             config: Dict[str, Any],
             parameters: ParameterSet,
             output_dir: str,
-        ) -> Objective:
+            ) -> Objective:
         """Read the objective from a configuration dictionary.
 
         Parameters
@@ -144,7 +141,7 @@ class Objective(ABC):
         """
         raise NotImplementedError()
 
-    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
+    def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
         """Plot a given function call given the parameter hash
 
         Parameters
@@ -198,7 +195,7 @@ class ObjectiveResult:
     values: List[np.ndarray]
     variances: Optional[List[np.ndarray]] = None
 
-    def scalarise(self, composition: Composition=None) -> float:
+    def scalarise(self, composition: Composition = None) -> float:
         """Scalarise the result.
 
         Parameters
@@ -215,7 +212,7 @@ class ObjectiveResult:
             return composition(np.concatenate(self.values))
         return np.mean(self.values)
 
-    def scalarise_stochastic(self, composition: Composition=None) -> Tuple[float, float]:
+    def scalarise_stochastic(self, composition: Composition = None) -> Tuple[float, float]:
         """Scalarise the result.
 
         Parameters
@@ -244,10 +241,10 @@ class GenericObjective(Objective):
     def __init__(
             self,
             parameters: ParameterSet,
-            stochastic: bool=False,
-            composition: Composition=None,
-            output_dir: str=None,
-        ) -> None:
+            stochastic: bool = False,
+            composition: Composition = None,
+            output_dir: str = None,
+            ) -> None:
         super().__init__()
         self.parameters = parameters
         self.output_dir = output_dir
@@ -273,7 +270,7 @@ class GenericObjective(Objective):
                 file.write(f'\t{"Hash":>64}\n')
 
     @abstractmethod
-    def _objective(self, values: np.ndarray, concurrent: bool=False) -> ObjectiveResult:
+    def _objective(self, values: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
         """Abstract method for objective computation.
 
         Parameters
@@ -289,7 +286,7 @@ class GenericObjective(Objective):
             Objective result.
         """
 
-    def __call__(self, values: np.ndarray, concurrent: bool=False) -> ObjectiveResult:
+    def __call__(self, values: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
         """Objective computation for the outside world. Also handles output file writing.
 
         Parameters

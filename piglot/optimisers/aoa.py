@@ -104,20 +104,20 @@ class AOA(ScalarOptimiser):
             raise RuntimeError('Need to pass bounds for AOA!')
 
         # Initiate candidate solutions randomly
-        solutions = (bound[:,1] - bound[:,0])* \
-                                 self.rng.random(size=(self.n_solutions,n_dim)) + bound[:,0]
+        solutions = ((bound[:, 1] - bound[:, 0]) *
+                     self.rng.random(size=(self.n_solutions, n_dim)) + bound[:, 0])
         # Replace fisrt candidate solution by the initial shot
-        solutions[0,:] = init_shot
+        solutions[0, :] = init_shot
         #
-        beta = (bound[:,1] - bound[:,0])*self.mu
+        beta = (bound[:, 1] - bound[:, 0])*self.mu
         # Evaluate fitness
         fitness = np.zeros(self.n_solutions)
         for i in range(0, self.n_solutions):
-            fitness[i] = objective(solutions[i,:])
+            fitness[i] = objective(solutions[i, :])
         # Update best solution
         pos_best_solution = np.argmin(fitness)
         best_value = fitness[pos_best_solution]
-        best_solution = solutions[pos_best_solution,:]
+        best_solution = solutions[pos_best_solution, :]
         # Check solution progress
         if self._progress_check(0, best_value, best_solution):
             return best_value, best_solution
@@ -125,8 +125,8 @@ class AOA(ScalarOptimiser):
         # Start iterative cycle
         for i in range(0, n_iter):
             # Update MOA and MOP
-            MOA = self.MOA_start + i*(self.MOA_end-self.MOA_start)/n_iter
-            MOP = 1.0 - (i**(1/self.alpha))/(n_iter** (1 / self.alpha))
+            MOA = self.MOA_start + i * (self.MOA_end - self.MOA_start) / n_iter
+            MOP = 1.0 - (i ** (1 / self.alpha)) / (n_iter ** (1 / self.alpha))
             # Update solutions
             for i_solution in range(0, self.n_solutions):
                 new_solution = np.zeros(n_dim)
@@ -137,32 +137,32 @@ class AOA(ScalarOptimiser):
                         # Exploration phase
                         if r2 > 0.5:
                             # Division operator
-                            new_solution[i_pos] = best_solution[i_pos]/(MOP+self.epsilon) *\
-                                                                                 beta[i_pos]
+                            new_solution[i_pos] = (best_solution[i_pos] / (MOP + self.epsilon) *
+                                                   beta[i_pos])
                         else:
                             # Multiplication operator
-                            new_solution[i_pos] = best_solution[i_pos]*MOP*beta[i_pos]
+                            new_solution[i_pos] = best_solution[i_pos] * MOP * beta[i_pos]
                     else:
                         # Exploitation phase
                         if r3 > 0.5:
                             # Subtraction operator
-                            new_solution[i_pos] = best_solution[i_pos] - MOP*beta[i_pos]
+                            new_solution[i_pos] = best_solution[i_pos] - MOP * beta[i_pos]
                         else:
                             # Addition operator
-                            new_solution[i_pos] = best_solution[i_pos] + MOP*beta[i_pos]
+                            new_solution[i_pos] = best_solution[i_pos] + MOP * beta[i_pos]
                 # Boundary check
-                new_solution = np.where(new_solution > bound[:,1], bound[:,1], new_solution)
-                new_solution = np.where(new_solution < bound[:,0], bound[:,0], new_solution)
+                new_solution = np.where(new_solution > bound[:, 1], bound[:, 1], new_solution)
+                new_solution = np.where(new_solution < bound[:, 0], bound[:, 0], new_solution)
                 # Update fitness function
                 new_fitness = objective(new_solution)
                 if new_fitness < fitness[i_solution]:
                     fitness[i_solution] = new_fitness
-                    solutions[i_solution,:] = new_solution
-                if (fitness[i_solution] < best_value):
+                    solutions[i_solution, :] = new_solution
+                if fitness[i_solution] < best_value:
                     best_value = fitness[i_solution]
-                    best_solution = solutions[i_solution,:]
+                    best_solution = solutions[i_solution, :]
             # Update progress and check convergence
-            if self._progress_check(i+1, best_value, best_solution):
+            if self._progress_check(i + 1, best_value, best_solution):
                 break
 
         return best_value, best_solution

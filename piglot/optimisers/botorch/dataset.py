@@ -14,11 +14,11 @@ class BayesDataset:
             n_dim: int,
             n_outputs: int,
             bounds: np.ndarray,
-            export: str=None,
-            dtype: torch.dtype=torch.float64,
-            std_tol: float=1e-6,
-            def_variance: float=1e-6,
-        ) -> None:
+            export: str = None,
+            dtype: torch.dtype = torch.float64,
+            std_tol: float = 1e-6,
+            def_variance: float = 1e-6,
+            ) -> None:
         self.dtype = dtype
         self.n_points = 0
         self.n_dim = n_dim
@@ -162,8 +162,8 @@ class BayesDataset:
             Standardised values and variances.
         """
         mask, y_avg, y_std = self.get_obervation_stats()
-        std_values = (values[:,mask] - y_avg) / y_std
-        std_variances = variances[:,mask] / y_std
+        std_values = (values[:, mask] - y_avg) / y_std
+        std_variances = variances[:, mask] / y_std
         return std_values, std_variances
 
     def denormalise(self, std_params: torch.Tensor) -> torch.Tensor:
@@ -208,7 +208,7 @@ class BayesDataset:
     def min(
             self,
             transformer: Callable[[torch.Tensor], float],
-        ) -> Tuple[np.ndarray, np.ndarray]:
+            ) -> Tuple[np.ndarray, np.ndarray]:
         """Return the minimum value of the dataset, according to a given transformation.
 
         Parameters
@@ -222,4 +222,4 @@ class BayesDataset:
             Parameters and values for the minimum point.
         """
         idx = np.argmin([transformer(value) for value in self.values])
-        return self.params[idx,:].numpy(), self.values[idx,:].numpy()
+        return self.params[idx, :].numpy(), self.values[idx, :].numpy()

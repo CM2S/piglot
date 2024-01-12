@@ -24,10 +24,10 @@ def write_parameters(param_value: Dict[str, float], source: str, dest: str) -> N
                 out = line
                 for parameter, value in param_value.items():
                     # Replace full expression
-                    regex = r'\<' + parameter + '\(.*?\>'
+                    regex = r'\<' + parameter + r'\(.*?\>'
                     out = re.sub(regex, str(value), out)
                     # Replace short expression
-                    regex = r'\<' + parameter + '\>'
+                    regex = r'\<' + parameter + r'\>'
                     out = re.sub(regex, str(value), out)
                 fout.write(out)
 

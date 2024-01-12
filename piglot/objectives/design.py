@@ -84,9 +84,9 @@ class DesignTarget:
             name: str,
             prediction: Union[str, List[str]],
             quantity: Quantity,
-            negate: bool=False,
-            weight: float=1.0,
-        ) -> None:
+            negate: bool = False,
+            weight: float = 1.0,
+            ) -> None:
         # Sanitise prediction field
         if isinstance(prediction, str):
             prediction = [prediction]
@@ -136,7 +136,7 @@ class DesignTarget:
         if 'prediction' not in config:
             raise ValueError(f"Missing prediction for design target '{name}'.")
         # Read the quantity
-        if not 'quantity' in config:
+        if 'quantity' not in config:
             raise ValueError("Missing quantity for fitting objective.")
         quantity = config['quantity']
         # Parse specification: simple or complete
@@ -214,8 +214,8 @@ class DesignObjective(GenericObjective):
             solver: Solver,
             targets: List[DesignTarget],
             output_dir: str,
-            stochastic: bool=False,
-        ) -> None:
+            stochastic: bool = False,
+            ) -> None:
         super().__init__(
             parameters,
             stochastic,
@@ -230,7 +230,7 @@ class DesignObjective(GenericObjective):
         super().prepare()
         self.solver.prepare()
 
-    def _objective(self, values: np.ndarray, concurrent: bool=False) -> ObjectiveResult:
+    def _objective(self, values: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
         """Objective computation for design objectives.
 
         Parameters
@@ -254,7 +254,7 @@ class DesignObjective(GenericObjective):
             variances.append(target.weight * np.var(targets) / len(targets))
         return ObjectiveResult(results, variances if self.stochastic else None)
 
-    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
+    def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
         """Plot a given function call given the parameter hash
 
         Parameters
@@ -327,7 +327,7 @@ class DesignObjective(GenericObjective):
             config: Dict[str, Any],
             parameters: ParameterSet,
             output_dir: str,
-        ) -> DesignObjective:
+            ) -> DesignObjective:
         """Read a design objective from a configuration dictionary.
 
         Parameters
@@ -345,11 +345,11 @@ class DesignObjective(GenericObjective):
             Objective function to optimise.
         """
         # Read the solver
-        if not 'solver' in config:
+        if 'solver' not in config:
             raise ValueError("Missing solver for fitting objective.")
         solver = read_solver(config['solver'], parameters, output_dir)
         # Read the targets
-        if not 'targets' in config:
+        if 'targets' not in config:
             raise ValueError("Missing targets for fitting objective.")
         targets: Dict[DesignTarget, List[str]] = {}
         for target_name, target_config in config.pop('targets').items():

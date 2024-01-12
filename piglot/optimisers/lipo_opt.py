@@ -131,20 +131,19 @@ class LIPO(ScalarOptimiser):
         """
         # Set optimization problem as a maximization one
         maximize = True
+
         # Convert the optimization problem to a minimization problem by negating the
         # optimization function
         def negate(**kwargs):
             return -objective(list(kwargs.values()))
-        #def negate(**kwargs):
-        #    return func(list(kwargs.values()))
         # Convert the bounds in array type to dicitionary type, as required in the
         # GlobalOptimizer documentation
         lower_bounds = {}
         upper_bounds = {}
         patterns = [par.name for par in self.parameters]
         if bound is not None:
-            lower_bounds = dict(zip(patterns, bound[:,0]))
-            upper_bounds = dict(zip(patterns, bound[:,1]))
+            lower_bounds = dict(zip(patterns, bound[:, 0]))
+            upper_bounds = dict(zip(patterns, bound[:, 1]))
         # Compute loss function value given the initial shot
         evaluations = []
         if init_shot is not None:

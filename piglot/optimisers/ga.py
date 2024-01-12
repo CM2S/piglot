@@ -205,12 +205,25 @@ class GA(ScalarOptimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, objective: Objective, variable_type='real', variable_type_mixed=None,
-                 function_timeout=3600, algorithm_parameters={'max_num_iteration': None,
-                 'population_size':100, 'mutation_probability':0.1, 'elit_ratio': 0.01,
-                 'crossover_probability': 0.5, 'parents_portion': 0.3,
-                 'crossover_type':'uniform', 'max_iteration_without_improv':None},
-                 convergence_curve=True, progress_bar=False):
+    def __init__(
+            self,
+            objective: Objective,
+            variable_type='real',
+            variable_type_mixed=None,
+            function_timeout=3600,
+            algorithm_parameters={
+                'max_num_iteration': None,
+                'population_size': 100,
+                'mutation_probability': 0.1,
+                'elit_ratio': 0.01,
+                'crossover_probability': 0.5,
+                'parents_portion': 0.3,
+                'crossover_type': 'uniform',
+                'max_iteration_without_improv': None,
+            },
+            convergence_curve=True,
+            progress_bar=False,
+            ):
         """
         Constructs all the necessary attributes for the Genetic Algorithm optimiser
 

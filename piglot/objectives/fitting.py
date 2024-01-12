@@ -134,14 +134,14 @@ class Reference:
             filename: str,
             prediction: Union[str, List[str]],
             output_dir: str,
-            x_col: int=1,
-            y_col: int=2,
-            skip_header: int=0,
-            transformer: Transformer=None,
-            filter_tol: float=0.0,
-            show: bool=False,
-            weight: float=1.0,
-        ):
+            x_col: int = 1,
+            y_col: int = 2,
+            skip_header: int = 0,
+            transformer: Transformer = None,
+            filter_tol: float = 0.0,
+            show: bool = False,
+            weight: float = 1.0,
+            ):
         # Sanitise prediction field
         if isinstance(prediction, str):
             prediction = [prediction]
@@ -155,9 +155,9 @@ class Reference:
         self.show = show
         self.weight = weight
         # Load the data right away
-        data = np.genfromtxt(filename, skip_header=skip_header)[:,[x_col - 1, y_col - 1]]
-        self.x_data = data[:,0]
-        self.y_data = data[:,1]
+        data = np.genfromtxt(filename, skip_header=skip_header)[:, [x_col - 1, y_col - 1]]
+        self.x_data = data[:, 0]
+        self.y_data = data[:, 1]
         # Apply the transformer
         if self.transformer is not None:
             self.x_data, self.y_data = self.transformer(self.x_data, self.y_data)
@@ -362,7 +362,7 @@ class FittingSolver:
             self,
             solver: Solver,
             references: Dict[Reference, List[str]],
-        ) -> None:
+            ) -> None:
         self.solver = solver
         self.references = references
 
@@ -394,7 +394,7 @@ class FittingSolver:
             output[reference] = [result[case] for case in cases]
         return output
 
-    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
+    def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
         """Plot a given function call given the parameter hash
 
         Parameters
@@ -460,7 +460,7 @@ class FittingSolver:
                 # Plot the individual responses
                 for name in names:
                     axis.plot(responses[name].get_time(), responses[name].get_data(),
-                            label=f'{name}')
+                              label=f'{name}')
             if reference_limits:
                 axis.set_xlim(xlim)
                 axis.set_ylim(ylim)
@@ -499,11 +499,11 @@ class FittingSolver:
             Solver for fitting objectives.
         """
         # Read the solver
-        if not 'solver' in config:
+        if 'solver' not in config:
             raise ValueError("Missing solver for fitting objective.")
         solver = read_solver(config['solver'], parameters, output_dir)
         # Read the references
-        if not 'references' in config:
+        if 'references' not in config:
             raise ValueError("Missing references for fitting objective.")
         references: Dict[Reference, List[str]] = {}
         for reference_name, reference_config in config.pop('references').items():
@@ -529,9 +529,9 @@ class FittingObjective(GenericObjective):
             solver: FittingSolver,
             output_dir: str,
             reduction: Reduction,
-            stochastic: bool=False,
-            composite: bool=False,
-        ) -> None:
+            stochastic: bool = False,
+            composite: bool = False,
+            ) -> None:
         super().__init__(
             parameters,
             stochastic,
@@ -547,7 +547,7 @@ class FittingObjective(GenericObjective):
         super().prepare()
         self.solver.prepare()
 
-    def _objective(self, values: np.ndarray, concurrent: bool=False) -> ObjectiveResult:
+    def _objective(self, values: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
         """Abstract method for objective computation.
 
         Parameters
@@ -579,7 +579,7 @@ class FittingObjective(GenericObjective):
             variances.append(reference.weight * variance)
         return ObjectiveResult(losses, variances if self.stochastic else None)
 
-    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
+    def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
         """Plot a given function call given the parameter hash.
 
         Parameters
@@ -621,13 +621,12 @@ class FittingObjective(GenericObjective):
         """
         return self.solver.plot_current()
 
-
     @staticmethod
     def read(
             config: Dict[str, Any],
             parameters: ParameterSet,
             output_dir: str,
-        ) -> FittingObjective:
+            ) -> FittingObjective:
         """Read a fitting objective from a configuration dictionary.
 
         Parameters
@@ -645,7 +644,7 @@ class FittingObjective(GenericObjective):
             Objective function to optimise.
         """
         # Parse the reduction
-        if not 'reduction' in config:
+        if 'reduction' not in config:
             config['reduction'] = 'mse'
         elif config['reduction'] not in AVAILABLE_REDUCTIONS:
             raise ValueError(f"Invalid reduction '{config['reduction']}' for fitting objective.")

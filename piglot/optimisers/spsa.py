@@ -54,7 +54,6 @@ class SPSA(ScalarOptimiser):
         self.a = a
         self.c = 1e-6 if c is None else c
 
-
     def _scalar_optimise(
         self,
         objective: Callable[[np.ndarray, Optional[bool]], float],
@@ -120,4 +119,3 @@ class SPSA(ScalarOptimiser):
                 break
 
         return x, new_value
-  

@@ -10,7 +10,6 @@ from piglot.parameter import ParameterSet
 from piglot.objective import GenericObjective, ObjectiveResult
 
 
-
 class AnalyticalObjective(GenericObjective):
     """Objective function derived from an analytical expression."""
 
@@ -25,7 +24,7 @@ class AnalyticalObjective(GenericObjective):
         self.parameters = parameters
         self.expression = sympy.lambdify(symbs, expression)
 
-    def _objective(self, values: np.ndarray, concurrent: bool=False) -> ObjectiveResult:
+    def _objective(self, values: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
         """Objective computation for analytical functions.
 
         Parameters
@@ -106,7 +105,14 @@ class AnalyticalObjective(GenericObjective):
         y = np.linspace(self.parameters[1].lbound, self.parameters[1].ubound, 100)
         X, Y = np.meshgrid(x, y)
         Z = np.array([[self._objective_denorm(np.array([x_i, y_i])) for x_i in x] for y_i in y])
-        axis.scatter(values[0], values[1], self._objective_denorm(values), c="r", label="Case", s=50)
+        axis.scatter(
+            values[0],
+            values[1],
+            self._objective_denorm(values),
+            c="r",
+            label="Case",
+            s=50,
+        )
         surf = axis.plot_surface(X, Y, Z, alpha=0.7, label="Analytical Objective")
         surf._facecolors2d = surf._facecolors3d
         surf._edgecolors2d = surf._edgecolors3d
@@ -121,7 +127,7 @@ class AnalyticalObjective(GenericObjective):
         fig.tight_layout()
         return fig
 
-    def plot_case(self, case_hash: str, options: Dict[str, Any]=None) -> List[Figure]:
+    def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
         """Plot a given function call given the parameter hash.
 
         Parameters
@@ -140,7 +146,7 @@ class AnalyticalObjective(GenericObjective):
         df = pd.read_table(self.func_calls_file)
         df.columns = df.columns.str.strip()
         df = df[df["Hash"] == case_hash]
-        values = df[[param.name for param in self.parameters]].to_numpy()[0,:]
+        values = df[[param.name for param in self.parameters]].to_numpy()[0, :]
         # Build title
         append_title = ''
         if options is not None and 'append_title' in options:
@@ -159,7 +165,7 @@ class AnalyticalObjective(GenericObjective):
             config: Dict[str, Any],
             parameters: ParameterSet,
             output_dir: str,
-        ) -> AnalyticalObjective:
+            ) -> AnalyticalObjective:
         """Read the objective from a configuration dictionary.
 
         Parameters
@@ -177,6 +183,6 @@ class AnalyticalObjective(GenericObjective):
             Objective function to optimise.
         """
         # Check for mandatory arguments
-        if not 'expression' in config:
+        if 'expression' not in config:
             raise RuntimeError("Missing analytical expression to minimise")
         return AnalyticalObjective(parameters, config['expression'], output_dir=output_dir)

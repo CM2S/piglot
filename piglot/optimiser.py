@@ -11,7 +11,6 @@ from piglot.utils.assorted import pretty_time
 from piglot.objective import Objective, GenericObjective
 
 
-
 def boundary_check(arg, bounds):
     """Check if the values are within the bounds and correct them if not.
 
@@ -27,8 +26,8 @@ def boundary_check(arg, bounds):
     array
         Corrected values.
     """
-    arg = np.where(arg > bounds[:,1], bounds[:,1], arg)
-    arg = np.where(arg < bounds[:,0], bounds[:,0], arg)
+    arg = np.where(arg > bounds[:, 1], bounds[:, 1], arg)
+    arg = np.where(arg < bounds[:, 0], bounds[:, 0], arg)
     return arg
 
 
@@ -89,11 +88,11 @@ class StoppingCriteria:
     """
     def __init__(
             self,
-            conv_tol: float=None,
-            max_iters_no_improv: int=None,
-            max_func_calls: int=None,
-            max_timeout: float=None,
-        ):
+            conv_tol: float = None,
+            max_iters_no_improv: int = None,
+            max_func_calls: int = None,
+            max_timeout: float = None,
+            ):
         """
         Constructs all the necessary attributes for the stopping criteria.
 
@@ -119,7 +118,7 @@ class StoppingCriteria:
             iters_no_improv: int,
             func_calls: int,
             elapsed: float,
-        ) -> bool:
+            ) -> bool:
         """
         Check the status of the stopping criteria.
 
@@ -167,10 +166,8 @@ class StoppingCriteria:
         )
 
 
-
 class InvalidOptimiserException(Exception):
     """Exception signaling invalid combination of optimiser and objective function."""
-
 
 
 class Optimiser(ABC):
@@ -203,7 +200,6 @@ class Optimiser(ABC):
         self.best_solution = None
         self.begin_time = None
 
-
     @abstractmethod
     def _validate_problem(self, objective: Objective) -> None:
         """Validate the combination of optimiser and objective.
@@ -214,15 +210,14 @@ class Optimiser(ABC):
             Objective to optimise.
         """
 
-
     def optimise(
             self,
             n_iter: int,
             parameters: ParameterSet,
             output_dir: str,
-            stop_criteria: StoppingCriteria=StoppingCriteria(),
-            verbose: bool=True,
-        ) -> Tuple[float, np.ndarray]:
+            stop_criteria: StoppingCriteria = StoppingCriteria(),
+            verbose: bool = True,
+            ) -> Tuple[float, np.ndarray]:
         """
         Optimiser for the outside world.
 
@@ -260,7 +255,7 @@ class Optimiser(ABC):
         n_dim = len(self.parameters)
         init_shot = [par.normalise(par.inital_value) for par in self.parameters]
         bounds = np.ones((n_dim, 2))
-        bounds[:,0] = -1
+        bounds[:, 0] = -1
         # Build best solution
         self.best_value = np.nan
         self.best_solution = None
@@ -294,7 +289,6 @@ class Optimiser(ABC):
         # Return the best value
         return self.best_value, np.array(new_solution)
 
-
     @abstractmethod
     def _optimise(
         self,
@@ -325,14 +319,13 @@ class Optimiser(ABC):
             Observed optimum of the objective.
         """
 
-
     def __update_progress_files(
             self,
             i_iter: int,
             curr_solution: float,
             curr_value: np.ndarray,
             extra_info: str,
-        ) -> None:
+            ) -> None:
         """Update progress on output files.
 
         Parameters
@@ -371,14 +364,13 @@ class Optimiser(ABC):
             file.write(f"\t{'-' if extra_info is None else extra_info}")
             file.write('\n')
 
-
     def _progress_check(
             self,
             i_iter: int,
             curr_value: float,
             curr_solution: np.ndarray,
-            extra_info: str=None,
-        ) -> bool:
+            extra_info: str = None,
+            ) -> bool:
         """
         Report the optimiser progress and check for termination.
 
@@ -421,7 +413,6 @@ class Optimiser(ABC):
             self.objective.func_calls,
             time.perf_counter() - self.begin_time,
         )
-
 
 
 class ScalarOptimiser(Optimiser):

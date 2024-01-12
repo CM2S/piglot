@@ -16,7 +16,12 @@ class InputData(ABC):
     """Generic class for solver input data."""
 
     @abstractmethod
-    def prepare(self, values: np.ndarray, parameters: ParameterSet, tmp_dir: str=None) -> InputData:
+    def prepare(
+            self,
+            values: np.ndarray,
+            parameters: ParameterSet,
+            tmp_dir: str = None,
+            ) -> InputData:
         """Prepare the input data for the simulation with a given set of parameters.
 
         Parameters
@@ -238,7 +243,7 @@ class Solver(ABC):
             cases: List[Case],
             parameters: ParameterSet,
             output_dir: str,
-        ) -> None:
+            ) -> None:
         """Constructor for the solver class.
 
         Parameters
@@ -282,7 +287,7 @@ class Solver(ABC):
             self,
             case: Case,
             result: CaseResult,
-        ) -> None:
+            ) -> None:
         """Write this case's history entry.
 
         Parameters
@@ -357,7 +362,7 @@ class Solver(ABC):
             self,
             values: np.ndarray,
             concurrent: bool,
-        ) -> Dict[Case, CaseResult]:
+            ) -> Dict[Case, CaseResult]:
         """Internal solver for the prescribed problems.
 
         Parameters
@@ -377,7 +382,7 @@ class Solver(ABC):
             self,
             values: np.ndarray,
             concurrent: bool,
-        ) -> Dict[str, OutputResult]:
+            ) -> Dict[str, OutputResult]:
         """Solve all cases for the given set of parameter values.
 
         Parameters

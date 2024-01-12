@@ -23,7 +23,7 @@ from piglot.optimisers.botorch.dataset import BayesDataset
 from piglot.optimiser import Optimiser
 
 
-def fit_mll_pytorch_loop(mll: ExactMarginalLogLikelihood, n_iters: int=100) -> None:
+def fit_mll_pytorch_loop(mll: ExactMarginalLogLikelihood, n_iters: int = 100) -> None:
     """Fit a GP model using a PyTorch optimisation loop.
 
     Parameters
@@ -52,15 +52,15 @@ class BayesianBoTorch(Optimiser):
     def __init__(
         self,
         objective: Objective,
-        n_initial: int=8,
-        n_test: int=0,
-        acquisition: str='ucb',
-        beta: float=1.0,
-        noisy: float=False,
-        q: int=1,
-        seed: int=1,
-        load_file: str=None,
-        export: str=None,
+        n_initial: int = 8,
+        n_test: int = 0,
+        acquisition: str = 'ucb',
+        beta: float = 1.0,
+        noisy: float = False,
+        q: int = 1,
+        seed: int = 1,
+        load_file: str = None,
+        export: str = None,
     ) -> None:
         if not isinstance(objective, GenericObjective):
             raise RuntimeError("Bayesian optimiser requires a GenericObjective")
@@ -81,7 +81,6 @@ class BayesianBoTorch(Optimiser):
             raise RuntimeError("Can only use q != 1 for quasi-Monte Carlo acquisitions")
         torch.set_num_threads(1)
 
-
     def _validate_problem(self, objective: Objective) -> None:
         """Validate the combination of optimiser and objective
 
@@ -90,7 +89,6 @@ class BayesianBoTorch(Optimiser):
         objective : Objective
             Objective to optimise
         """
-
 
     def _acq_func(
         self,
@@ -101,7 +99,6 @@ class BayesianBoTorch(Optimiser):
         if self.objective.composition:
             return self._build_acquisition_composite(dataset, model, n_dim)
         return self._build_acquisition_scalar(dataset, model, n_dim)
-
 
     def _build_model(self, std_dataset: BayesDataset) -> Model:
         # Fetch data
@@ -123,13 +120,12 @@ class BayesianBoTorch(Optimiser):
             fit_mll_pytorch_loop(mll)
         return model
 
-
     def _get_candidates(
             self,
             n_dim,
             dataset: BayesDataset,
             test_dataset: BayesDataset,
-        ) -> Tuple[np.ndarray, float]:
+            ) -> Tuple[np.ndarray, float]:
 
         # Build model on unit-cube and standardised data
         std_dataset = dataset.standardised()
@@ -165,9 +161,8 @@ class BayesianBoTorch(Optimiser):
 
         # Re-map to original space
         for i in range(self.q):
-            candidates[i,:] = dataset.denormalise(candidates[i,:])
+            candidates[i, :] = dataset.denormalise(candidates[i, :])
         return candidates.cpu().numpy(), cv_error
-
 
     def _eval_candidates(self, candidates: np.ndarray) -> List[ObjectiveResult]:
         # Single candidate case
@@ -178,17 +173,15 @@ class BayesianBoTorch(Optimiser):
             results = pool.map(lambda x: self.objective(x, concurrent=True), candidates)
         return results
 
-
     def _get_random_points(
             self,
             n_points: int,
             n_dim: int,
-            seed:int,
+            seed: int,
             bound: np.ndarray,
-        ) -> List[np.ndarray]:
+            ) -> List[np.ndarray]:
         points = qmc.Sobol(n_dim, seed=seed).random(n_points)
-        return [point * (bound[:,1] - bound[:,0]) + bound[:,0] for point in points]
-
+        return [point * (bound[:, 1] - bound[:, 0]) + bound[:, 0] for point in points]
 
     def _result_to_dataset(self, result: ObjectiveResult) -> Tuple[np.ndarray, np.ndarray]:
         if self.objective.composition:
@@ -205,14 +198,12 @@ class BayesianBoTorch(Optimiser):
             values, variances = np.array([values]), np.array([variances])
         return values, variances
 
-
     def _value_to_scalar(self, value: Union[np.ndarray, torch.Tensor]) -> float:
         if self.objective.composition:
             if isinstance(value, np.ndarray):
                 return self.objective.composition.composition(value)
             return self.objective.composition.composition_torch(value)
         return value.item()
-
 
     def _build_acquisition_scalar(
         self,
@@ -249,7 +240,6 @@ class BayesianBoTorch(Optimiser):
             raise RuntimeError(f"Unknown acquisition {self.acquisition}")
         return acq, num_restarts, raw_samples
 
-
     def _build_acquisition_composite(
         self,
         dataset: BayesDataset,
@@ -282,7 +272,6 @@ class BayesianBoTorch(Optimiser):
         else:
             raise RuntimeError(f"Unknown acquisition {self.acquisition}")
         return acq, num_restarts, raw_samples
-
 
     def _optimise(
         self,
@@ -358,12 +347,12 @@ class BayesianBoTorch(Optimiser):
             for i, result in enumerate(results):
                 values, variances = self._result_to_dataset(result)
                 values_batch.append(self._value_to_scalar(values))
-                dataset.push(candidates[i,:], values, variances)
+                dataset.push(candidates[i, :], values, variances)
 
             # Find best observation for this batch
             best_idx = np.argmin(values_batch)
             best_value = values_batch[best_idx]
-            best_params = candidates[best_idx,:]
+            best_params = candidates[best_idx, :]
 
             # Update progress (with CV data if available)
             extra = f'Val. {cv_error:6.4}' if cv_error else None

@@ -28,10 +28,10 @@ def read_solver(config: Dict[str, Any], parameters: ParameterSet, output_dir: st
         Solver to use for this problem.
     """
     # Read the solver name (and pop it from the dictionary)
-    if not 'name' in config:
+    if 'name' not in config:
         raise ValueError("Missing name for solver.")
     name = config.pop('name')
     # Delegate to the solver reader
-    if not name in AVAILABLE_SOLVERS:
+    if name not in AVAILABLE_SOLVERS:
         raise ValueError(f"Unknown solver '{name}'.")
     return AVAILABLE_SOLVERS[name].read(config, parameters, output_dir)

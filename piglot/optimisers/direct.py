@@ -98,8 +98,10 @@ class DIRECT(ScalarOptimiser):
         new_samples = []
         w_vec = []
         dir_vector = np.zeros(n_dim)
+
         # Slope function
-        slope = lambda d1, d2: np.abs(d1[1] - d2[1]) / np.linalg.norm(d1[0] - d2[0])
+        def slope(d1, d2):
+            return np.abs(d1[1] - d2[1]) / np.linalg.norm(d1[0] - d2[0])
         for i in max_dims:
             delta_vec = copy.deepcopy(dir_vector)
             delta_vec[i] = delta
@@ -173,8 +175,9 @@ class DIRECT(ScalarOptimiser):
                 potential.append(j)
 
         # Third pass: filter points after a slope decrease
-        slope_between = lambda x, y: (rectangles[y].func_val - rectangles[x].func_val) \
-                                   / (rectangles[y].diagonal() - rectangles[x].diagonal())
+        def slope_between(x, y):
+            return ((rectangles[y].func_val - rectangles[x].func_val) /
+                    (rectangles[y].diagonal() - rectangles[x].diagonal()))
         slopes_bad = True
         while slopes_bad:
             slopes_bad = False
@@ -198,12 +201,10 @@ class DIRECT(ScalarOptimiser):
             elif j == potential[0]:
                 slope = slope_between(potential[i+1], potential[i])
             else:
-                dl = rectangles[potential[i]].diagonal() \
-                   - rectangles[potential[i-1]].diagonal()
-                dr = rectangles[potential[i+1]].diagonal() \
-                   - rectangles[potential[i]].diagonal()
-                slope = (slope_between(potential[i], potential[i-1]) * dl \
-                         + slope_between(potential[i+1], potential[i]) * dr) / (dl + dr)
+                dl = rectangles[potential[i]].diagonal() - rectangles[potential[i-1]].diagonal()
+                dr = rectangles[potential[i+1]].diagonal() - rectangles[potential[i]].diagonal()
+                slope = (slope_between(potential[i], potential[i-1]) * dl +
+                         slope_between(potential[i+1], potential[i]) * dr) / (dl + dr)
             if rectangles[j].func_val - slope * rectangles[j].diagonal() \
                <= best_value - self.epsilon * np.abs(best_value):
                 n_filtered += 1
@@ -243,8 +244,8 @@ class DIRECT(ScalarOptimiser):
         """
         # Initialise starting cube
         self.K = 0
-        center = (bound[:,1] + bound[:,0]) / 2
-        cube_size = bound[:,1] - bound[:,0]
+        center = (bound[:, 1] + bound[:, 0]) / 2
+        cube_size = bound[:, 1] - bound[:, 0]
         best_value = objective(center)
         rectangles = [Rectangle(cube_size, center, best_value)]
 

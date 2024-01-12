@@ -324,7 +324,7 @@ def read_parameters(config: Dict[str, Any]) -> ParameterSet:
         Parameter set for this problem.
     """
     # Read the parameters
-    if not 'parameters' in config:
+    if 'parameters' not in config:
         raise ValueError("Missing parameters from configuration file.")
     parameters = DualParameterSet() if 'output_parameters' in config else ParameterSet()
     for name, spec in config['parameters'].items():

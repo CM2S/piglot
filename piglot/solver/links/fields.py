@@ -21,8 +21,8 @@ class LinksInputData(InputData):
             self,
             values: np.ndarray,
             parameters: ParameterSet,
-            tmp_dir: str=None,
-        ) -> LinksInputData:
+            tmp_dir: str = None,
+            ) -> LinksInputData:
         """Prepare the input data for the simulation with a given set of parameters.
 
         Parameters
@@ -88,7 +88,7 @@ class LinksInputData(InputData):
 class Reaction(OutputField):
     """Reaction outputs reader."""
 
-    def __init__(self, field: str, group: int=1):
+    def __init__(self, field: str, group: int = 1):
         """Constructor for reaction reader
 
         Parameters
@@ -154,8 +154,8 @@ class Reaction(OutputField):
             return OutputResult(np.empty(0), np.empty(0))
         data = np.genfromtxt(reac_filename)
         # Filter-out the requested group
-        data_group = data[data[:,0] == self.group, 1:]
-        return OutputResult(data_group[:,0], data_group[:,self.field])
+        data_group = data[data[:, 0] == self.group, 1:]
+        return OutputResult(data_group[:, 0], data_group[:, self.field])
 
     @staticmethod
     def read(config: Dict[str, Any]) -> Reaction:
@@ -172,7 +172,7 @@ class Reaction(OutputField):
             Output field to use for this problem.
         """
         # Read the field
-        if not 'field' in config:
+        if 'field' not in config:
             raise ValueError("Missing 'field' in reaction configuration.")
         field = config['field']
         # Read the group (if passed)
@@ -186,10 +186,10 @@ class OutFile(OutputField):
     def __init__(
             self,
             field: Union[str, int],
-            i_elem: int=None,
-            i_gauss: int=None,
-            x_field: str="LoadFactor",
-        ):
+            i_elem: int = None,
+            i_gauss: int = None,
+            x_field: str = "LoadFactor",
+            ):
         """Constructor for .out file reader
 
         Parameters
@@ -309,7 +309,7 @@ class OutFile(OutputField):
         x_column = columns.index(self.x_field) if isinstance(self.x_field, str) else self.x_field
         y_column = columns.index(self.field) if isinstance(self.field, str) else self.field
         # Return the given quantity as the x-variable
-        return OutputResult(df.iloc[:,x_column].to_numpy(), df.iloc[:,y_column].to_numpy())
+        return OutputResult(df.iloc[:, x_column].to_numpy(), df.iloc[:, y_column].to_numpy())
 
     @staticmethod
     def read(config: Dict[str, Any]) -> OutFile:
@@ -326,7 +326,7 @@ class OutFile(OutputField):
             Output field to use for this problem.
         """
         # Read the field
-        if not 'field' in config:
+        if 'field' not in config:
             raise ValueError("Missing 'field' in OutFile configuration.")
         field = config['field']
         # Read the element and GP numbers (if passed)
@@ -351,7 +351,7 @@ def links_fields_reader(config: Dict[str, Any]) -> OutputField:
         Output field to use for this problem.
     """
     # Extract name of output field
-    if not 'name' in config:
+    if 'name' not in config:
         raise ValueError("Missing 'name' in output field configuration.")
     field_name = config['name']
     # Delegate to the appropriate reader
@@ -359,6 +359,6 @@ def links_fields_reader(config: Dict[str, Any]) -> OutputField:
         'Reaction': Reaction,
         'OutFile': OutFile,
     }
-    if not field_name in readers:
+    if field_name not in readers:
         raise ValueError(f"Unknown output field name '{field_name}'.")
     return readers[field_name].read(config)

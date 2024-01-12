@@ -12,9 +12,9 @@ from botorch.models.transforms.outcome import Standardize
 def get_model(
         x_data: np.ndarray,
         y_data: np.ndarray,
-        var_data: np.ndarray=None,
-        noisy: bool=False,
-    ) -> Union[SingleTaskGP, FixedNoiseGP]:
+        var_data: np.ndarray = None,
+        noisy: bool = False,
+        ) -> Union[SingleTaskGP, FixedNoiseGP]:
     """Get a GP regression model for the current data.
 
     Parameters

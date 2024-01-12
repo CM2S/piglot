@@ -71,7 +71,7 @@ def read_optimiser(config: Dict[str, Any], objective: Objective) -> Optimiser:
         kwargs = {}
     else:
         # Parse the detailed specification
-        if not 'name' in config:
+        if 'name' not in config:
             raise RuntimeError("Missing optimiser name.")
         name = config.pop("name")
         kwargs = {n: str_to_numeric(v) for n, v in config.items()}

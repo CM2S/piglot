@@ -170,7 +170,7 @@ def plot_parameters(args):
             values = data_dict['values']
             param_values = data_dict['params']
             x_values = times if args.time else np.arange(len(times))
-            params = param_values[:,idx]
+            params = param_values[:, idx]
             y_values = pick_from_best(values, params) if args.best else params
             axis.plot(x_values, y_values, label=f'{param.name}: {name}')
         if idx == len(parameters) - 1:

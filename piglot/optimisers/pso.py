@@ -48,11 +48,6 @@ class GlobalBestPSOMod(GlobalBestPSO):
         else:
             log_level = logging.NOTSET
 
-        #self.rep.log("Obj. func. args: {}".format(kwargs), lvl=logging.DEBUG)
-        #self.rep.log(
-        #    "Optimize for {} iters with {}".format(iters, self.options),
-        #    lvl=log_level,
-        #)
         # Populate memory of the handlers
         self.bh.memory = self.swarm.position
         self.vh.memory = self.swarm.position
@@ -109,7 +104,7 @@ class GlobalBestPSOMod(GlobalBestPSO):
                 self.swarm, self.bounds, self.bh
             )
             if optimiser._progress_check(i+1, self.swarm.best_cost,
-                                      self.swarm.pbest_pos[self.swarm.pbest_cost.argmin()]):
+                                         self.swarm.pbest_pos[self.swarm.pbest_cost.argmin()]):
                 break
 
         # Obtain the final best_cost and the final best_position
@@ -117,13 +112,6 @@ class GlobalBestPSOMod(GlobalBestPSO):
         final_best_pos = self.swarm.pbest_pos[
             self.swarm.pbest_cost.argmin()
         ].copy()
-        # Write report in log and return final cost and position
-        #self.rep.log(
-        #    "Optimization finished | best cost: {}, best pos: {}".format(
-        #        final_best_cost, final_best_pos
-        #    ),
-        #    lvl=log_level,
-        #)
         # Close Pool of Processes
         if n_processes is not None:
             pool.close()
@@ -297,10 +285,10 @@ class PSO(ScalarOptimiser):
             Observed optimum of the objective.
         """
         if bound is not None:
-            new_bound = tuple(map(tuple, np.stack((bound[:,0], bound[:,1]))))
-        population = (bound[:,1] - bound[:,0])* \
-                                 self.rng.random(size=(self.n_part, n_dim)) + bound[:,0]
-        population[0,:] = init_shot
+            new_bound = tuple(map(tuple, np.stack((bound[:, 0], bound[:, 1]))))
+        population = ((bound[:, 1] - bound[:, 0]) *
+                      self.rng.random(size=(self.n_part, n_dim)) + bound[:, 0])
+        population[0, :] = init_shot
         model = GlobalBestPSOMod(self.n_part, n_dim, self.options, new_bound,
                                  self.oh_strategy, self.bh_strategy, self.velocity_clamp,
                                  self.vh_strategy, self.center, -np.inf, self.ftol_iter,

@@ -19,10 +19,10 @@ class SyntheticObjective(GenericObjective):
             parameters: ParameterSet,
             name: str,
             output_dir: str,
-            transform: str=None,
-            composition: Composition=None,
+            transform: str = None,
+            composition: Composition = None,
             **kwargs,
-        ) -> None:
+            ) -> None:
         super().__init__(
             parameters,
             stochastic=False,
@@ -71,7 +71,7 @@ class SyntheticObjective(GenericObjective):
             'three_hump_camel': botorch.test_functions.synthetic.ThreeHumpCamel,
         }
 
-    def _objective(self, values: np.ndarray, concurrent: bool=False) -> ObjectiveResult:
+    def _objective(self, values: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
         """Objective computation for analytical functions.
 
         Parameters
@@ -100,7 +100,7 @@ class SyntheticObjective(GenericObjective):
             config: Dict[str, Any],
             parameters: ParameterSet,
             output_dir: str,
-        ) -> SyntheticObjective:
+            ) -> SyntheticObjective:
         """Read the objective from a configuration dictionary.
 
         Parameters
@@ -118,7 +118,7 @@ class SyntheticObjective(GenericObjective):
             Objective function to optimise.
         """
         # Check for mandatory arguments
-        if not 'function' in config:
+        if 'function' not in config:
             raise RuntimeError("Missing test function")
         function = config.pop('function')
         # Optional arguments

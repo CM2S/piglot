@@ -12,7 +12,6 @@ from piglot.solver.links.fields import links_fields_reader, LinksInputData
 from piglot.utils.solver_utils import has_keyword, load_module_from_file
 
 
-
 class LinksSolver(Solver):
     """Links solver."""
 
@@ -24,7 +23,7 @@ class LinksSolver(Solver):
             links_bin: str,
             parallel: int,
             tmp_dir: str,
-        ) -> None:
+            ) -> None:
         """Constructor for the Links solver class.
 
         Parameters
@@ -96,7 +95,7 @@ class LinksSolver(Solver):
             self,
             values: np.ndarray,
             concurrent: bool,
-        ) -> Dict[Case, CaseResult]:
+            ) -> Dict[Case, CaseResult]:
         """Internal solver for the prescribed problems.
 
         Parameters
@@ -116,9 +115,10 @@ class LinksSolver(Solver):
         if os.path.isdir(tmp_dir):
             shutil.rmtree(tmp_dir)
         os.mkdir(tmp_dir)
-        # Run cases (in parallel if specified)
+
         def run_case(case: Case) -> CaseResult:
             return self._run_case(values, case, tmp_dir)
+        # Run cases (in parallel if specified)
         if self.parallel > 1:
             with Pool(self.parallel) as pool:
                 results = pool.map(run_case, self.cases)
@@ -165,7 +165,7 @@ class LinksSolver(Solver):
             Solver to use for this problem.
         """
         # Get the Links binary path
-        if not 'links' in config:
+        if 'links' not in config:
             raise ValueError("Missing 'links' in solver configuration.")
         links_bin = config['links']
         # Read the parallelism and temporary directory (if present)
@@ -183,11 +183,11 @@ class LinksSolver(Solver):
                 config['generator']['class'],
             )
         # Read the cases
-        if not 'cases' in config:
+        if 'cases' not in config:
             raise ValueError("Missing 'cases' in solver configuration.")
         cases = []
         for case_name, case_config in config['cases'].items():
-            if not 'fields' in case_config:
+            if 'fields' not in case_config:
                 raise ValueError(f"Missing 'fields' in case '{case_name}' configuration.")
             fields = {
                 field_name: links_fields_reader(field_config)

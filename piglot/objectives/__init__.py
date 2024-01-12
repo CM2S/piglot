@@ -34,10 +34,10 @@ def read_objective(config: Dict[str, Any], parameters: ParameterSet, output_dir:
         Objective to optimise for.
     """
     # Read the objective name (and pop it from the dictionary)
-    if not 'name' in config:
+    if 'name' not in config:
         raise ValueError("Missing name for objective.")
     name = config.pop('name')
     # Delegate to the objective reader
-    if not name in AVAILABLE_OBJECTIVES:
+    if name not in AVAILABLE_OBJECTIVES:
         raise ValueError(f"Unknown objective '{name}'.")
     return AVAILABLE_OBJECTIVES[name].read(config, parameters, output_dir)

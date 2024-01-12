@@ -54,7 +54,6 @@ class SPSA_Adam(ScalarOptimiser):
         self.c = 1e-6 if c is None else c
         self.seed = seed
 
-
     def _scalar_optimise(
         self,
         objective: Callable[[np.ndarray, Optional[bool]], float],
@@ -100,7 +99,7 @@ class SPSA_Adam(ScalarOptimiser):
 
         for i in range(0, n_iter):
             c_k = self.c / (i + 1) ** self.gamma
-            # [-1,1] Bernoulli distribution 
+            # [-1,1] Bernoulli distribution
             delta = 2 * bernoulli.rvs(self.prob, size=n_dim, random_state=self.seed + i) - 1
             # Bound check
             up = boundary_check(x + c_k * delta, bound)
