@@ -1,4 +1,5 @@
 """PSO optimiser module."""
+from typing import Tuple, Callable, Optional
 import logging
 from collections import deque
 import numpy as np
@@ -7,9 +8,10 @@ try:
     from pyswarms.backend.operators import compute_pbest
 except ImportError:
     # Show a nice exception when this package is used
-    from piglot.optimisers.optimiser import missing_method
+    from piglot.optimiser import missing_method
     GlobalBestPSO = missing_method("PSO", "pyswarms")
-from piglot.optimisers.optimiser import Optimiser
+from piglot.objective import Objective
+from piglot.optimiser import ScalarOptimiser
 
 
 class GlobalBestPSOMod(GlobalBestPSO):
@@ -46,11 +48,6 @@ class GlobalBestPSOMod(GlobalBestPSO):
         else:
             log_level = logging.NOTSET
 
-        #self.rep.log("Obj. func. args: {}".format(kwargs), lvl=logging.DEBUG)
-        #self.rep.log(
-        #    "Optimize for {} iters with {}".format(iters, self.options),
-        #    lvl=log_level,
-        #)
         # Populate memory of the handlers
         self.bh.memory = self.swarm.position
         self.vh.memory = self.swarm.position
@@ -107,7 +104,7 @@ class GlobalBestPSOMod(GlobalBestPSO):
                 self.swarm, self.bounds, self.bh
             )
             if optimiser._progress_check(i+1, self.swarm.best_cost,
-                                      self.swarm.pbest_pos[self.swarm.pbest_cost.argmin()]):
+                                         self.swarm.pbest_pos[self.swarm.pbest_cost.argmin()]):
                 break
 
         # Obtain the final best_cost and the final best_position
@@ -115,13 +112,6 @@ class GlobalBestPSOMod(GlobalBestPSO):
         final_best_pos = self.swarm.pbest_pos[
             self.swarm.pbest_cost.argmin()
         ].copy()
-        # Write report in log and return final cost and position
-        #self.rep.log(
-        #    "Optimization finished | best cost: {}, best pos: {}".format(
-        #        final_best_cost, final_best_pos
-        #    ),
-        #    lvl=log_level,
-        #)
         # Close Pool of Processes
         if n_processes is not None:
             pool.close()
@@ -166,7 +156,7 @@ class GlobalBestPSOMod(GlobalBestPSO):
             # return np.concatenate(results)
 
 
-class PSO(Optimiser):
+class PSO(ScalarOptimiser):
     """
     PSO optimiser.
     Documentation:
@@ -211,14 +201,16 @@ class PSO(Optimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, n_part, options, oh_strategy=None, bh_strategy='periodic',
-                 velocity_clamp=None, vh_strategy='unmodified', center=1.0,
+    def __init__(self, objective: Objective, n_part, options, oh_strategy=None,
+                 bh_strategy='periodic', velocity_clamp=None, vh_strategy='unmodified', center=1.0,
                  ftol_iter=1, n_processes=None):
         """
         Constructs all the necessary attributes for the PSO optimiser
 
         Parameters
         ----------
+        objective : Objective
+            Objective function to optimise.
         n_part : int
             number of particles in the swarm.
         options : dict with keys :code:`{'c1', 'c2', 'w'}`
@@ -249,6 +241,7 @@ class PSO(Optimiser):
             number of processes to use for parallel particle evaluation (default: None =
             no parallelization)
         """
+        super().__init__('PSO', objective)
         self.n_part = n_part
         self.options = options
         self.oh_strategy = oh_strategy
@@ -258,41 +251,48 @@ class PSO(Optimiser):
         self.center = center
         self.ftol_iter = ftol_iter
         self.n_processes = n_processes
-        self.name = 'PSO'
         self.rng = np.random.default_rng(1)
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _scalar_optimise(
+        self,
+        objective: Callable[[np.ndarray, Optional[bool]], float],
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ) -> Tuple[float, np.ndarray]:
         """
+        Abstract method for optimising the objective.
+
         Parameters
         ----------
-        func : callable
-            function to optimize
-        n_dim : integer
-            dimension, i.e., number of parameters to optimize
-        n_iter : integer
-            maximum number of iterations
-        bound : array
-            first column corresponding to the lower bound, and second column to the
-            upper bound
-        init_shot : list
-            initial shot for the optimization problem
+        objective : Callable[[np.ndarray], float]
+            Objective function to optimise.
+        n_dim : int
+            Number of parameters to optimise.
+        n_iter : int
+            Maximum number of iterations.
+        bound : np.ndarray
+            Array where first and second columns correspond to lower and upper bounds, respectively.
+        init_shot : np.ndarray
+            Initial shot for the optimisation problem.
 
         Returns
         -------
-        best_value : float
-            best loss function value
-        best_solution : list
-            best parameter solution
+        float
+            Best observed objective value.
+        np.ndarray
+            Observed optimum of the objective.
         """
         if bound is not None:
-            new_bound = tuple(map(tuple, np.stack((bound[:,0], bound[:,1]))))
-        population = (bound[:,1] - bound[:,0])* \
-                                 self.rng.random(size=(self.n_part, n_dim)) + bound[:,0]
-        population[0,:] = init_shot
+            new_bound = tuple(map(tuple, np.stack((bound[:, 0], bound[:, 1]))))
+        population = ((bound[:, 1] - bound[:, 0]) *
+                      self.rng.random(size=(self.n_part, n_dim)) + bound[:, 0])
+        population[0, :] = init_shot
         model = GlobalBestPSOMod(self.n_part, n_dim, self.options, new_bound,
                                  self.oh_strategy, self.bh_strategy, self.velocity_clamp,
                                  self.vh_strategy, self.center, -np.inf, self.ftol_iter,
                                  population)
 
-        x, new_value = model.optimize(self, func, n_iter, self.n_processes, False)
+        x, new_value = model.optimize(self, objective, n_iter, self.n_processes, False)
         return x, new_value

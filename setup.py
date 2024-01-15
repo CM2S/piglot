@@ -67,16 +67,30 @@ setup(
     },
 
     # Python version compatibility
-    python_requires='>=3.6',
+    python_requires='>=3.8',
 
     # Packages provided
     packages=find_packages(),
+
+    # Scripts provided
+    entry_points={
+        'console_scripts': [
+            'piglot = piglot.bin.piglot:main',
+            'piglot-plot = piglot.bin.piglot_plot:main',
+        ]
+    },
 
     install_requires=[
         'numpy',
         'tqdm',
         'pandas',
-        'scipy>=1.6,<1.8'
+        'sympy',
+        'scipy>=1.6',
+        'torch',
+        'botorch',
+        'Pillow',
+        'matplotlib',
+        'PyYAML'
     ],
 
     extras_require={'lipo': ['lipo'],
@@ -84,5 +98,5 @@ setup(
                     'bayes_sk': ['bask'],
                     'genetic': ['geneticalgorithm'],
                     'pso': ['pyswarms'],
-                    'full': ['lipo', 'bask', 'geneticalgorithm', 'pyswarms']},
+                    'full': ['lipo', 'bask', 'geneticalgorithm', 'pyswarms', 'botorch']},
     )

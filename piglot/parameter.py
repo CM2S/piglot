@@ -1,4 +1,11 @@
 """Optimisation parameter module."""
+from typing import Iterator, Dict, Any
+import os
+from hashlib import sha256
+import numpy as np
+import pandas as pd
+import sympy
+from piglot.utils.yaml_parser import parse_config_file
 
 
 class Parameter:
@@ -22,6 +29,8 @@ class Parameter:
         self.inital_value = inital_value
         self.lbound = lbound
         self.ubound = ubound
+        if inital_value > ubound or inital_value < lbound:
+            raise RuntimeError("Initial shot outside of bounds")
 
     def normalise(self, value):
         """Normalise a value to internal [-1,1] bounds.
@@ -98,13 +107,17 @@ class ParameterSet:
         """Constructor for a parameter set."""
         self.parameters = []
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Parameter]:
         """Iterator for a parameter set."""
         return iter(self.parameters)
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Length of the parameter set."""
         return len(self.parameters)
+
+    def __getitem__(self, key) -> Parameter:
+        """Get a parameter by name."""
+        return self.parameters[key]
 
     def add(self, name, inital_value, lbound, ubound):
         """Add a parameter to this set.
@@ -122,12 +135,12 @@ class ParameterSet:
 
         Raises
         ------
-        Exception
+        RuntimeError
             If a repeated parameter is given.
         """
         # Sanity checks
         if name in [p.name for p in self.parameters]:
-            raise Exception("Repeated parameter {0} in set!".format(name))
+            raise RuntimeError(f"Repeated parameter {name} in set!")
         self.parameters.append(Parameter(name, inital_value, lbound, ubound))
 
     def normalise(self, values):
@@ -193,6 +206,26 @@ class ParameterSet:
         vals = self.denormalise(values) if input_normalised else values
         return dict(zip([p.name for p in self.parameters], vals))
 
+    @staticmethod
+    def hash(values):
+        """Build the hash for the current parameter values.
+
+        Parameters
+        ----------
+        values : array
+            Parameters to hash
+
+        Returns
+        -------
+        str
+            Hex digest of the hash
+        """
+        hasher = sha256()
+        values = np.array(values)
+        for value in values:
+            hasher.update(value)
+        return hasher.hexdigest()
+
 
 class DualParameterSet(ParameterSet):
     """Container class for a set of parameters with distinct internal and output parameters.
@@ -204,7 +237,7 @@ class DualParameterSet(ParameterSet):
 
     def __init__(self):
         """Constructor for a dual parameter set."""
-        self.parameters = []
+        super().__init__()
         self.output_parameters = []
 
     def add_output(self, name, mapping):
@@ -221,12 +254,12 @@ class DualParameterSet(ParameterSet):
 
         Raises
         ------
-        Exception
+        RuntimeError
             If an output parameter is repeated.
         """
         # Sanity checks
         if name in [p.name for p in self.output_parameters]:
-            raise Exception("Repeated output parameter {0} in set!".format(name))
+            raise RuntimeError(f"Repeated output parameter {name} in set!")
         self.output_parameters.append(OutputParameter(name, mapping))
 
     def clone_output(self, name):
@@ -237,8 +270,7 @@ class DualParameterSet(ParameterSet):
         name : str
             Name of the internal parameter to clone.
         """
-        mapping = lambda **vals_dict: vals_dict[name]
-        self.output_parameters.append(OutputParameter(name, mapping))
+        self.output_parameters.append(OutputParameter(name, lambda **vals_dict: vals_dict[name]))
 
     def to_output(self, values, input_normalised=True):
         """Compute the output parameters' values given an array of internal inputs.
@@ -276,3 +308,40 @@ class DualParameterSet(ParameterSet):
         data = dict(zip([p.name for p in self.output_parameters],
                         self.to_output(values, input_normalised)))
         return data
+
+
+def read_parameters(config: Dict[str, Any]) -> ParameterSet:
+    """Parse the parameters from the configuration dictionary.
+
+    Parameters
+    ----------
+    config : Dict[str, Any]
+        Configuration dictionary.
+
+    Returns
+    -------
+    ParameterSet
+        Parameter set for this problem.
+    """
+    # Read the parameters
+    if 'parameters' not in config:
+        raise ValueError("Missing parameters from configuration file.")
+    parameters = DualParameterSet() if 'output_parameters' in config else ParameterSet()
+    for name, spec in config['parameters'].items():
+        int_spec = [float(s) for s in spec]
+        parameters.add(name, *int_spec)
+    if "output_parameters" in config:
+        symbs = sympy.symbols(list(config['parameters'].keys()))
+        for name, spec in config["output_parameters"].items():
+            parameters.add_output(name, sympy.lambdify(symbs, spec))
+    # Fetch initial shot from another run
+    if 'init_shot_from' in config:
+        source = parse_config_file(config['init_shot_from'])
+        func_calls_file = os.path.join(source['output'], 'func_calls')
+        df = pd.read_table(func_calls_file)
+        df.columns = df.columns.str.strip()
+        min_series = df.iloc[df['Objective'].idxmin()]
+        for param in parameters:
+            if param.name in min_series.index:
+                param.inital_value = min_series[param.name]
+    return parameters

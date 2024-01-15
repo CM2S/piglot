@@ -1,7 +1,9 @@
 """DIRECT optimiser module."""
+from typing import Tuple, Callable, Optional
 import copy
 import numpy as np
-from piglot.optimisers.optimiser import Optimiser
+from piglot.objective import Objective
+from piglot.optimiser import ScalarOptimiser
 
 
 class Rectangle:
@@ -39,7 +41,7 @@ class Rectangle:
         return np.linalg.norm(self.size / 2)
 
 
-class DIRECT(Optimiser):
+class DIRECT(ScalarOptimiser):
     """
     DIRECT method for optimisation.
 
@@ -52,16 +54,18 @@ class DIRECT(Optimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, epsilon=0):
-        """Constructs all necessary attributes for the SPSA optimiser.
+    def __init__(self, objective: Objective, epsilon=0):
+        """Constructs all necessary attributes for the DIRECT optimiser.
 
         Parameters
         ----------
+        objective : Objective
+            Objective function to optimise.
         epsilon : float, optional
             Model parameter, refer to documentation, by default 0.
         """
+        super().__init__('DIRECT', objective)
         self.epsilon = epsilon
-        self.name = 'DIRECT'
         self.K = 0
 
     def __divide_rectangle(self, n_dim, rectangles, j, func):
@@ -94,8 +98,10 @@ class DIRECT(Optimiser):
         new_samples = []
         w_vec = []
         dir_vector = np.zeros(n_dim)
+
         # Slope function
-        slope = lambda d1, d2: np.abs(d1[1] - d2[1]) / np.linalg.norm(d1[0] - d2[0])
+        def slope(d1, d2):
+            return np.abs(d1[1] - d2[1]) / np.linalg.norm(d1[0] - d2[0])
         for i in max_dims:
             delta_vec = copy.deepcopy(dir_vector)
             delta_vec[i] = delta
@@ -169,8 +175,9 @@ class DIRECT(Optimiser):
                 potential.append(j)
 
         # Third pass: filter points after a slope decrease
-        slope_between = lambda x, y: (rectangles[y].func_val - rectangles[x].func_val) \
-                                   / (rectangles[y].diagonal() - rectangles[x].diagonal())
+        def slope_between(x, y):
+            return ((rectangles[y].func_val - rectangles[x].func_val) /
+                    (rectangles[y].diagonal() - rectangles[x].diagonal()))
         slopes_bad = True
         while slopes_bad:
             slopes_bad = False
@@ -194,47 +201,52 @@ class DIRECT(Optimiser):
             elif j == potential[0]:
                 slope = slope_between(potential[i+1], potential[i])
             else:
-                dl = rectangles[potential[i]].diagonal() \
-                   - rectangles[potential[i-1]].diagonal()
-                dr = rectangles[potential[i+1]].diagonal() \
-                   - rectangles[potential[i]].diagonal()
-                slope = (slope_between(potential[i], potential[i-1]) * dl \
-                         + slope_between(potential[i+1], potential[i]) * dr) / (dl + dr)
+                dl = rectangles[potential[i]].diagonal() - rectangles[potential[i-1]].diagonal()
+                dr = rectangles[potential[i+1]].diagonal() - rectangles[potential[i]].diagonal()
+                slope = (slope_between(potential[i], potential[i-1]) * dl +
+                         slope_between(potential[i+1], potential[i]) * dr) / (dl + dr)
             if rectangles[j].func_val - slope * rectangles[j].diagonal() \
                <= best_value - self.epsilon * np.abs(best_value):
                 n_filtered += 1
                 final_potential.append(j)
         return final_potential
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
-        """Solves the optimisation problem.
+    def _scalar_optimise(
+        self,
+        objective: Callable[[np.ndarray, Optional[bool]], float],
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ) -> Tuple[float, np.ndarray]:
+        """
+        Abstract method for optimising the objective.
 
         Parameters
         ----------
-        func : callable
-            Function to optimise
-        n_dim : integer
-            Dimension, i.e., number of parameter to optimise
-        n_iter : integer
-            Maximum number of iterations
-        bound : array
-            2D array with upper and lower bounds. First column refers to lower bounds,
-            whilst the second refers to the upper bounds.
-        init_shot : array
+        objective : Callable[[np.ndarray], float]
+            Objective function to optimise.
+        n_dim : int
+            Number of parameters to optimise.
+        n_iter : int
+            Maximum number of iterations.
+        bound : np.ndarray
+            Array where first and second columns correspond to lower and upper bounds, respectively.
+        init_shot : np.ndarray
             Initial shot for the optimisation problem.
 
         Returns
         -------
-        best_value : float
-            Best loss function value
-        best_solution : array
-            Best parameters
+        float
+            Best observed objective value.
+        np.ndarray
+            Observed optimum of the objective.
         """
         # Initialise starting cube
         self.K = 0
-        center = (bound[:,1] + bound[:,0]) / 2
-        cube_size = bound[:,1] - bound[:,0]
-        best_value = func(center)
+        center = (bound[:, 1] + bound[:, 0]) / 2
+        cube_size = bound[:, 1] - bound[:, 0]
+        best_value = objective(center)
         rectangles = [Rectangle(cube_size, center, best_value)]
 
         # Check if this solution is converged
@@ -250,8 +262,7 @@ class DIRECT(Optimiser):
             iter_value = np.inf
             iter_solution = None
             for j in potentially_optimal:
-                new_solution, new_value = self.__divide_rectangle(n_dim, rectangles, j,
-                                                                  func)
+                new_solution, new_value = self.__divide_rectangle(n_dim, rectangles, j, objective)
                 best_value = min(best_value, new_value)
                 if new_value < iter_value:
                     iter_value = new_value

@@ -1,13 +1,16 @@
 """Genetic Algorithm optimiser module."""
+from typing import Tuple, Callable, Optional
 import sys
+import time
 import numpy as np
 try:
     from geneticalgorithm import geneticalgorithm
 except ImportError:
     # Show a nice exception when this package is used
-    from piglot.optimisers.optimiser import missing_method
+    from piglot.optimiser import missing_method
     geneticalgorithm = missing_method("Genetic algorithm", "geneticalgorithm")
-from piglot.optimisers.optimiser import Optimiser
+from piglot.objective import Objective
+from piglot.optimiser import ScalarOptimiser
 
 
 class geneticalgorithmMod(geneticalgorithm):
@@ -143,18 +146,12 @@ class geneticalgorithmMod(geneticalgorithm):
         #sys.stdout.write('\n\n Objective function:\n %s\n' % (self.best_function))
         #sys.stdout.flush()
         re=np.array(self.report)
-        if self.convergence_curve==True:
-            plt.plot(re)
-            plt.xlabel('Iteration')
-            plt.ylabel('Objective function')
-            plt.title('Genetic Algorithm')
-            plt.show()
         if self.stop_mniwi==True:
             sys.stdout.write('\nWarning: GA is terminated due to the'+\
                              ' maximum number of iterations without improvement was met!')
 
 
-class GA(Optimiser):
+class GA(ScalarOptimiser):
     """
     Genetic Algorithm optimiser.
     Documentation:
@@ -203,17 +200,32 @@ class GA(Optimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, variable_type='real', variable_type_mixed=None,
-                 function_timeout=3600, algorithm_parameters={'max_num_iteration': None,
-                 'population_size':100, 'mutation_probability':0.1, 'elit_ratio': 0.01,
-                 'crossover_probability': 0.5, 'parents_portion': 0.3,
-                 'crossover_type':'uniform', 'max_iteration_without_improv':None},
-                 convergence_curve=True, progress_bar=False):
+    def __init__(
+            self,
+            objective: Objective,
+            variable_type='real',
+            variable_type_mixed=None,
+            function_timeout=3600,
+            algorithm_parameters={
+                'max_num_iteration': None,
+                'population_size': 100,
+                'mutation_probability': 0.1,
+                'elit_ratio': 0.01,
+                'crossover_probability': 0.5,
+                'parents_portion': 0.3,
+                'crossover_type': 'uniform',
+                'max_iteration_without_improv': None,
+            },
+            convergence_curve=True,
+            progress_bar=False,
+            ):
         """
         Constructs all the necessary attributes for the Genetic Algorithm optimiser
 
         Parameters
         ----------
+        objective : Objective
+            Objective function to optimise.
         variable_type : string
             'bool' if all variables are Boolean;
             'int' if all variables are integer;
@@ -249,39 +261,47 @@ class GA(Optimiser):
             Show progress bar or not. Default is True.
 
         """
+        super().__init__('GA', objective)
         self.variable_type = variable_type
         self.variable_type_mixed = variable_type_mixed
         self.function_timeout = function_timeout
         self.algorithm_parameters = algorithm_parameters
         self.convergence_curve = convergence_curve
         self.progress_bar = progress_bar
-        self.name = 'GA'
 
-    def _optimise(self, func, n_dim, n_iter, bound, init_shot):
+    def _scalar_optimise(
+        self,
+        objective: Callable[[np.ndarray, Optional[bool]], float],
+        n_dim: int,
+        n_iter: int,
+        bound: np.ndarray,
+        init_shot: np.ndarray,
+    ) -> Tuple[float, np.ndarray]:
         """
+        Abstract method for optimising the objective.
+
         Parameters
         ----------
-        func : callable
-            function to optimize
-        n_dim : integer
-            dimension, i.e., number of parameters to optimize
-        n_iter : integer
-            maximum number of iterations
-        bound : array
-            first column corresponding to the lower bound, and second column to the
-            upper bound
-        init_shot : list
-            initial shot for the optimization problem
+        objective : Callable[[np.ndarray], float]
+            Objective function to optimise.
+        n_dim : int
+            Number of parameters to optimise.
+        n_iter : int
+            Maximum number of iterations.
+        bound : np.ndarray
+            Array where first and second columns correspond to lower and upper bounds, respectively.
+        init_shot : np.ndarray
+            Initial shot for the optimisation problem.
 
         Returns
         -------
-        best_value : float
-            best loss function value
-        best_solution : list
-            best parameter solution
+        float
+            Best observed objective value.
+        np.ndarray
+            Observed optimum of the objective.
         """
         self.algorithm_parameters['max_num_iteration'] = n_iter
-        model = geneticalgorithmMod(func, n_dim, self.variable_type, bound,
+        model = geneticalgorithmMod(objective, n_dim, self.variable_type, bound,
                                     self.variable_type_mixed,
                                     self.function_timeout, self.algorithm_parameters,
                                     self.convergence_curve, self.progress_bar)
