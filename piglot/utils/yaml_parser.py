@@ -2,9 +2,27 @@
 from typing import Dict, Any
 import os
 import os.path
-from yaml import safe_load
+import yaml
 from yaml.parser import ParserError
 from yaml.scanner import ScannerError
+
+
+class UniqueKeyLoader(yaml.SafeLoader):
+    """YAML loader that checks for duplicate keys in mappings.
+
+    Adapted from https://gist.github.com/pypt/94d747fe5180851196eb.
+    """
+
+    def construct_mapping(self, node, deep=False):
+        mapping = set()
+        for key_node, _ in node.value:
+            if ':merge' in key_node.tag:
+                continue
+            key = self.construct_object(key_node, deep=deep)
+            if key in mapping:
+                raise ValueError(f"Duplicate {key!r} key found in YAML.")
+            mapping.add(key)
+        return super().construct_mapping(node, deep)
 
 
 def parse_config_file(config_file: str) -> Dict[str, Any]:
@@ -27,7 +45,7 @@ def parse_config_file(config_file: str) -> Dict[str, Any]:
     """
     try:
         with open(config_file, 'r', encoding='utf8') as file:
-            config = safe_load(file)
+            config = yaml.load(file, Loader=UniqueKeyLoader)
     except (ParserError, ScannerError) as exc:
         raise RuntimeError("Failed to parse the config file: YAML syntax seems invalid.") from exc
     # Check required terms
