@@ -158,11 +158,13 @@ class StoppingCriteria:
         StoppingCriteria
             Stopping criteria.
         """
+        def optional_get(key, convert):
+            return convert(config[key]) if key in config else None
         return StoppingCriteria(
-            conv_tol=config.get('conv_tol'),
-            max_iters_no_improv=config.get('max_iters_no_improv'),
-            max_func_calls=config.get('max_func_calls'),
-            max_timeout=config.get('max_timeout'),
+            conv_tol=optional_get(config.get('conv_tol'), float),
+            max_iters_no_improv=optional_get(config.get('max_iters_no_improv'), int),
+            max_func_calls=optional_get(config.get('max_func_calls'), int),
+            max_timeout=optional_get(config.get('max_timeout'), float),
         )
 
 
