@@ -1,0 +1,15 @@
+
+iters: 3
+max_func_calls: 10
+
+optimiser:
+  name: aoa
+
+
+parameters:
+  Young: [200, 100, 300]
+
+
+objective:
+  name: analytical
+  expression: (Young-150)**2

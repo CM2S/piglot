@@ -57,8 +57,9 @@ def reverse_pretty_time(time_str: str) -> float:
     }
     value = 0.0
     for suffix, factor in mults.items():
-        left, time_str = time_str.split(suffix)
-        value += float(left) * factor
+        if suffix in time_str:
+            left, time_str = time_str.split(suffix)
+            value += float(left) * factor
     return value
 
 
@@ -110,6 +111,7 @@ def stats_interp_to_common_grid(
     conf = t.interval(0.95, num_points - 1)[1]
     return {
         'grid': grid,
+        'num_points': num_points,
         'responses': interp_responses,
         'average': np.nanmean(interp_responses, axis=0),
         'variance': np.nanvar(interp_responses, axis=0),

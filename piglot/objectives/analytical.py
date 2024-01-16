@@ -20,7 +20,9 @@ class AnalyticalObjective(GenericObjective):
             composition=None,
             output_dir=output_dir,
         )
-        symbs = sympy.symbols([param.name for param in parameters])
+        # Generate a dummy set of parameters (to ensure proper handling of output parameters)
+        values = np.array([parameter.inital_value for parameter in parameters])
+        symbs = sympy.symbols(list(parameters.to_dict(values, input_normalised=False).keys()))
         self.parameters = parameters
         self.expression = sympy.lambdify(symbs, expression)
 

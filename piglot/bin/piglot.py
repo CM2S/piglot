@@ -35,10 +35,12 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+def main(config_path: str = None):
     """Entry point for piglot."""
-    args = parse_args()
-    config = parse_config_file(args.config)
+    if config_path is None:
+        args = parse_args()
+        config_path = args.config
+    config = parse_config_file(config_path)
     # Build output directory with a copy of the configuration file
     output_dir = config["output"]
     if os.path.isdir(output_dir):

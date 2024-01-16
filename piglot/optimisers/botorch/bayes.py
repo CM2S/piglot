@@ -134,8 +134,8 @@ class BayesianBoTorch(Optimiser):
         # Evaluate GP performance with the test dataset
         cv_error = None
         if self.n_test > 0:
-            std_test_params, std_test_values, _ = std_dataset.standardise(
-                test_dataset.params,
+            std_test_params = test_dataset.normalise(test_dataset.params)
+            std_test_values, _ = std_dataset.standardise(
                 test_dataset.values,
                 test_dataset.variances,
             )
@@ -216,7 +216,7 @@ class BayesianBoTorch(Optimiser):
         raw_samples = max(256, 16 * n_dim * n_dim)
         # Delegate acquisition building
         best = torch.min(dataset.values).item()
-        mc_objective = GenericMCObjective(lambda x: -x)
+        mc_objective = GenericMCObjective(lambda vals, X: -vals)
         sampler = SobolQMCNormalSampler(torch.Size([512]), seed=self.seed)
         if self.acquisition == 'ucb':
             acq = UpperConfidenceBound(model, self.beta, maximize=False)
@@ -252,7 +252,7 @@ class BayesianBoTorch(Optimiser):
         # Build composite MC objective
         _, y_avg, y_std = dataset.get_obervation_stats()
         mc_objective = GenericMCObjective(
-            lambda x: -self.objective.composition.composition_torch(x * y_std + y_avg)
+            lambda vals, X: -self.objective.composition.composition_torch(vals * y_std + y_avg)
         )
         # Delegate acquisition building
         best = torch.max(dataset.values).item()

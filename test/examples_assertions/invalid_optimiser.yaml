@@ -1,0 +1,13 @@
+
+iters: 50
+
+optimiser:
+  name: nelder-mead
+
+parameters:
+  Young: [200, 100, 300]
+
+
+objective:
+  name: analytical
+  expression: (Young-150)**2

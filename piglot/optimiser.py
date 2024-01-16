@@ -161,10 +161,10 @@ class StoppingCriteria:
         def optional_get(key, convert):
             return convert(config[key]) if key in config else None
         return StoppingCriteria(
-            conv_tol=optional_get(config.get('conv_tol'), float),
-            max_iters_no_improv=optional_get(config.get('max_iters_no_improv'), int),
-            max_func_calls=optional_get(config.get('max_func_calls'), int),
-            max_timeout=optional_get(config.get('max_timeout'), float),
+            conv_tol=optional_get('conv_tol', float),
+            max_iters_no_improv=optional_get('max_iters_no_improv', int),
+            max_func_calls=optional_get('max_func_calls', int),
+            max_timeout=optional_get('max_timeout', float),
         )
 
 

@@ -85,7 +85,7 @@ setup(
         'tqdm',
         'pandas',
         'sympy',
-        'scipy>=1.6',
+        'scipy>=1.7',
         'torch',
         'botorch',
         'Pillow',
