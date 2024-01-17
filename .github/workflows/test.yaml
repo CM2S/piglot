@@ -31,4 +31,4 @@ jobs:
         flake8 .
     - name: Test with pytest
       run: |
-        pytest --cov-report term-missing --cov=piglot test/
+        pytest test/
