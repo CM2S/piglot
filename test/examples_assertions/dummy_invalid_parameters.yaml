@@ -25,5 +25,5 @@ objective:
 
 
   references:
-    'reference.dat':
+    'reference.txt':
       prediction: ['modifier_1']
