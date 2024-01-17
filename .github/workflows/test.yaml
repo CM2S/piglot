@@ -3,7 +3,7 @@ name: Unit and integration testing
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "test" ]
   pull_request:
     branches: [ "main" ]
 
