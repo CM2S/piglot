@@ -50,11 +50,9 @@ class DummyInputData(InputData):
         values = np.array([parameter.inital_value for parameter in parameters])
         param_dict = parameters.to_dict(values, input_normalised=False)
         # Check if the require parameters are present in the input file
-        parameters_dummy = ('m', 'c')
-        if len(parameters_dummy) != len(param_dict):
-            raise RuntimeError("Invalid parameters: the parameters 'm' and 'c' are required.")
-        if not all(name in param_dict for name in parameters_dummy):
-            raise RuntimeError("Invalid parameters: the parameters 'm' and 'c' are required.")
+        parameters_dummy = set(('m', 'c'))
+        if set(param_dict.keys()) != parameters_dummy:
+            raise ValueError("Invalid parameters: the parameters 'm' and 'c' are required.")
 
     def name(self) -> str:
         """Return the name of the input data.

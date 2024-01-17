@@ -1,0 +1,30 @@
+
+iters: 10
+
+optimiser: random
+
+
+parameters:
+  m: [500, 0, 1000]
+  c: [0, -1000, 1000]
+
+
+
+objective:
+  name: fitting
+  composite: False
+  solver:
+    name: dummy
+    cases:
+      'case_1':
+        fields:
+          'modifier_1':
+            name: Modifier
+            y_scale: 2.0
+            y_offset: -1.0
+
+
+  references:
+    'test/examples/reference.dat':
+      prediction: ['modifier_1']
+      filter_tol: 1e-6

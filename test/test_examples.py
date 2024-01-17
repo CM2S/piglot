@@ -9,7 +9,7 @@ def get_files(path: str) -> List[str]:
     return [
         os.path.join(path, file)
         for file in os.listdir(path)
-        if os.path.isfile(os.path.join(path, file))
+        if os.path.isfile(os.path.join(path, file)) and file.endswith('.yaml')
     ]
 
 

@@ -95,11 +95,7 @@ class DummySolver(Solver):
         Dict[str, OutputResult]
             Output responses.
         """
-        fields = self.get_output_fields()
-        return {
-            name: field.get(case.input_data.get_current(self.tmp_dir))
-            for name, (case, field) in fields.items()
-        }
+        raise NotImplementedError("Dummy solver does not support current plotting.")
 
     @staticmethod
     def read(config: Dict[str, Any], parameters: ParameterSet, output_dir: str) -> Solver:
