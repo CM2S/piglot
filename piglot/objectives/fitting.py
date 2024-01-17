@@ -157,6 +157,7 @@ class Reference:
         # Load the data right away
         print(filename)
         print(os.getcwd())
+        print(os.listdir(os.getcwd()))
         data = np.genfromtxt(filename, skip_header=skip_header)[:, [x_col - 1, y_col - 1]]
         self.x_data = data[:, 0]
         self.y_data = data[:, 1]
