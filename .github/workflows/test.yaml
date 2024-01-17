@@ -30,7 +30,7 @@ jobs:
         python -m pip install flake8 pytest
     - name: Lint with flake8
       run: |
-        flake8 .
+        flake8 piglot test
     - name: Test with pytest
       run: |
         pytest test/
