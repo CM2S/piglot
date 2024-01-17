@@ -25,6 +25,6 @@ objective:
 
 
   references:
-    'test/examples/reference.dat':
+    'reference.dat':
       prediction: ['modifier_1']
       filter_tol: 1e-6

@@ -33,5 +33,5 @@ objective:
 
 
   references:
-    'test/examples/reference.dat':
+    'reference.dat':
       prediction: ['modifier_1', 'modifier_2']

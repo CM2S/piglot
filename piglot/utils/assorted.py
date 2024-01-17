@@ -1,5 +1,7 @@
 """Assorted utilities."""
 from typing import List, Dict, Tuple
+import os
+import contextlib
 import numpy as np
 from scipy.stats import t
 
@@ -121,3 +123,22 @@ def stats_interp_to_common_grid(
         'median': np.nanmedian(interp_responses, axis=0),
         'confidence': conf * np.nanstd(interp_responses, axis=0) / np.sqrt(num_points),
     }
+
+
+@contextlib.contextmanager
+def change_cwd(path: str):
+    """Context manager to temporarily change the current working directory.
+
+    Adapted from https://stackoverflow.com/a/75049063
+
+    Parameters
+    ----------
+    path : str
+        New working directory.
+    """
+    old = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(old)

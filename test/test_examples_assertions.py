@@ -4,6 +4,7 @@ import shutil
 import pytest
 from piglot.bin.piglot import main as piglot_main
 from piglot.optimiser import InvalidOptimiserException
+from piglot.utils.assorted import change_cwd
 
 
 EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
@@ -97,10 +98,12 @@ def transform_files(path: str) -> List[Tuple[str, Exception]]:
     ]
 
 
-@pytest.mark.parametrize('input_file,expected,match', transform_files('test/examples_assertions'))
-def test_input_files(input_file: str, expected: Exception, match: str):
-    with pytest.raises(expected, match=match):
-        piglot_main(input_file)
-    output_dir, _ = os.path.splitext(input_file)
-    if os.path.isdir(output_dir):
-        shutil.rmtree(output_dir)
+@pytest.mark.parametrize('input_dir,expected,match', transform_files('test/examples_assertions'))
+def test_input_files(input_dir: str, expected: Exception, match: str):
+    with change_cwd(os.path.dirname(input_dir)):
+        input_file = os.path.basename(input_dir)
+        with pytest.raises(expected, match=match):
+            piglot_main(input_file)
+        output_dir, _ = os.path.splitext(input_file)
+        if os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)

@@ -25,7 +25,7 @@ objective:
 
 
   references:
-    'test/examples/reference.dat':
+    'reference.dat':
       prediction: ['modifier_1']
       transformer:
         x_scale: -1

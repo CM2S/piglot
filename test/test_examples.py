@@ -3,6 +3,7 @@ import os
 import shutil
 import pytest
 from piglot.bin.piglot import main as piglot_main
+from piglot.utils.assorted import change_cwd
 
 
 def get_files(path: str) -> List[str]:
@@ -13,9 +14,11 @@ def get_files(path: str) -> List[str]:
     ]
 
 
-@pytest.mark.parametrize('input_file', get_files('test/examples'))
-def test_input_files(input_file: str):
-    piglot_main(input_file)
-    output_dir, _ = os.path.splitext(input_file)
-    if os.path.isdir(output_dir):
-        shutil.rmtree(output_dir)
+@pytest.mark.parametrize('input_dir', get_files('test/examples'))
+def test_input_files(input_dir: str):
+    with change_cwd(os.path.dirname(input_dir)):
+        input_file = os.path.basename(input_dir)
+        piglot_main(input_file)
+        output_dir, _ = os.path.splitext(input_file)
+        if os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
