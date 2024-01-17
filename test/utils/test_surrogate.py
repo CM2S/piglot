@@ -2,7 +2,6 @@ import unittest
 import numpy as np
 import torch
 from botorch.models import SingleTaskGP, FixedNoiseGP
-from gpytorch.mlls import ExactMarginalLogLikelihood
 from piglot.utils.surrogate import get_model
 
 

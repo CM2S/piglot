@@ -9,6 +9,7 @@ on:
 
 jobs:
   build:
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
