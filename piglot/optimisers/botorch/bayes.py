@@ -10,7 +10,7 @@ import botorch
 from botorch.fit import fit_gpytorch_mll
 from botorch.optim import optimize_acqf
 from botorch.models.model import Model
-from botorch.models import FixedNoiseGP, SingleTaskGP
+from botorch.models import SingleTaskGP
 from botorch.acquisition.acquisition import AcquisitionFunction
 from botorch.acquisition import UpperConfidenceBound, qUpperConfidenceBound
 from botorch.acquisition import ExpectedImprovement, qExpectedImprovement
