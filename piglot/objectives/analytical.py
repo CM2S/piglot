@@ -115,13 +115,7 @@ class AnalyticalObjective(GenericObjective):
             label="Case",
             s=50,
         )
-        surf = axis.plot_surface(X, Y, Z, alpha=0.7, label="Analytical Objective")
-        # Fix for certain versions of matplotlib
-        try:
-            surf._facecolors2d = surf._facecolors3d
-            surf._edgecolors2d = surf._edgecolors3d
-        except AttributeError:
-            pass
+        axis.plot_surface(X, Y, Z, alpha=0.7, label="Analytical Objective")
         axis.set_xlabel(self.parameters[0].name)
         axis.set_ylabel(self.parameters[1].name)
         axis.set_zlabel("Analytical Objective")
