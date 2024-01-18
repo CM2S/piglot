@@ -6,11 +6,22 @@ Subpackages
 
 .. toctree::
 
-    piglot.losses
+    piglot.bin
+    piglot.objectives
     piglot.optimisers
+    piglot.solver
+    piglot.utils
 
 Submodules
 ----------
+
+piglot.objective module
+-----------------------
+
+.. automodule:: piglot.objective
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 piglot.optimiser module
 -----------------------

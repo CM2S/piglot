@@ -1,6 +1,13 @@
 piglot.optimisers package
 =========================
 
+Subpackages
+-----------
+
+.. toctree::
+
+    piglot.optimisers.botorch
+
 Submodules
 ----------
 
@@ -8,22 +15,6 @@ piglot.optimisers.aoa module
 ----------------------------
 
 .. automodule:: piglot.optimisers.aoa
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-piglot.optimisers.bayes\_skopt module
--------------------------------------
-
-.. automodule:: piglot.optimisers.bayes_skopt
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-piglot.optimisers.bayesian module
----------------------------------
-
-.. automodule:: piglot.optimisers.bayesian
     :members:
     :undoc-members:
     :show-inheritance:
@@ -48,14 +39,6 @@ piglot.optimisers.lipo\_opt module
 ----------------------------------
 
 .. automodule:: piglot.optimisers.lipo_opt
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-piglot.optimisers.prs\_spsa module
-----------------------------------
-
-.. automodule:: piglot.optimisers.prs_spsa
     :members:
     :undoc-members:
     :show-inheritance:

@@ -8,8 +8,7 @@ from piglot.optimiser import ScalarOptimiser
 class AOA(ScalarOptimiser):
     """
     AOA optimiser.
-    Documentation:
-        https://www.sciencedirect.com/science/article/pii/S0045782520307945
+    Documentation: https://www.sciencedirect.com/science/article/pii/S0045782520307945
 
     Attributes
     ----------
