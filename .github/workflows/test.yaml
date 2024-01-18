@@ -9,28 +9,36 @@ on:
 
 jobs:
   build:
-    name: Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    name: ${{ matrix.runner.name }} - Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.runner.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11"]
+        python-version: 
+          - 3.9
+          - 3.10
+          - 3.11
+        runner:
+          - name: Windows
+            os: windows-latest
+          - name: Ubuntu
+            os: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install package
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install .
-    - name: Install test dependencies
-      run: |
-        python -m pip install flake8 pytest
-    - name: Lint with flake8
-      run: |
-        flake8 piglot test
-    - name: Test with pytest
-      run: |
-        pytest test/
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+      - name: Install test dependencies
+        run: |
+          python -m pip install .[test]
+      - name: Lint with flake8
+        run: |
+          flake8 piglot test
+      - name: Test with pytest
+        run: |
+          pytest test/
