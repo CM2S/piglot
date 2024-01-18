@@ -108,9 +108,7 @@ class BayesianBoTorch(Optimiser):
         # Clamp variances to prevent warnings from GPyTorch
         variances = torch.clamp_min(variances, 1e-6)
         # Initialise model instance depending on noise setting
-        model = (
-            SingleTaskGP(params, values) if self.noisy else FixedNoiseGP(params, values, variances)
-        )
+        model = SingleTaskGP(params, values, train_Yvar=None if self.noisy else variances)
         # Fit the GP (in case of trouble, fall back to an Adam-based optimiser)
         mll = ExactMarginalLogLikelihood(model.likelihood, model)
         try:

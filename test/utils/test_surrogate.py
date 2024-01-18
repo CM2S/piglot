@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import torch
-from botorch.models import SingleTaskGP, FixedNoiseGP
+from botorch.models import SingleTaskGP
 from piglot.utils.surrogate import get_model
 
 
@@ -19,7 +19,7 @@ class TestGetGPModel(unittest.TestCase):
 
     def test_get_model_fixed_noise_no_var_data(self):
         model = get_model(self.x_data, self.y_data)
-        self.assertIsInstance(model, FixedNoiseGP)
+        self.assertIsInstance(model, SingleTaskGP)
         self.assertEqual(model.train_inputs[0].shape, torch.Size([3, 2]))
         self.assertEqual(model.train_targets.shape, torch.Size([3]))
         self.assertTrue(torch.equal(model.likelihood.noise,
@@ -27,7 +27,7 @@ class TestGetGPModel(unittest.TestCase):
 
     def test_get_model_fixed_noise_with_var_data(self):
         model = get_model(self.x_data, self.y_data, self.var_data)
-        self.assertIsInstance(model, FixedNoiseGP)
+        self.assertIsInstance(model, SingleTaskGP)
         self.assertEqual(model.train_inputs[0].shape, torch.Size([3, 2]))
         self.assertEqual(model.train_targets.shape, torch.Size([3]))
         self.assertTrue(torch.equal(model.likelihood.noise, torch.tensor(self.var_data)))
