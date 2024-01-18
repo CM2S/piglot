@@ -1,0 +1,62 @@
+[project]
+name = "piglot"
+dynamic = ["version"]
+description = "Parameter Identification by Global Optimisation"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {file = "LICENSE.txt"}
+keywords = ["optimisation", "parameter identification", "constitutive modelling"]
+authors = [
+    {name = "CM2S"}
+]
+maintainers = [
+    {name = "Ana Francisca Alves", email = "afalves@fe.up.pt" },
+    {name = "Rui Coelho", email = "ruicoelhopedro@gmail.com" },
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Build Tools",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3 :: Only",
+]
+dependencies = [
+    "numpy",
+    "tqdm",
+    "pandas",
+    "sympy",
+    "scipy>=1.7", # For scipy.stats.qmc
+    "torch",
+    "botorch",
+    "Pillow",
+    "matplotlib>=3.7.2", # https://github.com/matplotlib/matplotlib/pull/25565
+    "PyYAML",
+]
+
+[project.optional-dependencies]
+lipo = ["lipo"]
+genetic = ["geneticalgorithm"]
+pso = ["pyswarms"]
+full = ["lipo", "geneticalgorithm", "pyswarms"]
+test = ["pytest", "pytest-cov", "flake8"]
+
+[project.urls]
+"Homepage" = "https://github.com/CM2S/piglot"
+"Bug Reports" = "https://github.com/CM2S/piglot/issues"
+"Source" = "https://github.com/CM2S/piglot/"
+
+[project.entry-points."piglot.bin"]
+piglot = "piglot:main"
+piglot-plot = "piglot_plot:main"
+
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+version = {attr = "piglot.__version__"}
