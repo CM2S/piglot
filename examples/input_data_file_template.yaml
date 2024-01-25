@@ -1,0 +1,217 @@
+# piglot input file specification
+# =============================================================================
+# Description:
+# Description of the input file main specifications required to perform an
+# optimisation problem using piglot.
+#
+#                                                       Last modified: Jan 2022
+# =============================================================================
+
+
+
+# Stopping Criteria
+# =============================================================================
+# Specification of the stopping criteria for the iterative procedure.
+#
+# (Mandatory)
+# iters : int
+#     Maximum number of iterations.
+iters: iters
+#
+# (Optional) Additional stopping criteria are available and may be used in
+# conjuction with 'iters'.
+# conv_tol : float
+#     Stop the optimiser if the loss becomes small than this value.
+# max_iters_no_improv : int
+#     Stop the optimiser if the loss does not improve after this number of
+#     iterations in a row.
+# max_func_calls : int
+#     Stop the optimiser after this number of function calls.
+# max_timeout : float
+#     Stop the optimiser after this elapsed time (in seconds).
+conv_tol: conv_tol
+max_iters_no_improv: max_iters_no_improv
+max_func_calls: max_func_calls
+max_timeout: max_timeout
+#
+# =============================================================================
+
+
+
+# Optimisation algorithms
+# =============================================================================
+# Specification of the optimisation algorithm (mandatory) and hyperparameters
+# (optional) selected to perform the optimisation.
+#
+optimiser:
+  name: optimiser_name
+  hyperparameter1: hyperparameter1
+  hyperparameter2: hyperparameter2
+  hyperparameter3: hyperparameter3
+#
+# =============================================================================
+
+
+
+# Parameters
+# =============================================================================
+# Specification of the parameters to identify by optimisation.
+#
+# (Mandatory) Identification of the parameters to optimise.
+parameters:
+  parameter1: [initial_value1, lower_bound1, upper_bound1]
+  parameter2: [initial_value2, lower_bound2, upper_bound2]
+  parameter3: [initial_value3, lower_bound3, upper_bound3]
+#
+# (Optional) Use 'output_parameters' for output purposes.
+output_parameters:
+  parameter3: expression_param1_param2_param3 # e.g., np.exp(parameter1)
+  parameter4: expression_param1_param2_param3 # e.g., parameter1*parameter2
+  parameter5: expression_param1_param2_param3 # e.g., parameter3
+#
+# (Optional) Use the best solution of a previous optimisation as initial_value
+# for the parameters in 'parameters'.
+init_shot_from: previous_optimisation.yaml
+#
+# =============================================================================
+
+
+
+# Objective
+# =============================================================================
+# Specification of the objective problem for the optimisation.
+# Four objectives are available: (1) analytical, (2) test_function, (3) design,
+#                                (4) fitting
+#
+# -----------------------------------------------------------------------------
+# OPTION 1: Minimize a given analytical expression.
+objective:
+  name: analytical
+  expression: analytical_expression # e.g., (parameter1 - parameter3)**2
+#
+# -----------------------------------------------------------------------------
+# OPTION 2: Minimize a synthetic test function (see synthetic test functions
+#           available).
+objective:
+  name: test_function
+  function: name_synthetic_test_function # e.g., hartmann, powell
+  # (Optional) Test function modifications (see documentation)
+  composition: composition
+  transform: transform
+#
+# -----------------------------------------------------------------------------
+# OPTION 3: Minimize a scalar design objective function.
+objective:
+  name: design
+  # (Optional) Use variance of several cases for optimisation, by default False
+  stochastic: False
+  # Solver specification (see available solvers)
+  solver:
+    name: solver_name
+    solver_field1: solver_field1
+    solver_field2: solver_field2
+    # (Optional) Specification of the design pre-processor script and class
+    generator:
+      script: design_script.py
+      class: GeneratorClass
+    # Define cases and fields used for design (solver dependent)
+    cases:
+      'case1':
+        fields:
+          'case1_field1':
+            name: field_name
+            field1: field1
+            field2: field2
+          'case1_field2':
+            name: field_name
+            field1: field1
+            field2: field2
+      'case2':
+        fields:
+          'case2_field1':
+            name: field_name
+            field1: field1
+            field2: field2
+  # Specification of the design targets
+  targets:
+    # Target name
+    'name_of target':
+      # Target quantity
+      quantity: target_quantity
+      # Use the fields in prediction to perform the target optimisation
+      prediction: ['case1_field1', 'case2_field1']
+      # To perform a maximisation problem negate = True, by default False.
+      negate: False
+    'name_of_target2':
+      quantity: target_quantity
+      prediction: ['case2_field1']
+      negate: True
+#
+# -----------------------------------------------------------------------------
+# OPTION 4: minimize a scalar fitting objective function.
+objective:
+  name: fitting
+  # (Optional) Use a composite technique for optimisation, by default False.
+  composite: False
+  # (Optional) Use noise for optimisation, by default False.
+  stochastic: False
+  # Solver specification (see available solvers)
+  solver:
+    name: solver_name
+    solver_field1: solver_field1
+    solver_field2: solver_field2
+    # Define cases and fields used for fitting (solver dependent)
+    cases:
+      'case1':
+        fields:
+          'case_field1':
+            name: field_name
+            field1: field1
+            field2: field2
+  # Define reference responses for optimisation
+  references:
+    # Reference file
+    'path_reference_file':
+      # Use fields in prediction to compare with the path_reference_file
+      prediction: ['case_field1']
+      # (Optional) Modifications of the reference file
+      # x_col : int
+      #     Column of the x field, by default 1.
+      # y_col : int
+      #     Column of the y field, by default 2.
+      # weight: float
+      #     Weight of the path_reference_file, by default 1.
+      # filter_tol: float
+      #     Reduce number of points in reference response, by default 0.
+      # show: bool
+      #     Plot reference response reduction, by default False.
+      # skip_header: int
+      #     Number of lines to skip in reference file, by default 0.
+      x_col: x_col
+      y_col: y_col
+      weight: weight
+      filter_tol: filter_tol
+      skip_header: skip_header
+      show: show
+      # (Optional) Additional transformations of reference response
+      transformer:
+        # x_scale : float
+        #     Scale factor of x field, by default 1.
+        # y_scale : float
+        #     Scale factor of y field, by default 1.
+        # x_offset: float
+        #     Offset of the x field, by default 0.
+        # y_offset: float
+        #     Offset of the y field, by default 0.
+        # x_min: float
+        #     Lower bound of the x field, by default -np.inf.
+        # x_max: float
+        #     Upper bound of the x field, by default np.inf.
+        x_scale: x_scale
+        y_scale: y_scale
+        x_offset: x_offset
+        y_offset: y_offset
+        x_min: x_min
+        x_max: x_max
+#
+# =============================================================================
