@@ -10,8 +10,8 @@ authors = [
     {name = "CM2S"}
 ]
 maintainers = [
-    {name = "Ana Francisca Alves", email = "afalves@fe.up.pt" },
     {name = "Rui Coelho", email = "ruicoelhopedro@gmail.com" },
+    {name = "Ana Francisca Alves", email = "afalves@fe.up.pt" },
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
