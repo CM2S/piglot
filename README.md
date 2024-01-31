@@ -46,3 +46,4 @@ Note that this option also provides the `piglot` and `piglot-plot` scripts, but 
   1. Clone the `piglot` repository.
   2. Open your favourite terminal, change directory to the recently cloned `piglot` repository and run: `pip install .`
   3. Confirm the package is correctly installed by calling the `piglot` and `piglot-plot` executables.
+
