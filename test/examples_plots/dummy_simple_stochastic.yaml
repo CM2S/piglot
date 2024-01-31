@@ -6,9 +6,7 @@ optimiser:
 
 
 parameters:
-  m: [500, 0, 1000]
-  c: [0, -1000, 1000]
-
+  a: [0, -4, 4]
 
 
 objective:
@@ -16,22 +14,20 @@ objective:
   composite: False
   stochastic: True
   solver:
-    name: dummy
+    name: curve
     cases:
       'case_1':
-        fields:
-          'modifier_1':
-            name: Modifier
-            y_scale: 2.0
-            y_offset: -1.0
+        expression: <a> * x ** 2
+        parametric: x
+        bounds: [-5, 5]
+        points: 100
       'case_2':
-        fields:
-          'modifier_2':
-            name: Modifier
-            y_scale: 2.0
-            y_offset: 0.0
+        expression: 1.1 * <a> * x ** 2
+        parametric: x
+        bounds: [-5, 5]
+        points: 100
 
 
   references:
-    'reference.txt':
-      prediction: ['modifier_1', 'modifier_2']
+    'reference_curve.txt':
+      prediction: ['case_1', 'case_2']

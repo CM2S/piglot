@@ -80,14 +80,6 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         RuntimeError,
         "Failed to parse the config file: YAML syntax seems invalid.",
     ),
-    'dummy_invalid_parameters.yaml': (
-        ValueError,
-        "Invalid parameters: the parameters 'm' and 'c' are required.",
-    ),
-    'dummy_invalid_parameters2.yaml': (
-        ValueError,
-        "Invalid parameters: the parameters 'm' and 'c' are required.",
-    ),
 }
 
 

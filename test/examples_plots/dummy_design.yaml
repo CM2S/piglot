@@ -5,24 +5,22 @@ optimiser: random
 
 
 parameters:
-  m: [500, 0, 1000]
-  c: [0, -1000, 1000]
+  a: [2, 0.5, 4]
 
 
 
 objective:
   name: design
   solver:
-    name: dummy
+    name: curve
     cases:
       'case_1':
-        fields:
-          'modifier_1':
-            name: Modifier
-            y_scale: 2.0
-            y_offset: -1.0
+        expression: <a> * x ** 2
+        parametric: x
+        bounds: [-5, 5]
+        points: 100
   targets:
     'maximum_force':
       quantity: max
-      prediction: ['modifier_1']
+      prediction: ['case_1']
       negate: False
