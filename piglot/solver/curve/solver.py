@@ -1,5 +1,5 @@
 """Module for Curve solver."""
-from typing import Dict, Any
+from typing import Dict, Any, List
 import os
 import time
 import shutil
@@ -7,7 +7,7 @@ from multiprocessing.pool import ThreadPool as Pool
 import numpy as np
 import sympy
 from piglot.parameter import ParameterSet
-from piglot.solver.solver import Solver, Case, CaseResult, OutputField, OutputResult
+from piglot.solver.solver import Solver, Case, CaseResult, OutputResult
 from piglot.solver.curve.fields import CurveInputData, Curve
 
 
@@ -16,18 +16,18 @@ class CurveSolver(Solver):
 
     def __init__(
             self,
-            cases: Dict[Case, Dict[str, OutputField]],
+            cases: List[Case],
             parameters: ParameterSet,
             output_dir: str,
-            parallel: int,
-            tmp_dir: str,
+            parallel: int = 1,
+            tmp_dir: str = 'tmp',
             ) -> None:
         """Constructor for the Curve solver class.
 
         Parameters
         ----------
-        cases : Dict[Case, Dict[str, OutputField]]
-            Cases to be run and respective output fields.
+        cases : List[Case]
+            Cases to be run.
         parameters : ParameterSet
             Parameter set for this problem.
         output_dir : str
