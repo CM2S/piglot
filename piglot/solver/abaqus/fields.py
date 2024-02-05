@@ -2,6 +2,8 @@
 from __future__ import annotations
 from typing import Dict, Any
 import os
+import re
+import glob
 import numpy as np
 import pandas as pd
 from piglot.parameter import ParameterSet
@@ -56,6 +58,48 @@ class AbaqusInputData(InputData):
         for parameter in parameters:
             if not has_parameter(self.input_file, f'<{parameter.name}>'):
                 raise RuntimeError(f"Parameter '{parameter.name}' not found in input file.")
+
+        input_file, ext = os.path.splitext(os.path.basename(self.input_file))
+        with open(input_file + ext, 'r', encoding='utf-8') as file:
+            data = file.read()
+
+            job_list = re.findall(r'\*\* Job name: ([^M]+)', data)
+            job_list = [job.strip() for job in job_list]  # Remove trailing whitespace
+            if len(job_list) == 0:
+                raise ValueError("No steps found in the file.")
+            if self.job_name is not None:
+                if self.job_name not in job_list:
+                    raise ValueError(f"Job name '{self.job_name}' not found in the file.")
+            if self.job_name is None:
+                if len(job_list) > 1:
+                    raise ValueError("Multiple jobs found in the file. \
+                                     Please specify the job name.")
+                self.job_name = job_list[0]
+
+            instance_list = re.findall(r'\*Instance, name=([^,]+)', data)
+            if len(instance_list) == 0:
+                raise ValueError("No instances found in the file.")
+            if self.instance_name is not None:
+                if self.instance_name not in instance_list:
+                    raise ValueError(f"Instance name '{self.instance_name}' not found in the file.")
+            if self.instance_name is None:
+                if len(instance_list) > 1:
+                    raise ValueError("Multiple instances found in the file. \
+                                     Please specify the instance name.")
+                self.instance_name = instance_list[0]
+
+            step_list = re.findall(r'\*Step, name=([^,]+)', data)
+            if len(step_list) == 0:
+                raise ValueError("No steps found in the file.")
+            if self.step_name is not None:
+                if self.step_name not in step_list:
+                    raise ValueError(f"Step name '{self.step_name}' not found in the file.")
+            if self.step_name is None:
+                if len(step_list) > 1:
+                    raise ValueError("Multiple steps found in the file. \
+                                     Please specify the step name.")
+                self.step_name = step_list[0]
+
 
     def name(self) -> str:
         """Return the name of the input data.
@@ -116,7 +160,15 @@ class FieldsOutput(OutputField):
         input_data : AbaqusInputData
             Input data for this case.
         """
-        # TODO: FAZER! :=)
+        input_file, ext = os.path.splitext(os.path.basename(input_data.input_file))
+        with open(input_file + ext, 'r', encoding='utf-8') as file:
+            data = file.read()
+
+            nsets_list = re.findall(r'\*Nset, nset=([^,]+)', data)
+            if len(nsets_list) == 0:
+                raise ValueError("No sets found in the file.")
+            if self.set_name not in nsets_list:
+                raise ValueError(f"Set name '{self.set_name}' not found in the file.")
 
     def get(self, input_data: AbaqusInputData) -> OutputResult:
         """Reads reactions from a Abaqus analysis.
@@ -163,6 +215,12 @@ class FieldsOutput(OutputField):
         # Extract columns from data frame
         data_group = data[columns].to_numpy()
         y_field = reduction[self.field](data_group, axis=1)
+
+        # Delete the extra temporary files
+        files = glob.glob(output_dir + '/' + input_file + '*.txt')
+        for file in files:
+            if self.set_name not in file:
+                os.remove(file)
 
         return OutputResult(x_field, y_field)
 

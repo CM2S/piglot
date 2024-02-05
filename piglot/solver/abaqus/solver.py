@@ -48,27 +48,30 @@ class AbaqusSolver(Solver):  # inherits from the Solver class
         # parameters, and output_dir arguments. Then, it sets the abaqus_bin, parallel, and \
         # tmp_dir attributes of the AbaqusSolver instance to the corresponding arguments.
 
-    def _gen_post_proc_inputfile(self, input_data: AbaqusInputData, tmp_dir: str) -> str:
-        """Generate the post-processing input file.
+    def _post_proc_variables(self, input_data: AbaqusInputData) -> Dict[str, Any]:
+        """Generate the post-processing variables.
 
         Parameters
         ----------
         input_data : AbaqusInputData
             Input data for the simulation.
-        tmp_dir : str
-            Temporary directory to run the simulation.
+
+        Returns
+        -------
+        Dict[str, Any] 
+            Dictionary with the post processing variables.
         """
         input_file, ext = os.path.splitext(os.path.basename(input_data.input_file))
-        post_proc_file = os.path.join(tmp_dir, f'post_{input_file}.dat')
-        with open(post_proc_file, 'w', encoding='utf-8') as file:
-            file.write(f"input_file = '{input_file}{ext}'\n")
-            file.write(f"job_name = '{input_data.job_name}'\n")
-            file.write(f"step_name = '{input_data.step_name}'\n")
-            file.write(f"instance_name = '{input_data.instance_name}'\n")
-        return post_proc_file
+        variables = {}
+        variables['input_file'] = input_file + ext
+        variables['job_name'] = input_data.job_name
+        variables['step_name'] = input_data.step_name
+        variables['instance_name'] = input_data.instance_name
+
+        return variables
 
     def _run_case(self, values: np.ndarray, case: Case, tmp_dir: str) -> CaseResult:
-        """Run a single case wth Abaqus.
+        """Run single/parallel cases with Abaqus.
 
         Parameters
         ----------
@@ -84,11 +87,18 @@ class AbaqusSolver(Solver):  # inherits from the Solver class
         CaseResult
             Results for this case
         """
+
+        # Create a temporary directory (the name of the directory is the case name) inside tmp_dir
+        # (because of parallel runs) and copy the input file
+        case_name, _ = os.path.splitext(os.path.basename(case.input_data.input_file))
+        tmp_dir = os.path.join(tmp_dir, case_name)
+        os.mkdir(tmp_dir)
+
         # Copy input file replacing parameters by passed value
         input_data = case.input_data.prepare(
             values, self.parameters, tmp_dir=tmp_dir)
         input_file = input_data.input_file
-        case_name, _ = os.path.splitext(os.path.basename(input_file))
+
         # Run ABAQUS (we don't use high precision timers here to keep track of the start time)
         begin_time = time.time()
         run_inp = subprocess.run(
@@ -100,30 +110,29 @@ class AbaqusSolver(Solver):  # inherits from the Solver class
             stderr=subprocess.DEVNULL,
             check=False
         )
-        # TODO: Verificar se a simulação foi concluída
-        post_proc_file = self._gen_post_proc_inputfile(input_data, tmp_dir)
+
+        variables = self._post_proc_variables(input_data)
         python_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reader.py')
-        # TODO: ver se da para passar a infornmação do job_name, step_name e instance_name para o 
-        # abaqus
+
         run_odb = subprocess.run(
             [self.abaqus_bin, 'viewer', f"noGUI={python_script}", "--",
-             f"input_file={os.path.basename(post_proc_file)}"],
+             f"input_file={variables['input_file']}", "--",
+             f"job_name={variables['job_name']}", "--",
+             f"step_name={variables['step_name']}", "--",
+             f"instance_name={variables['instance_name']}"],
             cwd=tmp_dir,
             shell=True,  # deixar o sheel=True?
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False
         )
-        # TODO: Verificar se o pos processamento foi concluído
         end_time = time.time()
-        # TODO: VER DEPOIS PARA O ABAQUS
-        # Check if simulation completed
-        screen_file = os.path.join(os.path.splitext(
-            input_file)[0], f'{case_name}.screen')
-        # TODO: REFAZER!!!!!!
-        failed_case = False
-        responses = {name: field.get(input_data)
-                     for name, field in case.fields.items()}
+
+        failed_case = (run_inp.returncode != 0 or run_odb.returncode != 0)
+
+        responses = {name: field.get(input_data) if not failed_case else
+                     OutputResult(np.empty(0), np.empty(0)) for name, field in case.fields.items()}
+
         return CaseResult(
             begin_time,
             end_time - begin_time,
@@ -133,11 +142,7 @@ class AbaqusSolver(Solver):  # inherits from the Solver class
             responses,
         )
 
-    def _solve(
-        self,
-        values: np.ndarray,
-        concurrent: bool,
-    ) -> Dict[Case, CaseResult]:
+    def _solve(self, values: np.ndarray, concurrent: bool,) -> Dict[Case, CaseResult]:
         """Internal solver for the prescribed problems.
 
         Parameters
@@ -225,8 +230,12 @@ class AbaqusSolver(Solver):  # inherits from the Solver class
                 field_name: abaqus_fields_reader(field_config)
                 for field_name, field_config in case_config['fields'].items()
             }
-            cases.append(Case(AbaqusInputData(case_name, case_config['job_name'],
-                                              case_config['step_name'],
-                                              case_config['instance_name']), fields))
+            # Se nao for indicado o job_name, step_name e instance_name, o valor por defeito e None
+            job_name = case_config.get('job_name', None)
+            step_name = case_config.get('step_name', None)
+            instance_name = case_config.get('instance_name', None)
+            cases.append(Case(AbaqusInputData(case_name, job_name,
+                                              step_name,
+                                              instance_name), fields))
         # Return the solver
         return AbaqusSolver(cases, parameters, output_dir, abaqus_bin, parallel, tmp_dir)

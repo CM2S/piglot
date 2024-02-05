@@ -14,7 +14,7 @@ import codecs
 import numpy as np
 from odbAccess import *
 
-def read_input():
+def input_variables():
     """Reads the input file.
 
     Returns
@@ -22,21 +22,30 @@ def read_input():
     variables
         Variables to use in this problem
     """
-    args = [a for a in sys.argv if a.startswith("input_file=")][0].replace('input_file=', '')
+    args = sys.argv
     variables = {}
-    with codecs.open(args, "r", encoding='utf-8') as file:
-        for line in file:
-            if "=" in line:
-                var_name, var_value = line.split("=")
-                var_name = var_name.strip()
-                var_value = var_value.strip()
 
-                if var_value.startswith("'") and var_value.endswith("'"):
-                    var_value = str(var_value[1:-1])
-                else:
-                    var_value = int(var_value)
+    input_file_list = [a for a in args if a.startswith("input_file=")]
+    job_name_list = [a for a in args if a.startswith("job_name=")]
+    step_name_list = [a for a in args if a.startswith("step_name=")]
+    instance_name_list = [a for a in args if a.startswith("instance_name=")]
 
-                variables[var_name] = var_value
+    # Checks if the input_file, job_name, step_name and instance_name are not empty
+    # (Pode ser util no futuro caso o utilizador nao introduza algum dos argumentos)
+    input_file = input_file_list[0].replace('input_file=', '') \
+        if input_file_list else None
+    job_name = job_name_list[0].replace('job_name=', '') \
+        if job_name_list else None
+    step_name = step_name_list[0].replace('step_name=', '') \
+        if step_name_list else None
+    instance_name = instance_name_list[0].replace('instance_name=', '') \
+        if instance_name_list else None
+
+    variables['input_file'] = input_file
+    variables['job_name'] = job_name
+    variables['step_name'] = step_name
+    variables['instance_name'] = instance_name
+
     return variables
 
 def file_name_func(set_name, variable_name, inp_name):
@@ -88,7 +97,8 @@ def field_location(i, output_variable, location):
 def main():
     """Main function of the reader.py
     """
-    variables = read_input()
+
+    variables = input_variables()
 
     # Data defined by the user
     job_name = variables["job_name"]  # Replace with the actual job name
