@@ -1,6 +1,6 @@
-## sample_curve_fitting_stochastic example
+## sample_curve_fitting_stochastic_composite example
 
-A simple analytical curve fitting problem with noise in the input data is included to demonstrate how to use `piglot` with variance.
+A simple analytical curve fitting problem with noise in the input data is included to demonstrate how to use `piglot` with variance and with the composite strategy.
 In this case, we aim to fit two quadratic expressions of the type $f(x) = a x^2$ and $f(x) = 2a x^2$, using as a reference response, a numerically generated reference from the expression $f(x) = 2 x^2$ (provided in the `examples/sample_curve_fitting_stochastic/reference_curve.txt` file).
 We want to find the value for $a$ that better fits our reference. In this case, the optimal solution is no longer $a=2$, as two distinct functions are used to compute the generated response.
 
@@ -11,7 +11,7 @@ We also define a parameterisation using the variable $x$, where we sample the fu
 
 DESCRIBE STOCHASTIC
 
-The configuration file (`examples/sample_curve_fitting_stochastic/config.yaml`) for this example is:
+The configuration file (`examples/sample_curve_fitting_stochastic_composite/config.yaml`) for this example is:
 ```yaml
 iters: 10
 
@@ -23,7 +23,7 @@ parameters:
 objective:
   name: fitting
   stochastic: True
-  composite: False
+  composite: True
   solver:
     name: curve
     cases:
@@ -41,23 +41,22 @@ objective:
     'reference_curve.txt':
       prediction: ['case_1', 'case_2']
 ```
-The stochastic strategy is activated by setting ```stochastic: True```, and by adding a new generated response with the label `case_2`, given by the expression $f(x) = 2a x^2$.
+The stochastic strategy is activated by setting ```stochastic: True```, and by adding a new generated response with the label `case_2`, given by the expression $f(x) = 2a x^2$. The composite strategy is activated by setting ```composite: True```.
 
-To run this example, open a terminal inside the `piglot` repository, enter the `examples/sample_curve_fitting_stochastic` directory and run piglot with the given configuration file
+To run this example, open a terminal inside the `piglot` repository, enter the `examples/sample_curve_fitting_stochastic_composite` directory and run piglot with the given configuration file
 ```bash
-cd examples/sample_curve_fitting_stochastic
+cd examples/sample_curve_fitting_stochastic_composite
 piglot config.yaml
 ```
 You should see an output similar to
 ```
-BoTorch: 100%|████████████████████████████████████████| 10/10 [00:00<00:00, 14.42it/s, Loss: 1.7315e-01]
-Completed 10 iterations in 0.69363s
-Best loss:  1.73146009e-01
+BoTorch: 100%|████████████████████████████████████████| 10/10 [00:02<00:00,  3.80it/s, Loss: 5.2804e-05]
+Completed 10 iterations in 2s
+Best loss:  5.28041030e-05
 Best parameters
-- a:     1.198191
+- a:     1.325847
 ```
-Piglot identifies the `a` parameter as 1.2, and the error of the fitting is in the order of $10^{-1}$.
-For this case, the use of the composite Bayesian strategy (as decribed in [here](../sample_curve_fitting_stochastic_composite/description.md)) significantly improves the quality of the fitting. With the composite strategy the error of the fitting is reduced to $10^{-5}$.
+Piglot identifies the `a` parameter as 1.326, and the error of the fitting is in the order of $10^{-6}$, which is much smaller than the error obtained with the non-composite strategy (see [here](../sample_curve_fitting_stochastic/description.md)).
 
 
 To visualise the optimisation results, use the `piglot-plot` utility.
@@ -69,20 +68,17 @@ Which will display the best observed value for the optimisation problem.
 You should see the following output in the terminal
 ```
 Best run:
-Start Time /s    0.683277
-Run Time /s      0.014079
-Variance         0.005519
-a                1.198191
+Start Time /s    2.595121
+Run Time /s      0.014108
+Variance         0.018073
+a                1.325847
 Name: 18, dtype: object
-Hash: f07c094fdbbaa637387a31cdeeb946783f4b3aeefe99639995d7e6539cf48475
-Objective:  1.73146009e-01
+Hash: fc36fad0fc55278da3c16dbfd9a257e42c2d81361e8650236013ab6f6426c104
+Objective:  5.28041030e-05
 ```
 The script plots the best observed responses, and its comparison with the reference response. Moreover, the average, the median, the standard deviation and the 95\% mean condidence intervals are also provided.
-![Best case plot](../../docs/source/simple_stochastic_example/best_0.svg)
-![Best case plot](../../docs/source/simple_stochastic_example/best_1.svg)
-![Best case plot](../../docs/source/simple_stochastic_example/best_2.svg)
-
-
-
-
+![Best case plot](../../docs/source/composite_stochastic_example/best_0.svg)
+![Best case plot](../../docs/source/composite_stochastic_example/best_1.svg)
+![Best case plot](../../docs/source/composite_stochastic_example/best_2.svg)
+As can be seen, with the composite strategy, the mean of the responses is in excellent agreement with the reference response.
 

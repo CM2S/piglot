@@ -1,0 +1,15 @@
+iters: 100
+
+optimiser: direct
+
+parameters:
+  a_in: [0, -10, 10]
+  b_in: [0, -10, 10]
+
+output_parameters:
+  a: a_in
+  b: exp(b_in)
+
+objective:
+  name: analytical
+  expression: sinh(a) + b * sin(a) - a*0.1/b

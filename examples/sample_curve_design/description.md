@@ -10,7 +10,6 @@ We run 10 iterations using the `botorch` optimiser (our interface for Bayesian o
 The notation `<a>`, `<b>` and `<c>` indicates that these parameters should be optimised.
 We also define a parameterisation using the variable $x$, where we sample the function between `[-2,2]` with 100 points.
 
-### Using configuration files
 The configuration file (`examples/sample_curve_design/config.yaml`) for this example is:
 ```yaml
 iters: 10
