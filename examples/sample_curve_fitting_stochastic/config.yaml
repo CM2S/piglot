@@ -8,7 +8,6 @@ parameters:
 objective:
   name: fitting
   stochastic: True
-  composite: False
   solver:
     name: curve
     cases:

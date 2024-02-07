@@ -1,16 +1,35 @@
-## sample_curve_fitting_stochastic_composite example
+## Stochastic curve fitting example - composite setting
 
-A simple analytical curve fitting problem with noise in the input data is included to demonstrate how to use `piglot` with variance and with the composite strategy.
-In this case, we aim to fit two quadratic expressions of the type $f(x) = a x^2$ and $f(x) = 2a x^2$, using as a reference response, a numerically generated reference from the expression $f(x) = 2 x^2$ (provided in the `examples/sample_curve_fitting_stochastic/reference_curve.txt` file).
-We want to find the value for $a$ that better fits our reference. In this case, the optimal solution is no longer $a=2$, as two distinct functions are used to compute the generated response.
+Following the [stochastic curve fitting example](../sample_curve_fitting_stochastic/description.md), we now show how to use stochastic curve fitting under function composition.
+If you are unfamiliar with the stochastic aspect, please check the aforementioned example first.
 
-We run 10 iterations using the `botorch` optimiser (our interface for Bayesian optimisation), and set the parameter `a` for optimisation with bounds `[0,4]` and initial value 1.
-The notation `<a>` indicates that this parameter should be optimised.
-We also define a parameterisation using the variable $x$, where we sample the function between `[-5,5]` with 100 points.
+As before, we start by defining the two analytical expressions used for describing the curve:
+$$
+\begin{aligned}
+&f_1(x) = a x^2 \\
+&f_2(x) = 2a x^2
+\end{aligned}
+$$
+Once again, the goal is to build a stochastic objective function with a certain probability distribution and optimise it.
+In the previous example, the objective function was assumed to follow a Gaussian distribution with known mean and variance, that is, $J(a) \sim \mathcal{N}\left(\mu(a),\sigma^2(a)\right)$.
+These terms were computed from the individual loss functions of $f_1$ and $f_2$.
 
+However, under composition, we instead assume that, for a fixed $a$, the *response* at every point $x$ of the curve follows a normal distribution with known mean $\mu(x)$ and variance $\sigma^2(x)$, that is, $f(x) \sim \mathcal{N}\left(\mu(x), \sigma^2(x)\right)$.
+This is fundamentally different from the previous approach.
+In the simple (non-composite) strategy, we assume the scalar *objective function* (or loss, in the curve fitting case) is Gaussian; on the composite fashion, it is the *response* that is Gaussian.
+We can then compute the statistical quantities in a similar fashion:
+$$
+\begin{aligned}
+&\mu(x) = \dfrac{1}{N}\sum_{i=1}^{N} f_i(x) = \dfrac{f_1(x)+f_2(x)}{2} \\
+&\sigma^2(x) = \dfrac{1}{N^2}\sum_{i=1}^{N} \left[f_i(x) - \mu(x)\right]^2 = \dfrac{\left[f_1(x)-\mu(x)\right]^2+\left[f_2(x)-\mu(x)\right]^2}{4}
+\end{aligned}
+$$
+With the statistical model for the response, it is now time to build the statistical model for the objective function, which is then passed to the optimiser.
+This is where the composition aspect comes into play.
+Using BoTorch, we never need to explicitly compute the posterior distribution of the objective function as most acquisition functions can be computed with quasi-Monte Carlo sampling.
+Refer to the [composite curve fitting](../sample_curve_fitting_composite/description.md) example for more details on how we approach this problem.
 
-DESCRIBE STOCHASTIC
-
+In practice, to use composition, you only need to set the `composite: True` flag in the objective configuration.
 The configuration file (`examples/sample_curve_fitting_stochastic_composite/config.yaml`) for this example is:
 ```yaml
 iters: 10
@@ -41,14 +60,7 @@ objective:
     'reference_curve.txt':
       prediction: ['case_1', 'case_2']
 ```
-The stochastic strategy is activated by setting ```stochastic: True```, and by adding a new generated response with the label `case_2`, given by the expression $f(x) = 2a x^2$. The composite strategy is activated by setting ```composite: True```.
-
-To run this example, open a terminal inside the `piglot` repository, enter the `examples/sample_curve_fitting_stochastic_composite` directory and run piglot with the given configuration file
-```bash
-cd examples/sample_curve_fitting_stochastic_composite
-piglot config.yaml
-```
-You should see an output similar to
+Example output for this case:
 ```
 BoTorch: 100%|████████████████████████████████████████| 10/10 [00:02<00:00,  3.80it/s, Loss: 5.2804e-05]
 Completed 10 iterations in 2s
@@ -56,16 +68,10 @@ Best loss:  5.28041030e-05
 Best parameters
 - a:     1.325847
 ```
-Piglot identifies the `a` parameter as 1.326, and the error of the fitting is in the order of $10^{-6}$, which is much smaller than the error obtained with the non-composite strategy (see [here](../sample_curve_fitting_stochastic/description.md)).
-
-
-To visualise the optimisation results, use the `piglot-plot` utility.
-In the same directory, run
-```bash
-piglot-plot best config.yaml
-```
-Which will display the best observed value for the optimisation problem.
-You should see the following output in the terminal
+Piglot identifies the `a` parameter as 1.326, and the error of the fitting is in the order of $10^{-6}$.
+Unlike the non-composite case, the fitting error is significantly smaller.
+Recal that, this time, we are optimising the mean response of the two functions, which gives a theoretical value of $a=4/3\approx 1.333$ for the optimum.
+Finally, plotting the best case with `piglot-plot` yields:
 ```
 Best run:
 Start Time /s    2.595121
@@ -76,9 +82,6 @@ Name: 18, dtype: object
 Hash: fc36fad0fc55278da3c16dbfd9a257e42c2d81361e8650236013ab6f6426c104
 Objective:  5.28041030e-05
 ```
-The script plots the best observed responses, and its comparison with the reference response. Moreover, the average, the median, the standard deviation and the 95\% mean condidence intervals are also provided.
 ![Best case plot](../../docs/source/composite_stochastic_example/best_0.svg)
 ![Best case plot](../../docs/source/composite_stochastic_example/best_1.svg)
 ![Best case plot](../../docs/source/composite_stochastic_example/best_2.svg)
-As can be seen, with the composite strategy, the mean of the responses is in excellent agreement with the reference response.
-
