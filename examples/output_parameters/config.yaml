@@ -1,10 +1,11 @@
-iters: 100
+iters: 10
 
-optimiser: direct
+optimiser: botorch
+
 
 parameters:
-  a_in: [0, -10, 10]
-  b_in: [0, -10, 10]
+  a_in: [-5,-10, 0]
+  b_in: [5,  0, 10]
 
 output_parameters:
   a: a_in
@@ -12,4 +13,4 @@ output_parameters:
 
 objective:
   name: analytical
-  expression: sinh(a) + b * sin(a) - a*0.1/b
+  expression: sinh(a) + b*sin(a) - a/b

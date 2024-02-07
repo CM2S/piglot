@@ -118,5 +118,13 @@ In comparison with the previous example, the computational time is now 25 times 
 The reduced reference response can also be seen before the optimisation procedure by setting `show: True`:
 ![filtering](../../docs/source/reference_reduction_example/reduction.svg)
 
+The differences between the original and reduced responses is compiled in the table:
+
+|  | original response | reduced response |
+|----------|----------|----------|
+| number of points | 100 | 6 |
+| computational time / s |  25 | 1 |
+| memory peak / GB | 1.17 | 0.53 |
+| optimal parameter `a` | 1.999625 | 1.999832 |
 
 As described in `examples/input_data_file_template.yaml` more modifications of the reference response are readily available.

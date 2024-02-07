@@ -1,8 +1,8 @@
 ## output_parameters example
 
 A simple analytical example is included to demonstrate how to use `piglot` to find the minimum value of an analytical expression using the `output_parameters` functionality.
-In this case, we aim to find the parameters `a` and `b` that minimise an analytical expression given by $f(x) = \sinh(a) + b\sin(a) - 0.1a/b$. The parameter `a` has bounds `[-10,10]` and the parameter `b` has bounds `[0,25000]`. Given the wide bounds of the parameter `b` it is convenient to optimise this parameter in a logarithmic scale. 
-Within this setting, the parameter `b` is expressed in terms of a new parameter `b_in`, such that ```b: exp(b_in)```. The parameter `b_in` is the one used for optimisation and has bounds given by `[-10,10]` (the bounds are round off for simplicity). 
+In this case, we aim to find the parameters `a` and `b` that minimise an analytical expression given by $f(x) = \sinh(a) + b\sin(a) - a/b$. The parameter `a` has bounds `[-10,0]` and the parameter `b` has bounds `[1,25000]`. Given the wide bounds of the parameter `b` it is convenient to optimise this parameter in a logarithmic scale. 
+Within this setting, the parameter `b` is expressed in terms of a new parameter `b_in`, such that ```b: exp(b_in)```. The parameter `b_in` is the one used for optimisation and has bounds given by `[0,10]` (the upper bound is round off for simplicity). 
  
 
 We run 10 iterations using the `botorch` optimiser (our interface for Bayesian optimisation).
@@ -13,9 +13,10 @@ iters: 10
 
 optimiser: botorch
 
+
 parameters:
-  a_in: [0, -10, 10]
-  b_in: [0, -10, 10]
+  a_in: [-5,-10, 0]
+  b_in: [5,  0, 10]
 
 output_parameters:
   a: a_in
@@ -23,7 +24,7 @@ output_parameters:
 
 objective:
   name: analytical
-  expression: sinh(a) + b*sin(a) - 0.1*a/b
+  expression: sinh(a) + b * sin(a) - a/b
 ```
 Note that all parameters in `parameters` have to be defined in `output_parameters`.
 
@@ -35,14 +36,14 @@ piglot config.yaml
 ```
 You should see an output similar to
 ```
-BoTorch: 100%|███████████████████████████████████████| 10/10 [00:00<00:00, 12.73it/s, Loss: -1.1011e+04]
-Completed 10 iterations in 0.78535s
-Best loss: -1.10110417e+04
+BoTorch: 100%|███████████████████████████████████████| 10/10 [00:00<00:00, 12.47it/s, Loss: -2.3354e+04]
+Completed 10 iterations in 0.80208s
+Best loss: -2.33544803e+04
 Best parameters
-- a_in:   -10.000000
-- b_in:     1.253638
+- a_in:    -7.918022
+- b_in:    10.000000
 ```
-As shown below, this solution is not optimal and more iterations or a different optimiser are required to find the optimal parameters. 
+As shown below, this solution is the optimal solution for the function under analysis. 
 
 To visualise the optimisation results, use the `piglot-plot` utility.
 In the same directory, run
@@ -53,13 +54,13 @@ Which will display the best observed value for the optimisation problem.
 You should see the following output in the terminal
 ```
 Best run:
-Start Time /s    0.717547
+Start Time /s    0.444681
 Run Time /s       0.00003
-a_in                -10.0
-b_in             1.253638
-Name: 17, dtype: object
-Hash: fba66d56789755134f9e4bf2dc085bdd88476fdfe2ae80914a36abb7bd51d935
-Objective: -1.10110417e+04
+a_in            -7.918022
+b_in                 10.0
+Name: 14, dtype: object
+Hash: 71f2861f23499f09cec45132333db6a83697bd061314cf1b863a1789cc466123
+Objective: -2.33544803e+04
 ```
 The script will also plot the best observed response, and its comparison with the reference response: 
 ![Best case plot](../../docs/source/output_parameters/best.svg)
