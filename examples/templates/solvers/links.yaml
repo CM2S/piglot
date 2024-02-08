@@ -1,0 +1,77 @@
+# Specification for the Links solver
+
+# In the example below, we register three output fields:
+# - 'macro_reactions'
+# - 'macro_stress_strain'
+# - 'micro_homogenised_stress'
+# These are the quantities that are returned from the interface. When using the
+# solver with an objective, use there names to define the prediction fields.
+
+solver:
+  #
+  # Mandatory fields
+  # ---------------------------------------------------------------------------
+  #
+  # Solver name
+  name: links
+  #
+  # Path to the Links binary
+  links: LINKS
+  #
+  # List of cases to run
+  # The name of each case is the path to the input file that will be used
+  # for the analysis. You can have multiple cases, each with its own input
+  # file and fields.
+  cases:
+    # Example for a macroscopic input file
+    'macro_input_file.dat':
+      fields:
+        # Register a 'macro_reactions' output field that uses the reactions
+        # of the node group 1 along the x direction
+        'macro_reactions':
+          name: Reaction
+          field: x # Direction of the reaction
+          group: 1 # Optional, by default 1
+        # Register a 'macro_stress_strain' output field that uses the
+        # (F_xx, sigma_xx) curve of the element 12 at the gauss point 2
+        'macro_stress_strain':
+          name: OutFile
+          field: sigma_xx # Field to extract data (mandatory)
+          x_field: F_xx # Optional, by default LoadFactor
+          i_elem: 12 # Element number to extract data (mandatory for macro)
+          i_gauss: 2 # Gauss pont number to extract data (mandatory for macro)
+    # Example for a macroscopic input file
+    'micro_input_file.rve':
+      fields:
+        # Register a 'micro_homogenised_stress' output field that uses the
+        # homogenised (EquivStrain, EftvCauchyStre) curve
+        'micro_homogenised_stress':
+          name: OutFile
+          field: EftvCauchyStre # Field to extract data (mandatory)
+          x_field: EquivStrain # Optional, by default LoadFactor
+  #
+  # (Optional) Additional options for the solver
+  # Given values are the default ones
+  # ---------------------------------------------------------------------------
+  #
+  # Number of parallel analyses to run
+  # Only available when using multiple cases
+  parallel: 1
+  #
+  # Path to store temporary analyses
+  # By default, use a 'tmp' directory inside the output directory
+  tmp_dir: output_dir/tmp
+  #
+  # Generator class for advanced input file generation
+  # If not passed, use the default generator (which only does parameter
+  # substitution in the input file)
+  generator:
+    #
+    # Path to the generator script
+    script: design_script.py
+    #
+    # Generator class to use
+    # This class must be derived from the InputData class of the solver
+    # interface and should generate the input file for the solver
+    # during the prepare() method.
+    class: GeneratorClass

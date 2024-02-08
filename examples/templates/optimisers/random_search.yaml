@@ -1,0 +1,19 @@
+# Specification for the random search optimiser
+
+optimiser:
+  # Optimiser name (mandatory)
+  name: random
+  # 
+  # (Optional) Additional hyperparameters for the optimiser.
+  # Given values are the default ones.
+  # ---------------------------------------------------------------------------
+  #
+  # Sampling method to use for the random numbers. Possible options:
+  # - uniform: uniform sampling
+  # - normal: normal distribution, centered around the best value, and with
+  #           decreasing standard deviation throughout the iterative process.
+  # - sobol: Sobol sequence sampling
+  sampling: uniform
+  #
+  # Seed for the random number generators.
+  seed: 1

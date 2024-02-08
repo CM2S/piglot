@@ -1,0 +1,30 @@
+# Specification for the AOA optimiser
+
+optimiser:
+  # Optimiser name (mandatory)
+  name: aoa
+  # 
+  # (Optional) Additional hyperparameters for the optimiser.
+  # Given values are the default ones.
+  # ---------------------------------------------------------------------------
+  #
+  # Population size.
+  n_solutions: 10
+  #
+  # Non-negative parameter used to define the accuracy of the exploitation
+  alpha: 5.0
+  #
+  # Non-negative control parameter to adjust the search process
+  mu: 0.5
+  #
+  # Small parameter to avoid division by zero
+  epsilon: 1e-12
+  #
+  # Seed for the random number generators.
+  seed: 1
+  #
+  # Math Optimiser Accelerated function initial value
+  MOA_start: 0.2
+  #
+  # Math Optimiser Accelerated function end value
+  MOA_end: 1.0

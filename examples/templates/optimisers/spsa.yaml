@@ -1,0 +1,23 @@
+# Specification for the SPSA optimiser
+
+optimiser:
+  # Optimiser name (mandatory)
+  name: spsa
+  # 
+  # (Optional) Additional hyperparameters for the optimiser.
+  # Given values are the default ones.
+  # ---------------------------------------------------------------------------
+  #
+  # Seed for the random number generators.
+  seed: 1
+  #
+  # Method parameters. Refer to the documentation for more information.
+  alpha: 0.602
+  gamma: 0.101
+  prob: 0.5
+  #
+  # Model parameters. Refer to the documentation for more information.
+  # If not given, these are set acoording to internal heuristics.
+  A: None
+  a: None
+  c: None

@@ -1,0 +1,50 @@
+# Specification for the analytical curve generator solver
+
+# In the example below, we register two output fields:
+# - 'quadratic_curve'
+# - 'exponential_curve'
+# These are the quantities that are returned from the interface. When using the
+# solver with an objective, use there names to define the prediction fields.
+
+solver:
+  #
+  # Mandatory fields
+  # ---------------------------------------------------------------------------
+  #
+  # Solver name
+  name: curve
+  #
+  # List of cases to run
+  # The name of each case is the name of the output field to register. You can
+  # have multiple cases.
+  cases:
+    # Register a 'quadratic_curve' output field that uses the quadratic curve
+    # with the expression "<a> * x ** 2", where <a> is a parameter to be
+    # optimised, the parametric variable is x, discretised in the range [-5, 5]
+    # with 100 points.
+    'quadratic_curve':
+      expression: <a> * x ** 2 # Expression to use (note the <a> parameter)
+      parametric: x # Parametric variable (this is not optimised)
+      bounds: [-5, 5] # Bounds for the parametric variable
+      points: 100 # Optional, 100 by default
+    # Register a 'exponential_curve' output field that uses the exponential
+    # curve with the expression "<a> * exp(t)", where <a> is a parameter to be
+    # optimised, the parametric variable is t, discretised in the range [-2, 1]
+    # with 50 points.
+    'exponential_curve':
+      expression: <a> * exp(t) # Expression to use (note the <a> parameter)
+      parametric: t # Parametric variable (this is not optimised)
+      bounds: [-2, 1] # Bounds for the parametric variable
+      points: 50 # Optional, 100 by default
+  #
+  # (Optional) Additional options for the solver
+  # Given values are the default ones
+  # ---------------------------------------------------------------------------
+  #
+  # Number of parallel analyses to run
+  # Only available when using multiple cases
+  parallel: 1
+  #
+  # Path to store temporary files
+  # By default, use a 'tmp' directory inside the output directory
+  tmp_dir: output_dir/tmp

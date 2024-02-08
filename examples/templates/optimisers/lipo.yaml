@@ -1,0 +1,25 @@
+# Specification for the LIPO optimiser
+
+optimiser:
+  # Optimiser name (mandatory)
+  name: lipo
+  # 
+  # (Optional) Additional hyperparameters for the optimiser.
+  # Given values are the default ones.
+  # ---------------------------------------------------------------------------
+  #
+  # List of arguments to treat in log space.
+  # 'auto' will automatically detect the arguments to treat in log space.
+  log_args: 'auto'
+  #
+  # Parameters that are treated as flexible bounds.
+  flexible_bounds: []
+  #
+  # Threshold to allow flexible bounds for the parameters.
+  flexible_bound_threshold: -1.0
+  #
+  # Accuracy below which exploration will be prioritized vs exploitation
+  epsilon: 0.0
+  #
+  # Seed for the random number generators.
+  seed: None
