@@ -16,7 +16,7 @@ These terms were computed from the individual loss functions of $f_1$ and $f_2$.
 
 However, under composition, we instead assume that, for a fixed $a$, the *response* at every point $x$ of the curve follows a normal distribution with known mean $\mu(x)$ and variance $\sigma^2(x)$, that is, $f(x) \sim \mathcal{N}\left(\mu(x), \sigma^2(x)\right)$.
 This is fundamentally different from the previous approach.
-In the simple (non-composite) strategy, we assume the scalar *objective function* (or loss, in the curve fitting case) is Gaussian; on the composite fashion, it is the *response* that is Gaussian.
+In the simple (non-composite) strategy, we assume the scalar *objective function* (or loss, in the curve fitting case) is Gaussian; in the composite fashion, it is the *response* that is Gaussian.
 We can then compute the statistical quantities in a similar fashion:
 $$
 \begin{aligned}
@@ -70,7 +70,7 @@ Best parameters
 ```
 Piglot identifies the `a` parameter as 1.326, and the error of the fitting is in the order of $10^{-6}$.
 Unlike the non-composite case, the fitting error is significantly smaller.
-Recal that, this time, we are optimising the mean response of the two functions, which gives a theoretical value of $a=4/3\approx 1.333$ for the optimum.
+Recall that, this time, we are optimising the mean response of the two functions, which gives a theoretical value of $a=4/3\approx 1.333$ for the optimum.
 Finally, plotting the best case with `piglot-plot` yields:
 ```
 Best run:
@@ -82,6 +82,6 @@ Name: 18, dtype: object
 Hash: fc36fad0fc55278da3c16dbfd9a257e42c2d81361e8650236013ab6f6426c104
 Objective:  5.28041030e-05
 ```
-![Best case plot](../../docs/source/composite_stochastic_example/best_0.svg)
-![Best case plot](../../docs/source/composite_stochastic_example/best_1.svg)
-![Best case plot](../../docs/source/composite_stochastic_example/best_2.svg)
+![Best case plot, with the individual responses](../../docs/source/composite_stochastic_example/best_0.svg)
+![Best case plot, with mean, median and standard deviation](../../docs/source/composite_stochastic_example/best_1.svg)
+![Best case plot, with the confidence interval for the mean](../../docs/source/composite_stochastic_example/best_2.svg)

@@ -1,4 +1,4 @@
-## sample_curve_fitting example
+## Curve fitting example - analytical curve
 
 A simple analytical curve fitting problem is included to demonstrate how to use `piglot`.
 In this case, we aim to fit a quadratic expression of the type $f(x) = a x^2$, using as a reference, a numerically generated reference from the expression $f(x) = 2 x^2$ (provided in the `examples/sample_curve_fitting/reference_curve.txt` file).
@@ -35,7 +35,7 @@ objective:
 ```
 The generated response with the label `case_1` is compared with our reference response, given from the file `reference_curve.txt`
 
-To run this example, open a terminal inside the `piglot` repository, enter the `examples/sample_curve_fitting` directory and run piglot with the given configuration file
+To run this example, open a terminal inside the `piglot` repository, enter the `examples/sample_curve_fitting` directory and run `piglot` with the given configuration file
 ```bash
 cd examples/sample_curve_fitting
 piglot config.yaml
@@ -48,15 +48,15 @@ Best loss:  8.85050592e-08
 Best parameters
 - a:     1.999508
 ```
-As you can see, piglot correctly identifies the `a` parameter close to the expected value of 2, and the error of the fitting is in the order of $10^{-8}$.
-In addition to these outputs, `piglot` creates an output directory, with the same name of the configuration file (minus the extension), where it stores the optimisation data.
+As you can see, `piglot` correctly identifies the `a` parameter close to the expected value of 2, and the error of the fitting is in the order of $10^{-8}$.
+In addition to these outputs, `piglot` creates an output directory, with the same name as the configuration file (minus the extension), where it stores the optimisation data.
 
 To visualise the optimisation results, use the `piglot-plot` utility.
 In the same directory, run
 ```bash
 piglot-plot best config.yaml
 ```
-Which will display the best observed value for the optimisation problem.
+Which will display the best-observed value for the optimisation problem.
 You should see the following output in the terminal
 ```
 Best run:
@@ -67,7 +67,7 @@ Name: 18, dtype: object
 Hash: 2313718f75bc0445aa71df7d6d4e50ba82ad593d65f3762efdcbed01af338e30
 Objective:  8.85050592e-08
 ```
-The script will also plot the best observed response, and its comparison with the reference response: 
+The script will also plot the best observed response, and its comparison with the reference response:
 ![Best case plot](../../docs/source/simple_example/best.svg)
 
 Now, try running (this may take some time)
@@ -76,13 +76,13 @@ piglot-plot animation config.yaml
 ```
 This generates an animation for all the function evaluations that have been made throughout the optimisation procedure.
 You can find the `.gif` file(s) inside the output directory, which should give something like:
-![Best case plot](../../docs/source/simple_example/animation.gif)
+![Animation](../../docs/source/simple_example/animation.gif)
 
 
 ### Using Python scripts
 
 Another way of using `piglot` is via its package and Python modules.
-This approach may offer increase flexibility in the setup of the optimisation problem, at the cost of increased complexity and verbosity.
+This approach may offer increased flexibility in the setup of the optimisation problem, at the cost of increased complexity and verbosity.
 A sample script equivalent to the configuration file for the problem described in [the previous section](#using-configuration-files) is provided in `examples/sample_curve_fitting/config.py`, given by:
 ```python
 import os

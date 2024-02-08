@@ -1,7 +1,7 @@
 ## Stochastic curve fitting example
 
 A simple analytical curve fitting problem with noise in the input data is included to demonstrate how to use `piglot` to optimise stochastic objectives.
-Like the in the [sample curve fitting example](../sample_curve_fitting/description.md), we are trying to fit using a numerically generated reference response from the expression $f(x) = 2 x^2$ (provided in the `examples/sample_curve_fitting_stochastic/reference_curve.txt` file).
+Like in the [sample](../sample_curve_fitting/description.md) curve fitting example](../sample_curve_fitting/description.md), we are trying to fit using a numerically generated reference response from the expression $f(x) = 2 x^2$ (provided in the `examples/sample_curve_fitting_stochastic/reference_curve.txt` file).
 
 **Note:** Stochastic optimisation is not supported by most optimisers.
 Currently, only Bayesian optimisation with BoTorch supports the full version of the stochastic objective.
@@ -16,7 +16,7 @@ $$
 $$
 We can compute the scalar loss function with respect to the parameter optimise for each curve individually: $\mathcal{L}_1(a)$ and $\mathcal{L}_2(a)$.
 With these, we want to optimise a stochastic function $\mathcal{L}(a)$ which, for every parameter $a$, is assumed to follow a normal distribution with known mean $\mu(a)$ and variance $\sigma^2(a)$, that is, $\mathcal{L}(a) \sim \mathcal{N}\left(\mu(a), \sigma^2(a)\right)$.
-These quantities are constructed using mean of the two functions $\mathcal{L}_1(a)$ and $\mathcal{L}_2(a)$ and its respective standard error:
+These quantities are constructed using the mean of the two functions $\mathcal{L}_1(a)$ and $\mathcal{L}_2(a)$ and its respective standard error:
 $$
 \begin{aligned}
 &\mu(a) = \dfrac{1}{N}\sum_{i=1}^{N} \mathcal{L}_i(a) = \dfrac{\mathcal{L}_1(a)+\mathcal{L}_2(a)}{2} \\
@@ -26,7 +26,7 @@ $$
 Note that we use the (squared) standard error of the two functions as the variance of our stochastic model.
 This allows us to establish confidence intervals for the mean and, importantly, is the standard approach to simulate observation noise in our function evaluations.
 
-**Note:** This procedure optimises the mean of the *loss functions*, not the mean response. If you wish to optimise the later, check the example on [composite stochastic optimisation](../sample_curve_fitting_stochastic_composite/description.md).
+**Note:** This procedure optimises the mean of the *loss functions*, not the mean response. If you wish to optimise the latter, check the example on [composite stochastic optimisation](../sample_curve_fitting_stochastic_composite/description.md).
 
 The good news: `piglot` automatically handles computing these quantities for supported objectives.
 The configuration file (`examples/sample_curve_fitting_stochastic/config.yaml`) for this example is:
@@ -104,6 +104,6 @@ Best loss:  1.73143625e-01
 Best parameters
 - a:     1.199068
 ```
-However the optimiser is not aware of the variance of the objective function.
+However, the optimiser is not aware of the variance of the objective function.
 Similarly, if you run `piglot-plot`, you should only expect a single figure with both responses:
 ![Best case plot, with the individual responses](../../docs/source/simple_stochastic_example/best_0.svg)
