@@ -1,12 +1,13 @@
-## sample_curve_design example
+## Design example - analytical curve
 
-A simple design objective example is included to demonstrate how to use `piglot` in design problems.
+A simple design objective example is included to demonstrate how to use `piglot` in this context.
+In design problems, there is no reference response available, and several values of the parameters have to be evaluated for the target objectives.
 
 In this problem, we aim to minimise the minimum value and maximimise the area below a nonlinear function given by the expression $f(x) = |a \exp(x) + bx^2+c\sin(x)|$.
 
-In this case, there is no reference response, and several values of the parameters `a`, `b` and `c` are evaluated for the target objectives.
 
-We run 10 iterations using the `botorch` optimiser (our interface for Bayesian optimisation), and set the parameters for optimisation (`a`, `b` and `c`) with bounds `[0,4]` and initial value 1.
+
+We run 10 iterations using the `botorch` optimiser, and set the parameters for optimisation (`a`, `b` and `c`) with bounds `[-4,4]` and initial value 0.
 The notation `<a>`, `<b>` and `<c>` indicates that these parameters should be optimised.
 We also define a parameterisation using the variable $x$, where we sample the function between `[-2,2]` with 100 points.
 
@@ -58,8 +59,6 @@ Best parameters
 - b:    -4.000000
 - c:     4.000000
 ```
-In addition to these outputs, `piglot` creates an output directory, with the same name of the configuration file (minus the extension), where it stores the optimisation data.
-
 To visualise the optimisation results, use the `piglot-plot` utility.
 In the same directory, run (this may take some time)
 ```bash

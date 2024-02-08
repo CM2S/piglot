@@ -1,7 +1,7 @@
 ## Stochastic curve fitting example
 
 A simple analytical curve fitting problem with noise in the input data is included to demonstrate how to use `piglot` to optimise stochastic objectives.
-Like in the [sample](../sample_curve_fitting/description.md) curve fitting example](../sample_curve_fitting/description.md), we are trying to fit using a numerically generated reference response from the expression $f(x) = 2 x^2$ (provided in the `examples/sample_curve_fitting_stochastic/reference_curve.txt` file).
+Like in the [sample curve fitting example](../sample_curve_fitting/description.md), we are trying to fit using a numerically generated reference response from the expression $f(x) = 2 x^2$ (provided in the `examples/sample_curve_fitting_stochastic/reference_curve.txt` file).
 
 **Note:** Stochastic optimisation is not supported by most optimisers.
 Currently, only Bayesian optimisation with BoTorch supports the full version of the stochastic objective.

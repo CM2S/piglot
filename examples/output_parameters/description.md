@@ -1,4 +1,4 @@
-## output_parameters example
+## Minimum of an analytical expression - output parameters
 
 A simple analytical example is included to demonstrate how to use `piglot` to find the minimum value of an analytical expression using the `output_parameters` functionality.
 In this case, we aim to find the parameters `a` and `b` that minimise an analytical expression given by $f(x) = \sinh(a) + b\sin(a) - a/b$. The parameter `a` has bounds `[-10,0]` and the parameter `b` has bounds `[1,25000]`. Given the wide bounds of the parameter `b` it is convenient to optimise this parameter in a logarithmic scale. 
@@ -43,7 +43,7 @@ Best parameters
 - a_in:    -7.918022
 - b_in:    10.000000
 ```
-As shown below, this solution is the optimal solution for the function under analysis. 
+As shown below, this solution is the optimal solution for the analytical function under analysis. 
 
 To visualise the optimisation results, use the `piglot-plot` utility.
 In the same directory, run

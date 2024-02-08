@@ -4,7 +4,7 @@ In curve fitting problems with a reference response, we can exploit the function
 This technique has been widely explored in Bayesian optimisation (as proposed in [Astudillo and Frazier (2019)](https://doi.org/10.48550/arXiv.1906.01537)) and, for the curve fitting problem, in [Cardoso Coelho et al. (2023)](https://dx.doi.org/10.2139/ssrn.4674421).
 In `piglot`, this strategy is available out of the box and can be easily enabled.
 We now display an example of the application of this technique, based on the [simple curve fitting example](../sample_curve_fitting/description.md) (please check out that example before diving into the composite setting).
-In this example, we are heavily relying on Bayesian optimisation (if you are unfamiliar with the topic, we highly recommend checking [this [tutorial](https://doi.org/10.48550/arXiv.1807.02811) before proceeding).
+In this example, we are heavily relying on Bayesian optimisation (if you are unfamiliar with the topic, we highly recommend checking this [tutorial](https://doi.org/10.48550/arXiv.1807.02811) before proceeding).
 
 **Note:** Composite optimisation is not supported by most optimisers.
 Currently, only Bayesian optimisation with BoTorch supports the full version of the composite objective.

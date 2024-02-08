@@ -1,18 +1,12 @@
-## reference_reduction_composite example
+## Analytical curve fitting example - reference response reduction algorithm
+
 
 A simple analytical curve fitting problem is included to demonstrate how to use `piglot` with a modified reference response.
-In this case, we aim to demonstrate how the composite Bayesian optimisation is sensitive to the number of sampling points in the reference response, and present a strategy to mitigate this effect.
+In this case, we aim to demonstrate how the [composite Bayesian optimisation](../sample_curve_fitting_composite/description.md) is sensitive to the number of sampling points in the reference response, and present a strategy to mitigate this effect.
 
-The quadratic expression to fit is of the type $f(x) = a x^2$, and has as reference response a numerically generated response from the expression $f(x) = 2 x^2$ (provided in the `examples/reference_reduction_composite/reference_curve.txt` file).
-We want to find the value for $a$ that better fits our reference (it should be 2).
+Like in the [sample curve fitting example](../sample_curve_fitting/description.md), we are trying to fit the function $f(x) = a x^2$ using a numerically generated reference response from the expression $f(x) = 2 x^2$ (provided in the `examples/reference_reduction_composite/reference_curve.txt` file).
 
-We run 10 iterations using the `botorch` optimiser (our interface for Bayesian optimisation), and set the parameter `a` for optimisation with bounds `[0,4]` and initial value 1.
-Our optimisation objective is the fitting of an analytical curve, with the expression `<a> * x ** 2`.
-The notation `<a>` indicates that this parameter should be optimised.
-We also define a parameterisation using the variable $x$, where we sample the function between `[-5,5]` with 100 points.
-
-
-For this example, we consider a reference response with 100 sampling points.
+For this example, and in contrast with the [sample curve fitting example](../sample_curve_fitting/description.md), we consider a reference response with 100 sampling points.
 As you will see, the computational cost of the composite Bayesian optimisation is quite dependent on this number.
 
 
@@ -41,8 +35,6 @@ objective:
     'reference_curve.txt':
       prediction: ['case_1']
 ```
-Note that the only difference between this example and the one in `examples/sample_curve_fitting_composite` is that the reference response `reference_curve.txt` contains 100 points and not 6 points.
-
 To run this example, open a terminal inside the `piglot` repository, enter the `examples/reference_reduction_composite` directory and run piglot with the given configuration file
 ```bash
 cd examples/reference_reduction_composite
@@ -61,13 +53,13 @@ As you can see, piglot correctly identifies the `a` parameter close to the expec
 Now, we will apply a reference reduction algorithm to reduce the number of points in the reference response and see how it affects the computational cost of the composite strategy.
 
 ### Reduced reference response
-To perform the filtering of the data, the two-stage algorithm proposed in [Coelho et al.]([docs/source/simple_example/best.svg](https://dx.doi.org/10.2139/ssrn.4674421)) is used.
+To perform the filtering of the data, the two-stage algorithm proposed in [Cardoso Coelho et al.]([docs/source/simple_example/best.svg](https://dx.doi.org/10.2139/ssrn.4674421)) is used.
 This algorithm includes two stages which are briefly described as follows:
 1. Elimination stage: At every iteration, eliminate a single point from the reference response. For every point in the filtered response, we simulate its removal and compute the error between the original response and the filtered response. Then, the point that leads to the smallest error is eliminated. The procedure is repeated until we reach a predefined error threshold, or we run out of inner points to eliminate.
 
 2. Refinement stage: Optimise the coordinates of the resulting points to minimise the interpolated error. The optimisation variables are the time coordinates of the inner points, which are free to move along the reference time grid. The default bounded optimisation method in `scipy.optimize.minimize` is used for this task. This step retains the same number of points given from the previous stage, but it may lead to a better distribution of the points along the reference time grid.
 
-This feature can be activated by simply setting the filtering tolerance of the reference response to a given threshold. In this case we set `filter_tol: 1e-2`.
+This feature can be activated by simply setting the filtering tolerance of the reference response to a given threshold. In this case we set `filter_tol: 1e-2` so that the number of points in the [sample curve fitting example](../sample_curve_fitting/description.md) is recovered, that is, 6 sampling points.
 
 The configuration file (`examples/reference_reduction_composite/config_reduction.yaml`) for this example is:
 ```yaml
@@ -95,7 +87,6 @@ objective:
       filter_tol: 1e-2
       show: False
 ```
-
 To run this example, open a terminal inside the `piglot` repository, enter the `examples/reference_reduction_composite` directory and run piglot with the given configuration file
 ```bash
 cd examples/reference_reduction_composite
