@@ -14,6 +14,9 @@ authors:
   - name: A. Francisca Carvalho Alves
     orcid: 0000-0003-1214-5453
     affiliation: "1, 2"
+  - name: T. M. Nogueira Pires
+    orcid: 0009-0000-1518-2845
+    affiliation: "1"
   - name: F. M. Andrade Pires
     orcid: 0000-0002-4802-6360
     corresponding: true
@@ -42,28 +45,32 @@ These packages, however, do not provide an interface for different solvers, so t
 
 In this work, we present `piglot` an open-source Python package for automated optimisation of numerical responses, such as responses stemming from finite element simulations.
 In particular, focus is placed on derivative-free optimisation, to allow compatibility with black-solvers where gradient information may be unavailable.
-Within this setting, some solvers are already provided, namely a solver for fitting analytical functions, a solver for the in-house finite element code `Links`, a solver for the finite element software `Abaqus` and a solver for the clustering-based reduced-order model `CRATE` package [@Ferreira2023].
-We also provide an extensible interface for coupling with physics solvers. As long as the solver can return a time-response for the fields of interest, it is possible to optimise it with `piglot`.
+In this context an extensible interface for coupling with physics solvers is provided.
+As long as the solver can return a time-response for the fields of interest, it is possible to optimise it with `piglot`.
+Notwithstanding, some solvers are already provided, namely a solver for fitting analytical functions, a solver for the in-house finite element code `Links`, a solver for the finite element software `Abaqus`, and a solver for the clustering-based reduced-order model `CRATE` package [@Ferreira2023].
 
-Moreover, several optimisation methods are implemented and available for usage, such as DIRECT, LIPO, Bayesian optimisation, among others.
+For the optimisation itself, several optimisation methods are implemented and available, such as DIRECT, LIPO, Bayesian optimisation, among others.
 Particularly, a significant effort has been employed into Bayesian optimisation algorithms, backed with an open-source implementation [@balandatBoTorchFrameworkEfficient2020] and allowing for single- and multi-objective optimisation of both noise-free and stochastic objectives.
 Furthermore, a novel composite Bayesian optimisation strategy is available for curve-fitting problems, which, in our tests, severely outperforms classical optimisation approaches [@Coelho2023optm].
 
 The package also provides a builtin tool `piglot-plot` to visualise the results of the optimisation.
 There are native plotting utilities for the optimised responses, the parameter history, objective history and, for supported solvers, live plotting of the currently running case.
-Also, an animation of the optimisation process can be exported.
-
-In \autoref{fig:piglot_example} schematic illustration of the workflow of `piglot` is presented.
-
-![Schematic illustration of `piglot`. \label{fig:piglot_example}](piglot.svg){width=100%}
-
 The package also includes full documentation for a clear installation and usage, supporting a simple framework for new developments. 
 With this in mind, a thorough automated testing is incorporated, ensuring the compliance of new developments.
+
+In \autoref{fig:piglot_example} a scheme of the workflow of `piglot` is illustrated.
+There are two modes of initialisation available: using `.yaml` configuration files, or building the optimisation problem in a Python script. 
+The use of configuration files is the simplest and recommended approach of using `piglot`.
+During the optimisation there is a continuous exchange of information between the physics solvers, `piglot`, and the optimisers.
+Whereas the optimisers are responsible for providing a candidate solution for the parameters, $\bm{\theta}$, based on the loss function value, $J(\bm{\theta})$, the physics solvers receive the parameters, $\bm{\theta}$, and compute the numerical response, $\bm{\sigma}$, accordingly.
+The results of the optimisation can be then visualise using the `piglot-plot` tool.
+
+
+![Schematic illustration of `piglot`. \label{fig:piglot_example}](piglot.svg){width=100%}
 
 
 The `piglot` package has been successfully used for the identification of constitutive parameters for classical elasto-plastic models from multi-scale simulations, crystal plasticity models with mechanically-induced martensitic transformations [@cardosocoelhoMultiscaleModelCombining2023] and models for amorphous polymers [@ALVES2023112488].
 Moreover, this tool has also demonstrated its potential in the material design of different microstructures, such as particulate PC/ABS polymer blends.
-
 
 
 With this package, we aim to provide a simple and effective tool for general optimisation of numerical responses, which can be easily extended for other solvers in the community.
