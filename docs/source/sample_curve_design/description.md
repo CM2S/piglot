@@ -1,4 +1,4 @@
-## Design example - analytical curve
+# Design example - analytical curve
 
 A simple design objective example is included to demonstrate how to use `piglot` in this context.
 In design problems, there is no reference response available, and several values of the parameters have to be evaluated for the target objectives.
@@ -66,18 +66,18 @@ piglot-plot animation config.yaml
 ```
 This generates an animation for all the function evaluations that have been made throughout the optimisation procedure for the two target objectives.
 You can find the `.gif` file(s) inside the output directory, which should give something like (for the `minimum_value` target):
-![Best case plot](../../docs/source/design_example/animation.gif)
+![Best case plot](animation.gif)
 
 Now, try running
 ```bash
 piglot-plot parameters config.yaml
 ```
 This will plot the evaluated parameters during the optimisation procedure: 
-![Best case plot](../../docs/source/design_example/parameters.svg)
+![Best case plot](parameters.svg)
 
 To see the convergence history of the best loss function value, run
 ```bash
 piglot-plot history config.yaml --best
 ```
 which will generate:
-![Best case plot](../../docs/source/design_example/loss.svg)
+![Best case plot](loss.svg)

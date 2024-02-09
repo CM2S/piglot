@@ -1,4 +1,4 @@
-## Minimum of an analytical expression - output parameters
+# Minimum of an analytical expression - output parameters
 
 A simple analytical example is included to demonstrate how to use `piglot` to find the minimum value of an analytical expression using the `output_parameters` functionality.
 In this case, we aim to find the parameters `a` and `b` that minimise an analytical expression given by $f(x) = \sinh(a) + b\sin(a) - a/b$. The parameter `a` has bounds `[-10,0]` and the parameter `b` has bounds `[1,25000]`. Given the wide bounds of the parameter `b` it is convenient to optimise this parameter in a logarithmic scale. 
@@ -63,7 +63,7 @@ Hash: 71f2861f23499f09cec45132333db6a83697bd061314cf1b863a1789cc466123
 Objective: -2.33544803e+04
 ```
 The script will also plot the best observed response, and its comparison with the reference response: 
-![Best case plot](../../docs/source/output_parameters/best.svg)
+![Best case plot](best.svg)
 
 Now, try running (this may take some time)
 ```bash
@@ -71,5 +71,5 @@ piglot-plot animation config.yaml
 ```
 This generates an animation for all the function evaluations that have been made throughout the optimisation procedure.
 You can find the `.gif` file(s) inside the output directory, which should give something like:
-![Best case plot](../../docs/source/output_parameters/animation.gif)
+![Best case plot](animation.gif)
 

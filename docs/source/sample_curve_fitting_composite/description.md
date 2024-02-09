@@ -1,4 +1,4 @@
-## Curve fitting example - composite setting
+# Curve fitting example - composite setting
 
 In curve fitting problems with a reference response, we can exploit the function composition of the objective function to drastically improve the optimisation.
 This technique has been widely explored in Bayesian optimisation (as proposed in [Astudillo and Frazier (2019)](https://doi.org/10.48550/arXiv.1906.01537)) and, for the curve fitting problem, in [Cardoso Coelho et al. (2023)](https://dx.doi.org/10.2139/ssrn.4674421).
@@ -9,50 +9,56 @@ In this example, we are heavily relying on Bayesian optimisation (if you are unf
 **Note:** Composite optimisation is not supported by most optimisers.
 Currently, only Bayesian optimisation with BoTorch supports the full version of the composite objective.
 
-We start by defining our objective function (or *loss* in the curve fitting scenario) $\mathcal{L}\left(\bm{\theta}\right)$ as
-$$
-    \mathcal{L}\left(\bm{\theta}\right)
+We start by defining our objective function (or *loss* in the curve fitting scenario) $\mathcal{L}\left(\boldsymbol{\theta}\right)$ as
+
+$
+    \mathcal{L}\left(\boldsymbol{\theta}\right)
     =
-    \hat{\mathcal{L}}\left(\bm{e}\left(\bm{\theta}\right)\right)
+    \hat{\mathcal{L}}\left(\boldsymbol{e}\left(\boldsymbol{\theta}\right)\right)
     =
     \dfrac{1}{N}
     \sum_{i=1}^{N}
-    \left[e_i\left(\bm{\theta}\right)\right]^2
-$$
-where $\bm{e}$ is a vector containing the pointwise errors at every reference point, $\hat{\mathcal{L}}\left(\bullet\right)$ is the scalar reduction function applied (MSE in this case) and $N$ is the number of reference points.
+    \left[e_i\left(\boldsymbol{\theta}\right)\right]^2
+$
+
+where $\boldsymbol{e}$ is a vector containing the pointwise errors at every reference point, $\hat{\mathcal{L}}\left(\bullet\right)$ is the scalar reduction function applied (MSE in this case) and $N$ is the number of reference points.
 In other words, we are minimising the average squared error between each point of the reference and the prediction.
-Thus, the problem can be stated as the minimisation of a composite function $\hat{\mathcal{L}}\left(\bm{e}\left(\bm{\theta}\right)\right)$, where $\hat{\mathcal{L}}\left(\bullet\right)$ is known (and we can compute gradients) and $\bm{e}\left(\bm{\theta}\right)$ is "unknown" (comes from our black-box solver).
+Thus, the problem can be stated as the minimisation of a composite function $\hat{\mathcal{L}}\left(\boldsymbol{e}\left(\boldsymbol{\theta}\right)\right)$, where $\hat{\mathcal{L}}\left(\bullet\right)$ is known (and we can compute gradients) and $\boldsymbol{e}\left(\boldsymbol{\theta}\right)$ is "unknown" (comes from our black-box solver).
 
 When using Bayesian optimisation, we build a Gaussian process (GP) regression model of our observations.
 This surrogate model is used to choose the next potential points to evaluate.
 In the simple curve fitting example, the model is built on the loss function values, that is:
-$$
-    \mathcal{L}\left(\bm{\theta}\right)
+
+$
+    \mathcal{L}\left(\boldsymbol{\theta}\right)
     \sim
     \mathcal{GP}
     \left(
-        \mu_i\left(\bm{\theta}\right),
-        k_i\left(\bm{\theta},\bm{\theta}'\right)
+        \mu_i\left(\boldsymbol{\theta}\right),
+        k_i\left(\boldsymbol{\theta},\boldsymbol{\theta}'\right)
     \right)
-$$
-According to this, the *objective function value* is assumed to follow a Gaussian distribution with known mean and variance for each point $\bm{\theta}$ in the parameter space.
+$
+
+According to this, the *objective function value* is assumed to follow a Gaussian distribution with known mean and variance for each point $\boldsymbol{\theta}$ in the parameter space.
 We then use this GP to build and optimise our acquisition functions of choice, as usual in Bayesian optimisation.
 
-However, in the composite setting, we know that $\mathcal{L}\left(\bm{\theta}\right) = \hat{\mathcal{L}}\left(\bm{e}\left(\bm{\theta}\right)\right)$.
-Therefore, we can instead build a surrogate model for the error at each reference point $e_i\left(\bm{\theta}\right)$:
-$$
-    e_i\left(\bm{\theta}\right)
+However, in the composite setting, we know that $\mathcal{L}\left(\boldsymbol{\theta}\right) = \hat{\mathcal{L}}\left(\boldsymbol{e}\left(\boldsymbol{\theta}\right)\right)$.
+Therefore, we can instead build a surrogate model for the error at each reference point $e_i\left(\boldsymbol{\theta}\right)$:
+
+$
+    e_i\left(\boldsymbol{\theta}\right)
     \sim
     \mathcal{GP}
     \left(
-        \mu_i\left(\bm{\theta}\right),
-        k_i\left(\bm{\theta},\bm{\theta}'\right)
+        \mu_i\left(\boldsymbol{\theta}\right),
+        k_i\left(\boldsymbol{\theta},\boldsymbol{\theta}'\right)
     \right)
-$$
-Thus, we are saying that, for a given $\bm{\theta}$, the *prediction error at each reference point* follows a Gaussian distribution with known mean and variance.
-However, we need a posterior probablity distribution for the values of $\mathcal{L}\left(\bm{\theta}\right)$ to use our Bayesian optimisation tools, which we cannot derive for generic functions $\hat{\mathcal{L}}\left(\bullet\right)$!
-The solution to this problem is Monte Carlo sampling - we draw samples from the posteriors of $e_i\left(\bm{\theta}\right)$ and then evaluate them through $\hat{\mathcal{L}}\left(\bullet\right)$.
-The resulting sample values should follow the posterior distribution for $\mathcal{L}\left(\bm{\theta}\right)$ and we can use them to compute approximate acquisition function values.
+$
+
+Thus, we are saying that, for a given $\boldsymbol{\theta}$, the *prediction error at each reference point* follows a Gaussian distribution with known mean and variance.
+However, we need a posterior probablity distribution for the values of $\mathcal{L}\left(\boldsymbol{\theta}\right)$ to use our Bayesian optimisation tools, which we cannot derive for generic functions $\hat{\mathcal{L}}\left(\bullet\right)$!
+The solution to this problem is Monte Carlo sampling - we draw samples from the posteriors of $e_i\left(\boldsymbol{\theta}\right)$ and then evaluate them through $\hat{\mathcal{L}}\left(\bullet\right)$.
+The resulting sample values should follow the posterior distribution for $\mathcal{L}\left(\boldsymbol{\theta}\right)$ and we can use them to compute approximate acquisition function values.
 We leverage BoTorch's quasi-Monte Carlo acquisition functions for this task, and you can read more details on the entire procedure in [Cardoso Coelho et al. (2023)](https://dx.doi.org/10.2139/ssrn.4674421).
 
 Putting all the mathematical details aside, it is extremely simple to use the composite setting in `piglot`.

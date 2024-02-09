@@ -62,7 +62,7 @@ In \autoref{fig:piglot_example} a scheme of the workflow of `piglot` is illustra
 There are two modes of initialisation available: using `.yaml` configuration files, or building the optimisation problem in a Python script. 
 The use of configuration files is the simplest and recommended approach of using `piglot`.
 During the optimisation there is a continuous exchange of information between the physics solvers, `piglot`, and the optimisers.
-Whereas the optimisers are responsible for providing a candidate solution for the parameters, $\bm{\theta}$, based on the loss function value, $J(\bm{\theta})$, the physics solvers receive the parameters, $\bm{\theta}$, and compute the numerical response, $\bm{\sigma}$, accordingly.
+Whereas the optimisers are responsible for providing a candidate solution for the parameters, $\boldsymbol{\theta}$, based on the loss function value, $J(\boldsymbol{\theta})$, the physics solvers receive the parameters, $\boldsymbol{\theta}$, and compute the numerical response, $\boldsymbol{\sigma}$, accordingly.
 The results of the optimisation can be then visualise using the `piglot-plot` tool.
 
 

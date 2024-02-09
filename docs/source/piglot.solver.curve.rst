@@ -1,21 +1,21 @@
-piglot.solver.links package
+piglot.solver.curve package
 ===========================
 
 Submodules
 ----------
 
-piglot.solver.links.fields module
+piglot.solver.curve.fields module
 ---------------------------------
 
-.. automodule:: piglot.solver.links.fields
+.. automodule:: piglot.solver.curve.fields
    :members:
    :undoc-members:
    :show-inheritance:
 
-piglot.solver.links.solver module
+piglot.solver.curve.solver module
 ---------------------------------
 
-.. automodule:: piglot.solver.links.solver
+.. automodule:: piglot.solver.curve.solver
    :members:
    :undoc-members:
    :show-inheritance:
@@ -23,7 +23,7 @@ piglot.solver.links.solver module
 Module contents
 ---------------
 
-.. automodule:: piglot.solver.links
+.. automodule:: piglot.solver.curve
    :members:
    :undoc-members:
    :show-inheritance:

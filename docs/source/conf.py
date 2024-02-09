@@ -15,7 +15,7 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../piglot/'))
+sys.path.insert(0, os.path.abspath('../'))
 
 
 # -- Project information -----------------------------------------------------
@@ -44,6 +44,9 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
+    'autoapi.extension',
+    'myst_parser',
+    'sphinx_favicon',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -62,7 +65,7 @@ master_doc = 'index'
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = 'en'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -72,19 +75,40 @@ exclude_patterns = []
 # The name of the Pygments (syntax highlighting) style to use.
 # pygments_style = None
 
+autoapi_dirs = ['../../piglot']
+
 
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+html_theme = 'pydata_sphinx_theme'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
-# html_theme_options = {}
+html_theme_options = {
+    "secondary_sidebar_items": ["page-toc", "edit-this-page", "sourcelink"],
+    "logo": {
+        "image_light": "_static/logo.svg",
+        "image_dark": "_static/logo_dark.svg",
+        "alt_text": "piglot",
+    },
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/CM2S/piglot",
+            "icon": "fa-brands fa-github",
+        },
+        {
+            "name": "PyPI",
+            "url": "https://pypi.org/project/piglot",
+            "icon": "fa-custom fa-pypi",
+        },
+    ],
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -101,11 +125,21 @@ html_static_path = ['_static']
 #
 # html_sidebars = {}
 
+favicons = [
+    "logo.svg",
+]
+
 
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'piglotdoc'
+
+
+# -- Options for autoapi -------------------------------------------------------
+autoapi_type = "python"
+autoapi_dirs = ["../../piglot"]
+autoapi_member_order = "groupwise"
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -181,3 +215,20 @@ epub_exclude_files = ['search.html']
 napoleon_google_docstring = False
 napoleon_use_param = False
 napoleon_use_ivar = True
+
+
+myst_enable_extensions = [
+    "amsmath",
+    "attrs_inline",
+    "colon_fence",
+    "deflist",
+    "dollarmath",
+    "fieldlist",
+    "html_admonition",
+    "html_image",
+    "replacements",
+    "smartquotes",
+    "strikethrough",
+    "substitution",
+    "tasklist",
+]

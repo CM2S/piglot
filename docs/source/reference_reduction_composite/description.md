@@ -1,4 +1,4 @@
-## Analytical curve fitting example - reference response reduction algorithm
+# Analytical curve fitting example - reference response reduction algorithm
 
 
 A simple analytical curve fitting problem is included to demonstrate how to use `piglot` with a modified reference response.
@@ -10,7 +10,7 @@ For this example, and in contrast with the [sample curve fitting example](../sam
 As you will see, the computational cost of the composite Bayesian optimisation is quite dependent on this number.
 
 
-### Original reference response
+## Original reference response
 The configuration file (`examples/reference_reduction_composite/config.yaml`) for this example is:
 ```yaml
 iters: 10
@@ -52,8 +52,8 @@ As you can see, piglot correctly identifies the `a` parameter close to the expec
 
 Now, we will apply a reference reduction algorithm to reduce the number of points in the reference response and see how it affects the computational cost of the composite strategy.
 
-### Reduced reference response
-To perform the filtering of the data, the two-stage algorithm proposed in [Cardoso Coelho et al.]([docs/source/simple_example/best.svg](https://dx.doi.org/10.2139/ssrn.4674421)) is used.
+## Reduced reference response
+To perform the filtering of the data, the two-stage algorithm proposed in [Cardoso Coelho et al.](https://dx.doi.org/10.2139/ssrn.4674421) is used.
 This algorithm includes two stages which are briefly described as follows:
 1. Elimination stage: At every iteration, eliminate a single point from the reference response. For every point in the filtered response, we simulate its removal and compute the error between the original response and the filtered response. Then, the point that leads to the smallest error is eliminated. The procedure is repeated until we reach a predefined error threshold, or we run out of inner points to eliminate.
 
@@ -107,7 +107,7 @@ In comparison with the previous example, the computational time is now 25 times 
 
 
 The reduced reference response can also be seen before the optimisation procedure by setting `show: True`:
-![filtering](../../docs/source/reference_reduction_example/reduction.svg)
+![filtering](reduction.svg)
 
 The differences between the original and reduced responses is compiled in the table:
 

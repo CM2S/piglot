@@ -1,4 +1,4 @@
-## Curve fitting example - analytical curve
+# Curve fitting example - analytical curve
 
 A simple analytical curve fitting problem is included to demonstrate how to use `piglot`.
 In this case, we aim to fit a quadratic expression of the type $f(x) = a x^2$, using as a reference, a numerically generated reference from the expression $f(x) = 2 x^2$ (provided in the `examples/sample_curve_fitting/reference_curve.txt` file).
@@ -9,7 +9,7 @@ Our optimisation objective is the fitting of an analytical curve, with the expre
 The notation `<a>` indicates that this parameter should be optimised.
 We also define a parameterisation using the variable $x$, where we sample the function between `[-5,5]` with 100 points.
 
-### Using configuration files
+## Using configuration files
 The configuration file (`examples/sample_curve_fitting/config.yaml`) for this example is:
 ```yaml
 iters: 10
@@ -68,7 +68,7 @@ Hash: 2313718f75bc0445aa71df7d6d4e50ba82ad593d65f3762efdcbed01af338e30
 Objective:  8.85050592e-08
 ```
 The script will also plot the best observed response, and its comparison with the reference response:
-![Best case plot](../../docs/source/simple_example/best.svg)
+![Best case plot](best.svg)
 
 Now, try running (this may take some time)
 ```bash
@@ -76,10 +76,10 @@ piglot-plot animation config.yaml
 ```
 This generates an animation for all the function evaluations that have been made throughout the optimisation procedure.
 You can find the `.gif` file(s) inside the output directory, which should give something like:
-![Animation](../../docs/source/simple_example/animation.gif)
+![Animation](animation.gif)
 
 
-### Using Python scripts
+## Using Python scripts
 
 Another way of using `piglot` is via its package and Python modules.
 This approach may offer increased flexibility in the setup of the optimisation problem, at the cost of increased complexity and verbosity.
