@@ -138,3 +138,6 @@ tmp/
 results/
 reference/
 .vscode/
+
+# Example results
+examples/*/config/

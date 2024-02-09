@@ -8,8 +8,7 @@ from piglot.optimiser import ScalarOptimiser
 class AOA(ScalarOptimiser):
     """
     AOA optimiser.
-    Documentation:
-        https://www.sciencedirect.com/science/article/pii/S0045782520307945
+    Documentation: https://www.sciencedirect.com/science/article/pii/S0045782520307945
 
     Attributes
     ----------
@@ -100,13 +99,11 @@ class AOA(ScalarOptimiser):
         np.ndarray
             Observed optimum of the objective.
         """
-        if bound is None:
-            raise RuntimeError('Need to pass bounds for AOA!')
 
         # Initiate candidate solutions randomly
         solutions = ((bound[:, 1] - bound[:, 0]) *
                      self.rng.random(size=(self.n_solutions, n_dim)) + bound[:, 0])
-        # Replace fisrt candidate solution by the initial shot
+        # Replace first candidate solution by the initial shot
         solutions[0, :] = init_shot
         #
         beta = (bound[:, 1] - bound[:, 0])*self.mu

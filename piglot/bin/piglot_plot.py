@@ -1,4 +1,5 @@
 """Driving script for piglot's plotting utilities."""
+from typing import List
 import os
 import time
 import argparse
@@ -73,6 +74,7 @@ def plot_case(args):
                 fig.savefig(f'{base}_{i}{ext}')
     else:
         plt.show()
+    plt.close()
 
 
 def plot_current(args):
@@ -114,6 +116,7 @@ def plot_best(args):
                 fig.savefig(f'{base}_{i}{ext}')
     else:
         plt.show()
+    plt.close()
 
 
 def plot_history(args):
@@ -147,6 +150,7 @@ def plot_history(args):
         fig.savefig(args.save_fig)
     else:
         plt.show()
+    plt.close()
 
 
 def plot_parameters(args):
@@ -185,6 +189,7 @@ def plot_parameters(args):
         fig.savefig(args.save_fig)
     else:
         plt.show()
+    plt.close()
 
 
 def plot_regret(args):
@@ -216,6 +221,7 @@ def plot_regret(args):
         fig.savefig(args.save_fig)
     else:
         plt.show()
+    plt.close()
 
 
 def plot_animation(args):
@@ -260,7 +266,7 @@ def plot_animation(args):
             for idx in range(num_plots):
                 images = [Image.open(filename) for filename in file_list[idx]]
                 images[0].save(
-                    f'{obj_name}-{idx}.gif',
+                    os.path.join(config["output"], f'{obj_name}-{idx}.gif'),
                     format='GIF',
                     save_all=True,
                     append_images=images[1:],
@@ -312,9 +318,10 @@ def plot_gp(args):
         fig.savefig(args.save_fig)
     else:
         plt.show()
+    plt.close()
 
 
-def main():
+def main(passed_args: List[str] = None):
     """Entry point for this script."""
     # Global argument parser settings
     parser = argparse.ArgumentParser(
@@ -537,7 +544,7 @@ def main():
     )
     sp_gp.set_defaults(func=plot_gp)
 
-    args = parser.parse_args()
+    args = parser.parse_args() if passed_args is None else parser.parse_args(passed_args)
     args.func(args)
 
 

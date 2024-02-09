@@ -64,40 +64,6 @@ class Composition(ABC):
         return self.composition(inner)
 
 
-class MSEComposition(Composition):
-    """Mean squared error outer composite function with gradients"""
-
-    def composition(self, inner: np.ndarray) -> float:
-        """Compute the MSE outer function of the composition
-
-        Parameters
-        ----------
-        inner : np.ndarray
-            Return value from the inner function
-
-        Returns
-        -------
-        float
-            Scalar composition result
-        """
-        return np.mean(np.square(inner), axis=-1)
-
-    def composition_torch(self, inner: torch.Tensor) -> torch.Tensor:
-        """Compute the MSE outer function of the composition with gradients
-
-        Parameters
-        ----------
-        inner : torch.Tensor
-            Return value from the inner function
-
-        Returns
-        -------
-        torch.Tensor
-            Scalar composition result
-        """
-        return torch.mean(torch.square(inner), dim=-1)
-
-
 class DynamicPlotter(ABC):
     """Abstract class for dynamically-updating plots"""
 
@@ -139,7 +105,7 @@ class Objective(ABC):
         Objective
             Objective function to optimise.
         """
-        raise NotImplementedError()
+        raise NotImplementedError("Reading not implemented for this objective")
 
     def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
         """Plot a given function call given the parameter hash

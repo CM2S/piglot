@@ -1,0 +1,12 @@
+# Specification for the DIRECT optimiser
+
+optimiser:
+  # Optimiser name (mandatory)
+  name: direct
+  # 
+  # (Optional) Additional hyperparameters for the optimiser.
+  # Given values are the default ones.
+  # ---------------------------------------------------------------------------
+  #
+  # Parameter to preference exploitation over exploration.
+  epsilon: 0

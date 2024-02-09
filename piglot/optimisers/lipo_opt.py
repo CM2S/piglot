@@ -14,10 +14,12 @@ from piglot.optimiser import ScalarOptimiser
 class GlobalOptimizerMod(GlobalOptimizer):
 
     def run(self, optimiser, num_function_calls: int = 1):
-        """
-        run optimization
-        Args:
-            num_function_calls (int): number of function calls
+        """Run optimization.
+
+        Parameters
+        ----------
+        num_function_calls : int
+            Number of function calls
         """
         for i in range(num_function_calls):
             candidate = self.get_candidate()
@@ -31,17 +33,17 @@ class LIPO(ScalarOptimiser):
     """
     LIPO optimiser.
     Documentation:
-        https://github.com/jdb78/lipo
-        http://blog.dlib.net/2017/12/a-global-optimization-algorithm-worth.html
+    https://github.com/jdb78/lipo
+    http://blog.dlib.net/2017/12/a-global-optimization-algorithm-worth.html
 
     Attributes
     ----------
     log_args : list[str]
         list of arguments to treat in log space, if "auto", then a variable is
         optimized in log space if (default = 'auto'):
-            - The lower bound on the variable is > 0
-            - The ratio of the upper bound to lower bound is > 1000
-            - The variable is not an integer variable
+        - The lower bound on the variable is > 0
+        - The ratio of the upper bound to lower bound is > 1000
+        - The variable is not an integer variable
     flexible_bounds : dict[str, list[bool]]
         dictionary of parameters and list of booleans indicating if parameters are
         deemed flexible or not. By default all parameters are deemed flexible

@@ -1,0 +1,188 @@
+# piglot input file specification
+
+
+# Stopping Criteria
+# =============================================================================
+# Specification of the stopping criteria for the iterative procedure.
+#
+# (Mandatory) Maximum number of iterations.
+iters: iters
+#
+# (Optional) Additional stopping criteria are available and may be used in
+# conjuction with 'iters'.
+# -----------------------------------------------------------------------------
+#
+# Convergence tolerance for the optimisation (None by default).
+conv_tol: conv_tol
+#
+# Maximum number of iterations without improvement (None by default).
+max_iters_no_improv: max_iters_no_improv
+#
+# Maximum number of function calls (None by default).
+max_func_calls: max_func_calls
+#
+# Maximum time for the optimisation (None by default).
+max_timeout: max_timeout
+# =============================================================================
+
+
+
+# Optimisation algorithms
+# =============================================================================
+# Specification of the optimisation algorithm (mandatory) and hyperparameters
+# (optional) selected to perform the optimisation.
+#
+# To find the available optimisers and their hyperparameters, please refer to
+# the templates in the 'examples/templates/optimisers' directory.
+#
+# -----------------------------------------------------------------------------
+# OPTION 1: Simple specification with only the name
+optimiser: optimiser_name
+#
+# -----------------------------------------------------------------------------
+# OPTION 2: Full specification with parameters.
+optimiser:
+  name: optimiser_name
+  hyperparameter1: hyperparameter1
+  hyperparameter2: hyperparameter2
+  hyperparameter3: hyperparameter3
+#
+# =============================================================================
+
+
+
+# Parameters
+# =============================================================================
+# Specification of the parameters to identify by optimisation.
+#
+# (Mandatory) Identification of the parameters to optimise.
+parameters:
+  parameter1: [initial_value1, lower_bound1, upper_bound1]
+  parameter2: [initial_value2, lower_bound2, upper_bound2]
+  parameter3: [initial_value3, lower_bound3, upper_bound3]
+#
+# (Optional) Use 'output_parameters' for output purposes.
+output_parameters:
+  parameter3: expression_param1_param2_param3 # e.g., np.exp(parameter1)
+  parameter4: expression_param1_param2_param3 # e.g., parameter1*parameter2
+  parameter5: expression_param1_param2_param3 # e.g., parameter3
+#
+# (Optional) Use the best solution of a previous optimisation as initial_value
+# for the parameters in 'parameters'.
+init_shot_from: previous_optimisation.yaml
+#
+# =============================================================================
+
+
+
+# Objective
+# =============================================================================
+# Specification of the objective problem for the optimisation.
+# The following objectives are available:
+# (1) analytical
+# (2) test_function
+# (3) design
+# (4) fitting
+#
+# -----------------------------------------------------------------------------
+# OPTION 1: Minimize a given analytical expression.
+objective:
+  name: analytical
+  #
+  # Analytical expression to minimize. (e.g., (parameter1 - parameter3)**2
+  expression: analytical_expression
+#
+# -----------------------------------------------------------------------------
+# OPTION 2: Minimize a synthetic test function (see synthetic test functions
+#           available).
+objective:
+  name: test_function
+  #
+  # Name of the test function to use (e.g., hartmann, powell)
+  function: name_synthetic_test_function
+  #
+  # (Optional) Test function modifications (see documentation)
+  composition: None
+  transform: None
+#
+# -----------------------------------------------------------------------------
+# OPTION 3: Minimize a scalar design objective function.
+objective:
+  name: design
+  #
+  # (Optional) Use variance of several cases for optimisation, by default False
+  stochastic: False
+  #
+  # Solver specification (see available solvers)
+  solver:
+    name: solver_name
+    # Add the rest of the fields according to the solver documentation
+  #
+  # Specification of the design targets. You can have multiple design targets.
+  targets:
+    # Target name
+    'integral_quantity':
+      # Target quantity (check available quantities)
+      quantity: integral
+      # Output fields to use for quantity computation
+      # More than one field implies the computation of the mean of the fields
+      prediction: ['case1_field1', 'case2_field1']
+      # To perform a maximisation problem, set negate to True. By default False.
+      negate: False
+    'script_quantity':
+      # Target quantity: using a script to compute a custom quantity
+      quantity:
+        name: script
+        script: quantity_script.py # Path to the script
+        class: QuantityClass # Class name (must be derived from Quantity)
+      prediction: ['case2_field1']
+      negate: True
+#
+# -----------------------------------------------------------------------------
+# OPTION 4: minimize a scalar fitting objective function.
+objective:
+  name: fitting
+  #
+  # (Optional) Use a composite technique for optimisation, by default False.
+  # Also, the reduction function can be specified (by default, uses the mse).
+  composite: False
+  reduction: mse
+  #
+  # (Optional) Use noise for optimisation, by default False.
+  stochastic: False
+  #
+  # Solver specification (see available solvers)
+  solver:
+    name: solver_name
+    # Add the rest of the fields according to the solver documentation
+  #
+  # Define reference responses for optimisation
+  # You can use multiple references for the fitting objective
+  references:
+    # Reference file: path to the reference file
+    'path_reference_file.txt':
+      # Output fields to use for comparing with the reference response
+      # More than one field implies the computation of the mean of the fields
+      prediction: ['case_field1']
+      #
+      # (Optional) Reading options (given values are the defaults)
+      x_col: 1 # Column of the x field
+      y_col: 2 # Column of the y field
+      weight: 1 # Weight of the path_reference_file
+      skip_header: 0 # Number of lines to skip in reference file
+      #
+      # (Optional) Filter number of points in the reference
+      # This enables the reduction response algorithm when filter_tol > 0.
+      filter_tol: 0 # Tolerance for filtering reference response
+      show: False # Show the reduction of the reference response
+      #
+      # (Optional) Additional transformations of reference response
+      transformer:
+        x_scale: 1 # Scale factor of x field
+        y_scale: 1 # Scale factor of y field
+        x_offset: 0 # Offset of the x field
+        y_offset: 0 # Offset of the y field
+        x_min: -inf # Lower bound of the x field
+        x_max: inf # Upper bound of the x field
+#
+# =============================================================================

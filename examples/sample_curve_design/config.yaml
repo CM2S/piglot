@@ -1,0 +1,32 @@
+
+iters: 10
+
+optimiser: botorch
+
+
+parameters:
+  a: [0, -4, 4]
+  b: [0, -4, 4]
+  c: [0, -4, 4]
+
+
+
+objective:
+  name: design
+  solver:
+    name: curve
+    cases:
+      'case_1':
+        expression: abs(<a> * exp(x) + <b> * x**2 + <c> * sin(x))
+        parametric: x
+        bounds: [-2, 2]
+        points: 100
+  targets:
+    'minimum_value':
+      quantity: max
+      prediction: ['case_1']
+      negate: False
+    'maximum_area':
+      quantity: integral
+      prediction: ['case_1']
+      negate: True

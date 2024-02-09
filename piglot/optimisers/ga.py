@@ -154,8 +154,7 @@ class geneticalgorithmMod(geneticalgorithm):
 class GA(ScalarOptimiser):
     """
     Genetic Algorithm optimiser.
-    Documentation:
-        https://pypi.org/project/geneticalgorithm/
+    Documentation: https://pypi.org/project/geneticalgorithm/
 
     Attributes
     ----------
@@ -177,17 +176,7 @@ class GA(ScalarOptimiser):
         seconds) the algorithm raise error. For example, when there is an infinite
         loop in the given function.
     algorithm_parameters : dictionary
-        max_num_iteration : int
-        population_size : int
-        mutation_probability : float in [0,1]
-        elit_ration : float in [0,1]
-        crossover_probability : float in [0,1]
-        parents_portion : float in [0,1]
-        crossover_type : string
-            Default is 'uniform'; 'one_point' or two_point' are other options
-        max_iteration_without_improv : int
-            maximum number of successive iterations without improvement. If None it is
-            ineffective
+        Algorithm parameters.
     convergence_curve : True/False
         Plot the convergence curve or not. Default is True.
     progress_bar : True/False
@@ -259,7 +248,6 @@ class GA(ScalarOptimiser):
             Plot the convergence curve or not. Default is True.
         progress_bar : True/False
             Show progress bar or not. Default is True.
-
         """
         super().__init__('GA', objective)
         self.variable_type = variable_type

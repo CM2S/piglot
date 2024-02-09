@@ -1,11 +1,7 @@
 """Pure random search optimiser module."""
 from typing import Tuple, Callable, Optional
 import numpy as np
-from scipy.stats import norm
-try:
-    from scipy.stats import qmc
-except ImportError:
-    qmc = None
+from scipy.stats import norm, qmc
 from piglot.objective import Objective
 from piglot.optimiser import ScalarOptimiser
 
@@ -45,10 +41,7 @@ class PureRandomSearch(ScalarOptimiser):
         # Check if sampling method is valid
         valid_samples = ['uniform', 'normal', 'sobol']
         if sampling not in valid_samples:
-            raise ValueError("Invalid sampling {0}!".format(sampling))
-        # Check if Quasi-Monte Carlo is avaliable
-        if sampling == 'sobol' and qmc is None:
-            raise ValueError("Sobol sequence requires qmc module in scipy >= 1.7!")
+            raise ValueError(f"Invalid sampling {sampling}!")
         # Store parameters
         self.sampling = sampling
         self.seed = seed

@@ -85,8 +85,6 @@ class SPSA(ScalarOptimiser):
         np.ndarray
             Observed optimum of the objective.
         """
-        if init_shot is None:
-            raise RuntimeError('Need to pass an initial shot for SPSA!')
 
         if self.A is None:
             self.A = n_iter / 20

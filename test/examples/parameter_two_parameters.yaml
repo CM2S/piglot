@@ -1,0 +1,12 @@
+
+iters: 20
+
+optimiser: random
+
+parameters:
+  Young: [200, 100, 300]
+  poisson: [0.2, 0.1, 0.4]
+
+objective:
+  name: analytical
+  expression: (Young-150)**2 + (poisson-0.3)**2
