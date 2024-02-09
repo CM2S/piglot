@@ -144,7 +144,9 @@ objective:
   name: fitting
   #
   # (Optional) Use a composite technique for optimisation, by default False.
+  # Also, the reduction function can be specified (by default, uses the mse).
   composite: False
+  reduction: mse
   #
   # (Optional) Use noise for optimisation, by default False.
   stochastic: False

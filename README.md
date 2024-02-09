@@ -1,5 +1,9 @@
 <div align="center">
-  <img width="250" src="docs/source/logo.svg" alt="piglot logo" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/source/media/logo_dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/source/media/logo.svg">
+    <img alt="Hashnode logo" src="docs/source/media/logo.svg" width="250">
+  </picture>
 </div>
 
 A Python package for the optimisation of numerical responses.

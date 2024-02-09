@@ -34,7 +34,7 @@ bibliography: references.bib
 # Summary
 `piglot` is an open-source Python tool taylored for the automated optimisation of responses stemming from numerical solvers. With this tool we aim at providing a simple and user-friendly interface which is also easily extendable, allowing intergration with other solvers within the community. `piglot` provides a versatile solution for solving inverse problems on several research areas, such as structural analysis, material modelling, fluid dynamics, control systems or astrophysics, using, for instance, finite element analysis, spectral methods or Monte Carlo methods. The primary emphasis is on derivative-free optimisation, ensuring compatibility with black-box solvers in scenarios where gradient information is not available, and cases where the function evaluations may be noisy.
 
-![Logo of `piglot`. \label{fig:piglot_logo}](../source/logo.svg){width=35%}
+![Logo of `piglot`. \label{fig:piglot_logo}](../source/media/logo.svg){width=35%}
 
 # Statement of need
 
