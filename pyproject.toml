@@ -1,7 +1,7 @@
 [project]
 name = "piglot"
 dynamic = ["version"]
-description = "Parameter Identification by Global Optimisation"
+description = "A package for the optimisation of numerical responses"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {file = "LICENSE.txt"}
