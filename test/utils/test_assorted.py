@@ -34,15 +34,15 @@ class TestStatsInterpToCommonGrid(unittest.TestCase):
         result = stats_interp_to_common_grid(responses)
         self.assertTrue(np.array_equal(result['grid'], np.array([0, 0.1, 0.2, 0.3])))
         self.assertTrue(np.array_equal(result['num_points'], np.array([1, 2, 2, 2])))
-        self.assertTrue(np.array_equal(result['responses'][0],  np.array([0, 1, 2, 3])))
-        self.assertTrue(np.array_equal(result['responses'][1],  np.array([np.nan, 2, 3, 4]),
+        self.assertTrue(np.array_equal(result['responses'][0], np.array([0, 1, 2, 3])))
+        self.assertTrue(np.array_equal(result['responses'][1], np.array([np.nan, 2, 3, 4]),
                                        equal_nan=True))
-        self.assertTrue(np.array_equal(result['average'],  np.array([0, 1.5, 2.5, 3.5])))
-        self.assertTrue(np.array_equal(result['variance'],  np.array([0, 0.25, 0.25, 0.25])))
-        self.assertTrue(np.array_equal(result['std'],  np.array([0, 0.5, 0.5, 0.5])))
-        self.assertTrue(np.array_equal(result['min'],  np.array([0, 1, 2, 3])))
-        self.assertTrue(np.array_equal(result['max'],  np.array([0, 2, 3, 4])))
-        self.assertTrue(np.array_equal(result['median'],  np.array([0, 1.5, 2.5, 3.5])))
+        self.assertTrue(np.array_equal(result['average'], np.array([0, 1.5, 2.5, 3.5])))
+        self.assertTrue(np.array_equal(result['variance'], np.array([0, 0.25, 0.25, 0.25])))
+        self.assertTrue(np.array_equal(result['std'], np.array([0, 0.5, 0.5, 0.5])))
+        self.assertTrue(np.array_equal(result['min'], np.array([0, 1, 2, 3])))
+        self.assertTrue(np.array_equal(result['max'], np.array([0, 2, 3, 4])))
+        self.assertTrue(np.array_equal(result['median'], np.array([0, 1.5, 2.5, 3.5])))
 
 
 if __name__ == '__main__':
