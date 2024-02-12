@@ -40,7 +40,7 @@ bibliography: references.bib
 
 The increasingly growing interest in computational analysis for engineering problems has been driving the development of more accurate, robust and efficient methods and models.
 With the advent of this technology, the application of the so-called inverse problems has been gaining traction over the last years, where one seeks optimised parameters, geometries, configurations or models for numerical problems arising in engineering.
-In this context, in the past years, some packages have been developed to automate the identification of parameters [@nevergrad, @optuna_2019], which have been widely applied in many areas.
+In this context, in the past years, some packages have been developed to automate the identification of parameters [@nevergrad; @optuna_2019], which have been widely applied in many areas.
 However, for many applications, the upfront cost of implementing interfaces for these tools is prohibitive, and specific-purpose tools are preferred to these highly flexible frameworks.
 Particularly in the scope of structural analysis, quickly identifying parameters of numerical models from experimental data is of utmost importance.
 While commercial tools are available for this task [@hyperfit], to the authors' best knowledge, an open-source package to this end is still lacking.
