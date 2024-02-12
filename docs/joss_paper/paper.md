@@ -40,7 +40,7 @@ bibliography: references.bib
 
 The increasingly growing interest in computational analysis for engineering problems has been driving the development of more accurate, robust and efficient methods and models.
 With the advent of this technology, the application of the so-called inverse problems has been gaining traction over the last years, where one seeks optimised parameters, geometries, configurations or models for numerical problems arising in engineering.
-In this context, in the past years, some packages have been developed to automate the identification of parameters [@nevergrad,@optuna_2019], which have been widely applied in many areas.
+In this context, in the past years, some packages have been developed to automate the identification of parameters [@nevergrad, @optuna_2019], which have been widely applied in many areas.
 However, for many applications, the upfront cost of implementing interfaces for these tools is prohibitive, and specific-purpose tools are preferred to these highly flexible frameworks.
 Particularly in the scope of structural analysis, quickly identifying parameters of numerical models from experimental data is of utmost importance.
 While commercial tools are available for this task [@hyperfit], to the authors' best knowledge, an open-source package to this end is still lacking.
@@ -49,7 +49,7 @@ In this work, we present `piglot` an open-source Python package for automated op
 In particular, focus is placed on derivative-free optimisation, to allow compatibility with black-solvers where gradient information may be unavailable.
 In this context, an extensible interface for coupling with physics solvers is provided, encouraging contributions from the comunity into the package.
 As long as the solver can return a time-response for the fields of interest, it is possible to optimise it with `piglot`.
-Currently, interfaces for several solvers are included in te package, namely a solver for fitting analytical functions, and interfaces for our in-house finite element code `Links` (derived from HYPLAS), for the commercial finite element software `Abaqus`, and for the open-source clustering-based reduced-order model `CRATE` package [@Ferreira2023].
+Currently, interfaces for several solvers are included in the package, namely a solver for fitting analytical functions, and interfaces for our in-house finite element code `Links` (derived from HYPLAS), for the commercial finite element software `Abaqus`, and for the open-source clustering-based reduced-order model `CRATE` package [@Ferreira2023].
 
 For the optimisation itself, several methods are implemented and available, such as DIRECT, LIPO, Bayesian optimisation, among others.
 Particularly, a significant effort has been employed into Bayesian optimisation algorithms, backed with an open-source implementation [@balandatBoTorchFrameworkEfficient2020] and allowing for single- and (scalarised) multi-objective optimisation of both noise-free and stochastic objectives.
