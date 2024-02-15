@@ -1,5 +1,5 @@
 ---
-title: 'piglot: an Open-source Package for Derivative-free Optimisation'
+title: 'piglot: an Open-source Package for Derivative-free Optimisation of Numerical Responses'
 tags:
   - Python
   - computational mechanics
@@ -26,13 +26,16 @@ affiliations:
    index: 1
  - name: Institute of Science and Innovation in Mechanical and Industrial Engineering, Porto, Portugal
    index: 2
-date: 12 February 2024
+date: 15 February 2024
 bibliography: references.bib
 
 ---
 
 # Summary
-`piglot` is an open-source Python tool tailored for the automated optimisation of responses stemming from numerical solvers. This tool aims to provide a simple and user-friendly interface that seamlessly integrates with a spectrum of community solvers, ensuring effortless extension. Spanning diverse research domains, including structural analysis, material modelling, fluid dynamics, control systems, and astrophysics, `piglot` emerges as a versatile toolkit for tackling inverse problems. Leveraging methodologies such as finite element analysis, spectral methods, and Monte Carlo simulations, `piglot` excels in providing custom solutions for intricate challenges. The primary emphasis is on derivative-free optimisation, ensuring compatibility with black-box solvers in scenarios lacking gradient information and when function evaluations may be noisy.
+`piglot` is an open-source Python tool tailored for the automated optimisation of responses stemming from numerical solvers.
+This tool aims to provide a simple and user-friendly interface that seamlessly integrates with a spectrum of community solvers, ensuring effortless extension.
+`piglot` emerges as a versatile toolkit for tackling inverse problems spanning diverse research domains, such as structural analysis, material modelling, fluid dynamics, control systems, and astrophysics - fields where methodologies such as finite element analysis, spectral methods, and Monte Carlo simulations are often adopted.
+The primary emphasis is on derivative-free optimisation, ensuring compatibility with black-box solvers in scenarios lacking gradient information and when function evaluations may be noisy.
 
 
 
@@ -51,7 +54,7 @@ In this work, we present `piglot` an open-source Python package for automated op
 In particular, focus is placed on derivative-free optimisation, to allow compatibility with black-solvers where gradient information may be unavailable.
 In this context, an extensible interface for coupling with physics solvers is provided, encouraging contributions from the community to the package.
 As long as the solver can return a time-response for the fields of interest, it is possible to optimise it with `piglot`.
-Currently, interfaces for several solvers are included in the package, namely a solver for fitting analytical functions, and interfaces for our in-house finite element code `Links` (derived from HYPLAS), for the commercial finite element software `Abaqus`, and for the open-source clustering-based reduced-order model `CRATE` package [@Ferreira2023].
+Currently, interfaces for several solvers are included in the package, namely a solver for fitting analytical functions, and interfaces for our in-house finite element code `Links` (derived from HYPLAS), for the commercial finite element software `Abaqus`, and the open-source clustering-based reduced-order model `CRATE` package [@Ferreira2023].
 
 For the optimisation itself, several methods are implemented and available, such as DIRECT, LIPO, and Bayesian optimisation, among others.
 Particularly, a significant effort has been employed in Bayesian optimisation algorithms, backed with an open-source implementation [@balandatBoTorchFrameworkEfficient2020] and allowing for single- and (scalarised) multi-objective optimisation of both noise-free and stochastic objectives.
