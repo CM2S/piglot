@@ -1,0 +1,18 @@
+
+iters: 2
+max_func_calls: 0
+
+optimiser:
+  name: botorch
+  acquisition: qpi
+  beta: 0.9
+  n_test: 2
+
+
+parameters:
+  Young: [200, 100, 300]
+
+
+objective:
+  name: analytical
+  expression: (Young-150)**2
