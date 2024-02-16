@@ -7,9 +7,9 @@
 </div>
 
 [![Unit and integration testing](https://github.com/CM2S/piglot/actions/workflows/test.yaml/badge.svg)](https://github.com/CM2S/piglot/actions/workflows/test.yaml)
-![PyPI - Version](https://img.shields.io/pypi/v/piglot)
-![GitHub License](https://img.shields.io/github/license/CM2S/piglot)
-![CodeFactor Grade](https://img.shields.io/codefactor/grade/github/CM2S/piglot)
+[![PyPI - Version](https://img.shields.io/pypi/v/piglot)](https://pypi.org/project/piglot/)
+[![GitHub License](https://img.shields.io/github/license/CM2S/piglot)](https://github.com/CM2S/piglot/blob/main/LICENSE)
+[![CodeFactor Grade](https://img.shields.io/codefactor/grade/github/CM2S/piglot)](https://www.codefactor.io/repository/github/cm2s/piglot)
 
 A package for the optimisation of numerical responses.
 
@@ -103,7 +103,7 @@ Hash: 2313718f75bc0445aa71df7d6d4e50ba82ad593d65f3762efdcbed01af338e30
 Objective:  8.85050592e-08
 ```
 The script will also plot the best observed response, and its comparison with the reference response: 
-![Best case plot](docs/source/simple_example/best.svg)
+![Best case plot](https://raw.githubusercontent.com/CM2S/piglot/main/docs/source/sample_curve_fitting/best.svg)
 
 Now, try running (this may take some time)
 ```bash
@@ -111,7 +111,7 @@ piglot-plot animation config.yaml
 ```
 This generates an animation for all the function evaluations that have been made throughout the optimisation procedure.
 You can find the `.gif` file(s) inside the output directory, which should give something like:
-![Best case plot](docs/source/simple_example/animation.gif)
+![Animation](https://raw.githubusercontent.com/CM2S/piglot/main/docs/source/sample_curve_fitting/animation.gif)
 
 
 ## Using Python scripts
