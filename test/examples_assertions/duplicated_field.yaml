@@ -37,9 +37,9 @@ objective:
             name: Reaction
             field: y
   references:
-    'ref_x.reac':
+    'ref_x.txt':
       prediction: ['reaction_x', 'reaction_x_1']
       filter_tol: 1e-6
-    'ref_y.reac':
+    'ref_y.txt':
       prediction: ['reaction_y', 'reaction_y_1']
       filter_tol: 1e-6
