@@ -1,12 +1,14 @@
 import unittest
 import os
-from piglot.utils.solver_utils import extract_parameters, has_keyword, has_parameter, find_keyword, load_module_from_file
+from piglot.utils.solver_utils import extract_parameters, has_keyword, has_parameter, \
+    find_keyword, load_module_from_file
 from piglot.parameter import ParameterSet
 
 INPUT_FILE_1 = os.path.join("test", "solver_utils", "input_file_1.txt")
 INPUT_FILE_2 = os.path.join("test", "solver_utils", "input_file_2.txt")
 INPUT_FILE_3 = os.path.join("test", "solver_utils", "input_file_3.txt")
 INPUT_FILE_4 = os.path.join("test", "solver_utils", "test_module.py")
+
 
 class TestExtractParameters(unittest.TestCase):
     def test_extract_parameters(self):
@@ -72,6 +74,7 @@ class TestExtractParameters(unittest.TestCase):
 
         # Verify the returned object
         self.assertEqual(result, 'CM2S')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -26,6 +26,7 @@ def get_files(path: str) -> List[str]:
         if os.path.isfile(os.path.join(path, file)) and file.endswith('.yaml')
     ]
 
+
 def get_first_hash(filename: str) -> str:
     """Extracts the first hash from a file.
 

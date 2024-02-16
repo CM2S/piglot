@@ -3,7 +3,9 @@ import numpy as np
 from piglot.solver.solver import OutputResult
 from piglot.objectives.design import Quantity
 
+
 class MinQuantity(Quantity):
+
     """Minimum value of a response."""
 
     def compute(self, result: OutputResult) -> float:
