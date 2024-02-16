@@ -214,7 +214,7 @@ class BayesianBoTorch(Optimiser):
         raw_samples = max(256, 16 * n_dim * n_dim)
         # Delegate acquisition building
         best = torch.min(dataset.values).item()
-        mc_objective = GenericMCObjective(lambda vals, X: -vals)
+        mc_objective = GenericMCObjective(lambda vals, X: -vals.squeeze(-1))
         sampler = SobolQMCNormalSampler(torch.Size([512]), seed=self.seed)
         if self.acquisition == 'ucb':
             acq = UpperConfidenceBound(model, self.beta, maximize=False)
