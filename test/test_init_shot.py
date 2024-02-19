@@ -6,11 +6,11 @@ from piglot.utils.assorted import change_cwd
 
 
 def get_files(path: str) -> List[str]:
-    return [
+    return sorted([
         os.path.join(path, file)
         for file in os.listdir(path)
         if os.path.isfile(os.path.join(path, file)) and file.endswith('.yaml')
-    ]
+    ])
 
 
 @pytest.mark.parametrize('input_dir', get_files('test/example_init_shot'))
