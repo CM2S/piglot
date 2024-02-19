@@ -1,0 +1,42 @@
+
+iters: 20
+
+optimiser:
+  name: botorch
+  n_initial: 1
+  n_test: 0
+  beta: 1
+  acquisition: ucb
+
+
+
+parameters:
+  Young: [100, 100, 300]
+  S1: [200, 200, 400]
+  S2: [500, 500, 700]
+
+
+objective:
+  name: fitting
+  solver:
+    name: abaqus
+    abaqus_path: C:\SIMULIA\Commands\abaqus.bat
+
+    cases:
+      'sample.inp':
+        job_name: Job-1
+        step_name: Step-1
+        instance_name: Part-1-1
+        fields:
+          'reaction_x':
+            name: FieldsOutput
+            set_name: RF_SET
+            field: RF
+            x_field: U
+            direction: x
+   
+  references:
+    'reference.txt':
+      prediction: reaction_x
+      loss: nmse
+
