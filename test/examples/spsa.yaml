@@ -1,0 +1,14 @@
+
+iters: 1
+
+optimiser:
+  name: spsa
+
+
+parameters:
+  Young: [200, 100, 300]
+
+
+objective:
+  name: analytical
+  expression: (Young-150)**2

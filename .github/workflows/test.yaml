@@ -1,0 +1,55 @@
+
+name: Unit and integration testing
+
+on:
+  push:
+    branches: [ "main", "test" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: ${{ matrix.runner.name }} - Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.runner.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: 
+          - "3.9"
+          - "3.10"
+          - "3.11"
+        runner:
+          - name: Windows
+            os: windows-latest
+          - name: Ubuntu
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+      - name: Install test dependencies
+        run: |
+          python -m pip install .[test]
+      - name: Test pipx installation
+        run: |
+          python -m pip install pipx
+          pipx install .
+      - name: Lint with flake8
+        run: |
+          flake8 piglot test
+      - name: Test with pytest
+        run: |
+          pytest test/
+      - name: Install documentation dependencies
+        run: |
+          python -m pip install .[docs]
+      - name: Test building documentation
+        run: |
+          cd docs
+          make html

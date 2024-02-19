@@ -1,0 +1,48 @@
+# Specification for the BoTorch optimiser
+
+optimiser:
+  # Optimiser name (mandatory)
+  name: botorch
+  # 
+  # (Optional) Additional hyperparameters for the optimiser.
+  # Given values are the default ones.
+  # ---------------------------------------------------------------------------
+  #
+  # Number of initial points to evaluate before starting the optimisation.
+  # Note that the effective number of initial points is n_initial + 1, as the
+  # initial guess is always evaluated.
+  # Note: if using q > 1, these points will be evaluated in parallel.
+  n_initial: 8
+  #
+  # Number of points to use for the test dataset. Disabled if set to 0.
+  # Note: if using q > 1, these points will be evaluated in parallel.
+  n_test: 0
+  #
+  # Acquisition function to use.
+  # Available options: 'ucb', 'ei', 'pi', 'kg', 'qucb', 'qei', 'qpi', 'qkg'.
+  # The 'q' prefix indicates the use of the q-batch version of the acquisition
+  # function, normally evaluated with quasi-Monte Carlo methods.
+  acquisition: ucb
+  #
+  # Beta parameter for the UCB acquisition function.
+  beta: 1.0
+  #
+  # Whether to allow inference of the noise values of the objective.
+  # Enable this option if the objective function is noisy or if you are 
+  # experiencing numerical issues.
+  noisy: False
+  #
+  # Number of q-batch evaluations to use for the acquisition function.
+  # This allows generation of multiple candidate points per iteration,
+  # which can be useful for parallel optimisation.
+  # Can only be used with the 'q' prefix acquisition functions.
+  q: 1
+  #
+  # Seed for the random number generators.
+  seed: 1
+  #
+  # Load the dataset from a file.
+  load_file: None
+  #
+  # Export the dataset to a file.
+  export: None

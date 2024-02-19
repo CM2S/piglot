@@ -118,12 +118,12 @@ def errors_interps(
     np.ndarray
         Error associated with removing each point
     """
-    errors = np.empty_like(x_new[1:-1])
+    errors = []
     for i in range(len(x_new) - 2):
         x_deleted = np.delete(x_new, i + 1)
         y_deleted = np.delete(y_new, i + 1)
         y_ref_interp = np.interp(x_ref, x_deleted, y_deleted)
-        errors[i] = np.trapz(np.square(y_ref - y_ref_interp), x_ref)
+        errors.append(np.trapz(np.square(y_ref - y_ref_interp), x_ref))
     return errors
 
 

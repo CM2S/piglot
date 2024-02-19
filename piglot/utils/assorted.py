@@ -1,5 +1,7 @@
 """Assorted utilities."""
 from typing import List, Dict, Tuple
+import os
+import contextlib
 import numpy as np
 from scipy.stats import t
 
@@ -57,8 +59,9 @@ def reverse_pretty_time(time_str: str) -> float:
     }
     value = 0.0
     for suffix, factor in mults.items():
-        left, time_str = time_str.split(suffix)
-        value += float(left) * factor
+        if suffix in time_str:
+            left, time_str = time_str.split(suffix)
+            value += float(left) * factor
     return value
 
 
@@ -110,6 +113,7 @@ def stats_interp_to_common_grid(
     conf = t.interval(0.95, num_points - 1)[1]
     return {
         'grid': grid,
+        'num_points': num_points,
         'responses': interp_responses,
         'average': np.nanmean(interp_responses, axis=0),
         'variance': np.nanvar(interp_responses, axis=0),
@@ -119,3 +123,22 @@ def stats_interp_to_common_grid(
         'median': np.nanmedian(interp_responses, axis=0),
         'confidence': conf * np.nanstd(interp_responses, axis=0) / np.sqrt(num_points),
     }
+
+
+@contextlib.contextmanager
+def change_cwd(path: str):
+    """Context manager to temporarily change the current working directory.
+
+    Adapted from https://stackoverflow.com/a/75049063
+
+    Parameters
+    ----------
+    path : str
+        New working directory.
+    """
+    old = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(old)

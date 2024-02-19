@@ -1,0 +1,11 @@
+
+iters: 20
+
+optimiser: random
+
+parameters:
+  Young: [600, 100, 300]
+
+objective:
+  name: analytical
+  expression: (Young-150)**2

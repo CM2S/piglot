@@ -1,0 +1,25 @@
+
+iters: 10
+
+optimiser: random
+
+
+parameters:
+  a: [0, -4, 4]
+
+
+
+objective:
+  name: fitting
+  composite: False
+  solver:
+    name: curve
+    cases:
+      'case_1':
+        expression: <a> * x ** 2
+        parametric: x
+        bounds: [-5, 5]
+        points: 100
+  references:
+    'reference_curve.txt':
+      prediction: ['case_1']

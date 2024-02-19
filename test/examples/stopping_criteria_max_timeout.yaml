@@ -1,0 +1,16 @@
+
+iters: 50
+max_timeout: 5
+
+optimiser: random
+
+
+
+parameters:
+  Young: [200, 100, 300]
+  poisson: [0.25, 0.1, 0.4]
+
+
+objective:
+  name: analytical
+  expression: ((Young/poisson)-500)**2

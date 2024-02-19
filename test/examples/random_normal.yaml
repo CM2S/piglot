@@ -1,0 +1,16 @@
+
+iters: 1
+
+optimiser:
+  name: random
+  sampling: normal
+  seed: 1
+
+
+parameters:
+  Young: [200, 100, 300]
+
+
+objective:
+  name: analytical
+  expression: (Young-150)**2

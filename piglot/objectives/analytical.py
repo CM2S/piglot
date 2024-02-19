@@ -20,7 +20,9 @@ class AnalyticalObjective(GenericObjective):
             composition=None,
             output_dir=output_dir,
         )
-        symbs = sympy.symbols([param.name for param in parameters])
+        # Generate a dummy set of parameters (to ensure proper handling of output parameters)
+        values = np.array([parameter.inital_value for parameter in parameters])
+        symbs = sympy.symbols(list(parameters.to_dict(values, input_normalised=False).keys()))
         self.parameters = parameters
         self.expression = sympy.lambdify(symbs, expression)
 
@@ -113,9 +115,7 @@ class AnalyticalObjective(GenericObjective):
             label="Case",
             s=50,
         )
-        surf = axis.plot_surface(X, Y, Z, alpha=0.7, label="Analytical Objective")
-        surf._facecolors2d = surf._facecolors3d
-        surf._edgecolors2d = surf._edgecolors3d
+        axis.plot_surface(X, Y, Z, alpha=0.7, label="Analytical Objective")
         axis.set_xlabel(self.parameters[0].name)
         axis.set_ylabel(self.parameters[1].name)
         axis.set_zlabel("Analytical Objective")

@@ -85,8 +85,6 @@ class SPSA_Adam(ScalarOptimiser):
         np.ndarray
             Observed optimum of the objective.
         """
-        if init_shot is None:
-            raise RuntimeError('Need to pass an initial shot for SPSA!')
 
         x = init_shot
         new_value = objective(x)

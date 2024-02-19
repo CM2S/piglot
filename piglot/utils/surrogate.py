@@ -35,30 +35,17 @@ def get_model(
     """
     x = torch.tensor(x_data, dtype=torch.float64)
     y = torch.tensor(y_data, dtype=torch.float64).unsqueeze(1)
-    if noisy:
-        gp = SingleTaskGP(
-            x,
-            y,
-            input_transform=Normalize(d=1),
-            outcome_transform=Standardize(m=1),
-        )
-    else:
-        if var_data is None:
-            gp = FixedNoiseGP(
-                x,
-                y,
-                torch.zeros_like(y),
-                input_transform=Normalize(d=1),
-                outcome_transform=Standardize(m=1),
-            )
-        else:
-            gp = FixedNoiseGP(
-                x,
-                y,
-                torch.tensor(var_data, dtype=torch.float64).unsqueeze(1),
-                input_transform=Normalize(d=1),
-                outcome_transform=Standardize(m=1),
-            )
+    var = (
+        torch.ones_like(y) * 1e-6 * torch.std(y, dim=0) if var_data is None else
+        torch.tensor(var_data, dtype=torch.float64).unsqueeze(1)
+    )
+    gp = SingleTaskGP(
+        x,
+        y,
+        train_Yvar=None if noisy else var,
+        input_transform=Normalize(d=x.shape[-1]),
+        outcome_transform=Standardize(m=y.shape[-1]),
+    )
     mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
     fit_gpytorch_mll(mll)
     return gp

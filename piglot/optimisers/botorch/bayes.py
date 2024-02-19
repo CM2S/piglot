@@ -10,7 +10,7 @@ import botorch
 from botorch.fit import fit_gpytorch_mll
 from botorch.optim import optimize_acqf
 from botorch.models.model import Model
-from botorch.models import FixedNoiseGP, SingleTaskGP
+from botorch.models import SingleTaskGP
 from botorch.acquisition.acquisition import AcquisitionFunction
 from botorch.acquisition import UpperConfidenceBound, qUpperConfidenceBound
 from botorch.acquisition import ExpectedImprovement, qExpectedImprovement
@@ -108,9 +108,7 @@ class BayesianBoTorch(Optimiser):
         # Clamp variances to prevent warnings from GPyTorch
         variances = torch.clamp_min(variances, 1e-6)
         # Initialise model instance depending on noise setting
-        model = (
-            SingleTaskGP(params, values) if self.noisy else FixedNoiseGP(params, values, variances)
-        )
+        model = SingleTaskGP(params, values, train_Yvar=None if self.noisy else variances)
         # Fit the GP (in case of trouble, fall back to an Adam-based optimiser)
         mll = ExactMarginalLogLikelihood(model.likelihood, model)
         try:
@@ -134,8 +132,8 @@ class BayesianBoTorch(Optimiser):
         # Evaluate GP performance with the test dataset
         cv_error = None
         if self.n_test > 0:
-            std_test_params, std_test_values, _ = std_dataset.standardise(
-                test_dataset.params,
+            std_test_params = test_dataset.normalise(test_dataset.params)
+            std_test_values, _ = std_dataset.standardise(
                 test_dataset.values,
                 test_dataset.variances,
             )
@@ -216,7 +214,7 @@ class BayesianBoTorch(Optimiser):
         raw_samples = max(256, 16 * n_dim * n_dim)
         # Delegate acquisition building
         best = torch.min(dataset.values).item()
-        mc_objective = GenericMCObjective(lambda x: -x)
+        mc_objective = GenericMCObjective(lambda vals, X: -vals.squeeze(-1))
         sampler = SobolQMCNormalSampler(torch.Size([512]), seed=self.seed)
         if self.acquisition == 'ucb':
             acq = UpperConfidenceBound(model, self.beta, maximize=False)
@@ -252,7 +250,7 @@ class BayesianBoTorch(Optimiser):
         # Build composite MC objective
         _, y_avg, y_std = dataset.get_obervation_stats()
         mc_objective = GenericMCObjective(
-            lambda x: -self.objective.composition.composition_torch(x * y_std + y_avg)
+            lambda vals, X: -self.objective.composition.composition_torch(vals * y_std + y_avg)
         )
         # Delegate acquisition building
         best = torch.max(dataset.values).item()

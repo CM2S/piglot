@@ -1,0 +1,20 @@
+
+iters: 50
+conv_tol: 1e-2
+max_func_calls: 50
+max_iters_no_improv: 5
+max_timeout: 5
+
+
+optimiser: random
+
+
+
+parameters:
+  Young: [200, 100, 300]
+  poisson: [0.25, 0.1, 0.4]
+
+
+objective:
+  name: analytical
+  expression: ((Young/poisson)-500)**2
