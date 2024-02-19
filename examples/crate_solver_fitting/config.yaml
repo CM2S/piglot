@@ -1,0 +1,35 @@
+
+iters: 25
+
+optimiser: botorch
+
+parameters:
+  Young_1:   [200,   50,  350]
+  poisson_1: [0.3,  0.2,  0.4]
+  Young_2:   [400,  200,  600]
+  poisson_2: [0.2,  0.1,  0.3]
+
+objective:
+  name: fitting
+  composite: True
+  solver:
+    name: crate
+    crate: /media/francisca/HDD/Thesis/CRATE_thesis/src/cratepy/main.py
+    cases:
+      'predicted.dat':
+        fields:
+          'equivalent_stress_strain':
+            name: hresFile
+            y_field: vm_stress
+            x_field: vm_strain
+  references:
+    'reference.hres':
+      prediction: ['equivalent_stress_strain']
+      x_col: 25
+      y_col: 26
+      skip_header: 1
+      filter_tol: 1e-6
+      show: False
+
+
+
