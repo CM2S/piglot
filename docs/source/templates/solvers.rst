@@ -12,3 +12,9 @@ Links
 
 .. literalinclude:: ../../../examples/templates/solvers/links.yaml
   :language: yaml
+
+  CRATE
+-----
+
+.. literalinclude:: ../../../examples/templates/solvers/crate.yaml
+  :language: yaml
