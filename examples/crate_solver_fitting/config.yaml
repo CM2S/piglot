@@ -14,7 +14,8 @@ objective:
   composite: True
   solver:
     name: crate
-    crate: /media/francisca/HDD/Thesis/CRATE_thesis/src/cratepy/main.py
+    # path to the CRATE executable
+    crate: CRATE/src/cratepy/main.py
     cases:
       'predicted.dat':
         fields:
@@ -30,6 +31,3 @@ objective:
       skip_header: 1
       filter_tol: 1e-6
       show: False
-
-
-

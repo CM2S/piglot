@@ -13,7 +13,7 @@ solver:
   # Solver name
   name: crate
   #
-  # Path to CRATE main file
+  # Path to the CRATE executable
   links: CRATE/src/cratepy/main.py
   #
   # List of cases to run
@@ -27,8 +27,9 @@ solver:
         # Register a 'micro_homogenised_quantity' output field
         'micro_homogenised_quantity':
           name: hresFile
-          y_field: vm_stress # Field/column number to extract data (mandatory)
-          x_field: vm_strain # Optional, field/column number to extract data, by default LoadFactor
+          y_field: vm_stress # Field/column to extract data (mandatory)
+          x_field: vm_strain # Optional, field/column to extract data,
+                             # by default LoadFactor
   #
   # (Optional) Additional options for the solver
   # Given values are the default ones
@@ -41,6 +42,14 @@ solver:
   # Path to store temporary analyses
   # By default, use a 'tmp' directory inside the output directory
   tmp_dir: output_dir/tmp
+  #
+  # Python interpreter to use
+  # By default 'python3'
+  python: python3
+  #
+  # Path to the microstructure directory
+  # By default, uses the 'microstructure' path inside the 'CRATE' input file
+  microstructure_dir: microstructure
   #
   # Generator class for advanced input file generation
   # If not passed, use the default generator (which only does parameter

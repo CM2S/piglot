@@ -1,4 +1,4 @@
-"""Module for output fields from CRATE solver."""
+"""Module for output fields from Crate solver."""
 from __future__ import annotations
 from typing import Dict, Any, Union
 import os
@@ -10,7 +10,7 @@ from piglot.utils.solver_utils import get_case_name, write_parameters
 from piglot.utils.solver_utils import has_parameter
 
 
-class CRATEInputData(InputData):
+class CrateInputData(InputData):
     """Container for CRATE input data."""
 
     def __init__(self, input_file: str) -> None:
@@ -22,7 +22,7 @@ class CRATEInputData(InputData):
             values: np.ndarray,
             parameters: ParameterSet,
             tmp_dir: str = None,
-            ) -> CRATEInputData:
+            ) -> CrateInputData:
         """Prepare the input data for the simulation with a given set of parameters.
 
         Parameters
@@ -36,13 +36,13 @@ class CRATEInputData(InputData):
 
         Returns
         -------
-        CRATEInputData
+        CrateInputData
             Input data prepared for the simulation.
         """
         # Copy file and write out the parameters
         dest_file = os.path.join(tmp_dir, os.path.basename(self.input_file))
         write_parameters(parameters.to_dict(values), self.input_file, dest_file)
-        return CRATEInputData(dest_file)
+        return CrateInputData(dest_file)
 
     def check(self, parameters: ParameterSet) -> None:
         """Check if the input data is valid according to the given parameters.
@@ -69,7 +69,7 @@ class CRATEInputData(InputData):
         """
         return os.path.basename(self.input_file)
 
-    def get_current(self, target_dir: str) -> CRATEInputData:
+    def get_current(self, target_dir: str) -> CrateInputData:
         """Get the current input data.
 
         Parameters
@@ -79,13 +79,13 @@ class CRATEInputData(InputData):
 
         Returns
         -------
-        CRATEInputData
+        CrateInputData
             Current input data.
         """
-        return CRATEInputData(os.path.join(target_dir, os.path.basename(self.input_file)))
+        return CrateInputData(os.path.join(target_dir, os.path.basename(self.input_file)))
 
 
-class hresFile(OutputField):
+class HresFile(OutputField):
     """CRATE .hres file reader."""
 
     def __init__(
@@ -109,26 +109,25 @@ class hresFile(OutputField):
         """
         super().__init__()
         self.y_field = y_field
-        # Homogenised .hres output file
         self.x_field = x_field
         self.separator = 16
 
-    def check(self, input_data: CRATEInputData) -> None:
+    def check(self, input_data: CrateInputData) -> None:
         """Sanity checks on the input file.
 
         Parameters
         ----------
-        input_data : CRATEInputData
+        input_data : CrateInputData
             Input data for this case.
         """
         pass
 
-    def get(self, input_data: CRATEInputData) -> OutputResult:
+    def get(self, input_data: CrateInputData) -> OutputResult:
         """Get a parameter from the .hres file.
 
         Parameters
         ----------
-        input_data : CRATEInputData
+        input_data : CrateInputData
             Input data for this case.
 
         Returns
@@ -147,7 +146,7 @@ class hresFile(OutputField):
         with open(filename, 'r', encoding='utf8') as file:
             line_len = len(file.readline())
         n_columns = int((line_len-10) / self.separator)
-        # Fixed-width read (with a skip on the first line for GP outputs)
+        # Fixed-width read
         df = pd.read_fwf(filename, widths=[10] + n_columns*[self.separator])
         # Extract indices for named columns
         columns = df.columns.tolist()
@@ -157,7 +156,7 @@ class hresFile(OutputField):
         return OutputResult(df.iloc[:, x_column].to_numpy(), df.iloc[:, y_column].to_numpy())
 
     @staticmethod
-    def read(config: Dict[str, Any]) -> hresFile:
+    def read(config: Dict[str, Any]) -> HresFile:
         """Read the output field from the configuration dictionary.
 
         Parameters
@@ -176,7 +175,7 @@ class hresFile(OutputField):
         y_field = config['y_field']
         # Read the x field (if passed)
         x_field = config.get('x_field', 'LoadFactor')
-        return hresFile(y_field, x_field)
+        return HresFile(y_field, x_field)
 
 
 def crate_fields_reader(config: Dict[str, Any]) -> OutputField:
@@ -198,7 +197,7 @@ def crate_fields_reader(config: Dict[str, Any]) -> OutputField:
     field_name = config['name']
     # Delegate to the appropriate reader
     readers = {
-        'hresFile': hresFile,
+        'hresFile': HresFile,
     }
     if field_name not in readers:
         raise ValueError(f"Unknown output field name '{field_name}'.")

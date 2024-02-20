@@ -8,11 +8,11 @@ from multiprocessing.pool import ThreadPool as Pool
 import numpy as np
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import Solver, Case, CaseResult, OutputField, OutputResult, InputData
-from piglot.solver.crate.fields import crate_fields_reader, CRATEInputData
+from piglot.solver.crate.fields import crate_fields_reader, CrateInputData
 from piglot.utils.solver_utils import has_keyword, load_module_from_file
 
 
-class CRATESolver(Solver):
+class CrateSolver(Solver):
     """CRATE solver."""
 
     def __init__(
@@ -23,6 +23,8 @@ class CRATESolver(Solver):
             crate_bin: str,
             parallel: int,
             tmp_dir: str,
+            python_interp: str,
+            microstructure_dir: str,
             ) -> None:
         """Constructor for the CRATE solver class.
 
@@ -40,11 +42,17 @@ class CRATESolver(Solver):
             Number of parallel processes to use.
         tmp_dir : str
             Path to the temporary directory.
+        python_interp : str, optional
+            Python interpreter to use, by default 'python3'.
+        microstructure_dir : str, optional
+            Path to the microstructure directory, by default '.'.
         """
         super().__init__(cases, parameters, output_dir)
         self.crate_bin = crate_bin
         self.parallel = parallel
         self.tmp_dir = tmp_dir
+        self.python_interp = python_interp
+        self.microstructure_dir = microstructure_dir
 
     def _run_case(self, values: np.ndarray, case: Case, tmp_dir: str) -> CaseResult:
         """Run a single case wth CRATE.
@@ -68,9 +76,11 @@ class CRATESolver(Solver):
         input_file = input_data.input_file
         case_name, _ = os.path.splitext(os.path.basename(input_file))
         # Run CRATE (we don't use high precision timers here to keep track of the start time)
+        if not os.path.isdir(self.microstructure_dir):
+            raise ValueError(f"Microstructure directory '{self.microstructure_dir}' not found.")
         begin_time = time.time()
         process_result = subprocess.run(
-            ['python3', self.crate_bin, input_file],
+            [self.python_interp, self.crate_bin, input_file, self.microstructure_dir],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False
@@ -171,8 +181,12 @@ class CRATESolver(Solver):
         # Read the parallelism and temporary directory (if present)
         parallel = int(config.get('parallel', 1))
         tmp_dir = os.path.join(output_dir, config.get('tmp_dir', 'tmp'))
+        # Read the python interpreter (if present)
+        python_interp = config.get('python_interp', 'python3')
+        # Read the microstructure directory (if present)
+        microstructure_dir = config.get('microstructure_dir', '.')
         # Read generator, if any
-        input_data_class: Type[InputData] = CRATEInputData
+        input_data_class: Type[InputData] = CrateInputData
         if 'generator' in config:
             if 'script' not in config['generator']:
                 raise ValueError("Missing 'script' in generator configuration.")
@@ -195,4 +209,5 @@ class CRATESolver(Solver):
             }
             cases.append(Case(input_data_class(case_name), fields))
         # Return the solver
-        return CRATESolver(cases, parameters, output_dir, crate_bin, parallel, tmp_dir)
+        return CrateSolver(cases, parameters, output_dir, crate_bin, parallel, tmp_dir,
+                           python_interp, microstructure_dir)

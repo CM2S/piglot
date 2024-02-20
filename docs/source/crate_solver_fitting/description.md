@@ -2,15 +2,7 @@
 
 A fitting example is included to demonstrate how to use `piglot` with the clustering-based reduced-order model [`CRATE`](https://github.com/bessagroup/CRATE) solver.
 
-A 2D plane-strain infinitesimal strains simulation of a 2-phase heterogeneous material characterized by randomly distributed circular particles (volume fraction = 30%) embedded in a matrix (volume fraction = 70%), is subjected to a uniaxial tension macro-scale strain monotonic loading path prescribed in 50 load increments, and given by
-
-$
-\boldsymbol{\varepsilon}=\begin{bmatrix}
-0.02&0&0\\
-0&0&0\\
-0&0&0
-\end{bmatrix}\,.
-$
+A 2D plane-strain infinitesimal strains simulation of a 2-phase heterogeneous material characterized by randomly distributed circular particles (volume fraction = 30%) embedded in a matrix (volume fraction = 70%), is subjected to a uniaxial tension macro-scale strain monotonic loading path prescribed in 50 load increments, and given by $\boldsymbol{\varepsilon}_{xx}=0.02$.
 
 The matrix material phase constitutive behavior is governed by the von Mises isotropic elasto-plastic constitutive model with isotropic hardening, whereas the particle's material phase is governed by the isotropic linear elastic constitutive model.
 
@@ -18,7 +10,7 @@ A grid of $100\times 100$ voxels (provided in the `examples/crate_solver_fitting
 
 ![CRATE microstructure, with 8 clusters for the matrix and 2 clusters for the particles.](microstructure_crate.png)
 
-We want to find the values for the Young modulus and the Poisson coefficient of both phases.
+We want to find the values for the Young's modulus and the Poisson coefficient of both phases.
 The notation `Young_1` and `poisson_1` is respective to the properties of the matrix, and `Young_2` and `poisson_2` of the particles.
 
 The reference equivalent stress-strain response is computed using the following values for these parameters: `Young_1: 100`, `poisson_1: 0.3`, `Young_2: 500` and `poisson_2: 0.19`.
@@ -43,7 +35,8 @@ objective:
   composite: True
   solver:
     name: crate
-    crate: path_to_CRATE/src/cratepy/main.py
+    # path to the CRATE executable
+    crate: CRATE/src/cratepy/main.py
     cases:
       'predicted.dat':
         fields:
@@ -60,7 +53,9 @@ objective:
       filter_tol: 1e-6
       show: False
 ```
+The field `crate` must indicate the path to the `CRATE` executable.
 The input data file for running `CRATE` is given in `examples/crate_solver_fitting/predicted.dat`, where the notation `<Young_1>`, `<poisson_1>`, `<Young_2>` and `<poisson_2>` indicates the parameters to optimise.
+For each function call, and before running the solver, these template parameters are substituted by their appropriate values in the `CRATE` input data file.
 
 The column 25 and 26, corresponding to the equivalent strain and equivalent stress, of the reference file are used for comparison, and the header of the reference file is ignored by setting `skip_header: 1`. The number of points in the reference response is also filtered using the [response reduction algorithm](../reference_reduction_composite/description.md) with a threshold of `filter_tol: 1e-6`.
 
@@ -112,7 +107,7 @@ which will generate:
 
 To see the best-observed value for the optimisation problem, run
 ```bash
-piglot-plot best config.yaml --best
+piglot-plot best config.yaml
 ```
 which will generate:
 

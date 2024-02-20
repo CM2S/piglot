@@ -4,13 +4,13 @@ from piglot.parameter import ParameterSet
 from piglot.solver.solver import Solver
 from piglot.solver.links.solver import LinksSolver
 from piglot.solver.curve.solver import CurveSolver
-from piglot.solver.crate.solver import CRATESolver
+from piglot.solver.crate.solver import CrateSolver
 
 
 AVAILABLE_SOLVERS: Dict[str, Type[Solver]] = {
     'links': LinksSolver,
     'curve': CurveSolver,
-    'crate': CRATESolver,
+    'crate': CrateSolver,
 }
 
 
