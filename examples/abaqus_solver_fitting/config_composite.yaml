@@ -1,0 +1,38 @@
+
+iters: 25
+
+optimiser: botorch
+
+
+parameters:
+  Young: [100, 100, 300]
+  S1: [200, 200, 400]
+  S2: [500, 500, 700]
+
+
+objective:
+  name: fitting
+  composite: True
+  solver:
+    name: abaqus
+    # path to the Abaqus executable
+    abaqus_path: C:\SIMULIA\Commands\abaqus.bat
+
+    cases:
+      'sample.inp':
+        job_name: Job-1 # optional field for this case
+        step_name: Step-1 # optional field for this case
+        instance_name: Part-1-1 # optional field for this case
+        fields:
+          'reaction_x':
+            name: FieldsOutput
+            set_name: RF_SET
+            field: RF
+            x_field: U
+            direction: x
+   
+  references:
+    'reference.txt':
+      prediction: reaction_x
+
+
