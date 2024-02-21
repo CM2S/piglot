@@ -1,4 +1,4 @@
-# Design example - analytical curve
+# Analytical curve
 
 A simple design objective example is included to demonstrate how to use `piglot` in this context.
 In design problems, there is no reference response available, and several values of the parameters have to be evaluated for the target objectives.
@@ -51,7 +51,7 @@ piglot config.yaml
 ```
 You should see an output similar to
 ```
-BoTorch: 100%|███████████████████████████████████████| 10/10 [00:00<00:00, 10.92it/s, Loss: -4.3239e+00]
+BoTorch: 100%|████████████████████████████| 10/10 [00:00<00:00, 10.92it/s, Loss: -4.3239e+00]
 Completed 10 iterations in 0.91609s
 Best loss: -4.32393814e+00
 Best parameters

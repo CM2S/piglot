@@ -1,7 +1,9 @@
-# Stochastic curve fitting example - composite setting
+# Stochastic curve fitting - composite setting
 
 Following the [stochastic curve fitting example](../sample_curve_fitting_stochastic/description.md), we now show how to use stochastic curve fitting under function composition.
 If you are unfamiliar with the stochastic aspect, please check the aforementioned example first.
+
+## Background
 
 As before, we start by defining the two analytical expressions used for describing the curve:
 
@@ -19,7 +21,7 @@ These terms were computed from the individual loss functions of $f_1$ and $f_2$.
 However, under composition, we instead assume that, for a fixed $a$, the *response* at every point $x$ of the curve follows a normal distribution with known mean $\mu(x)$ and variance $\sigma^2(x)$, that is, $f(x) \sim \mathcal{N}\left(\mu(x), \sigma^2(x)\right)$.
 This is fundamentally different from the previous approach.
 In the simple (non-composite) strategy, we assume the scalar *objective function* (or loss, in the curve fitting case) is Gaussian; in the composite fashion, it is the *response* that is Gaussian.
-We can then compute the statistical quantities in a similar fashion:
+We can then similarly compute the statistical quantities:
 
 $
 \begin{aligned}
@@ -32,6 +34,8 @@ With the statistical model for the response, it is now time to build the statist
 This is where the composition aspect comes into play.
 Using BoTorch, we never need to explicitly compute the posterior distribution of the objective function as most acquisition functions can be computed with quasi-Monte Carlo sampling.
 Refer to the [composite curve fitting](../sample_curve_fitting_composite/description.md) example for more details on how we approach this problem.
+
+## Application
 
 In practice, to use composition, you only need to set the `composite: True` flag in the objective configuration.
 The configuration file (`examples/sample_curve_fitting_stochastic_composite/config.yaml`) for this example is:
@@ -66,7 +70,7 @@ objective:
 ```
 Example output for this case:
 ```
-BoTorch: 100%|████████████████████████████████████████| 10/10 [00:02<00:00,  3.80it/s, Loss: 5.2804e-05]
+BoTorch: 100%|█████████████████████████████| 10/10 [00:02<00:00,  3.80it/s, Loss: 5.2804e-05]
 Completed 10 iterations in 2s
 Best loss:  5.28041030e-05
 Best parameters

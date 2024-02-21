@@ -1,4 +1,4 @@
-# Stochastic curve fitting example
+# Stochastic curve fitting
 
 A simple analytical curve fitting problem with noise in the input data is included to demonstrate how to use `piglot` to optimise stochastic objectives.
 Like in the [sample curve fitting example](../sample_curve_fitting/description.md), we are trying to fit using a numerically generated reference response from the expression $f(x) = 2 x^2$ (provided in the `examples/sample_curve_fitting_stochastic/reference_curve.txt` file).
@@ -7,15 +7,15 @@ Like in the [sample curve fitting example](../sample_curve_fitting/description.m
 Currently, only Bayesian optimisation with BoTorch supports the full version of the stochastic objective.
 However, for a simpler version that is compatible with all optimisers, check the [final section](#ignoring-variance) of this document.
 
-To simulate stochasticity, we use two analytical expressions for describing the curve:
+## Background
 
+To simulate stochasticity, we use two analytical expressions for describing the curve:
 $
 \begin{aligned}
 &f_1(x) = a x^2 \\
 &f_2(x) = 2a x^2
 \end{aligned}
 $
-
 We can compute the scalar loss function with respect to the parameter optimise for each curve individually: $\mathcal{L}_1(a)$ and $\mathcal{L}_2(a)$.
 With these, we want to optimise a stochastic function $\mathcal{L}(a)$ which, for every parameter $a$, is assumed to follow a normal distribution with known mean $\mu(a)$ and variance $\sigma^2(a)$, that is, $\mathcal{L}(a) \sim \mathcal{N}\left(\mu(a), \sigma^2(a)\right)$.
 These quantities are constructed using the mean of the two functions $\mathcal{L}_1(a)$ and $\mathcal{L}_2(a)$ and its respective standard error:
@@ -31,6 +31,8 @@ Note that we use the (squared) standard error of the two functions as the varian
 This allows us to establish confidence intervals for the mean and, importantly, is the standard approach to simulate observation noise in our function evaluations.
 
 **Note:** This procedure optimises the mean of the *loss functions*, not the mean response. If you wish to optimise the latter, check the example on [composite stochastic optimisation](../sample_curve_fitting_stochastic_composite/description.md).
+
+## Application
 
 The good news: `piglot` automatically handles computing these quantities for supported objectives.
 The configuration file (`examples/sample_curve_fitting_stochastic/config.yaml`) for this example is:
@@ -68,7 +70,7 @@ Finally, to pass variance information to the optimiser, we add the option `stoch
 The rest of the file is identical to our [curve fitting example](examples/sample_curve_fitting/description.md).
 Example output for this case:
 ```
-BoTorch: 100%|████████████████████████████████████████| 10/10 [00:00<00:00, 14.42it/s, Loss: 1.7315e-01]
+BoTorch: 100%|█████████████████████████████| 10/10 [00:00<00:00, 14.42it/s, Loss: 1.7315e-01]
 Completed 10 iterations in 0.69363s
 Best loss:  1.73146009e-01
 Best parameters
@@ -102,7 +104,7 @@ If you wish to use other optimisers, the objective can be constructed in a fashi
 To use this, simply unset the `stochastic` flag from the configuration file (either by setting it to `False` or removing it altogether).
 If you repeat this example with the aforementioned flag unset, you should expect a similar outcome from the optimisation:
 ```
-BoTorch: 100%|████████████████████████████████████████| 10/10 [00:00<00:00, 13.13it/s, Loss: 1.7314e-01]
+BoTorch: 100%|█████████████████████████████| 10/10 [00:00<00:00, 13.13it/s, Loss: 1.7314e-01]
 Completed 10 iterations in 0.76140s
 Best loss:  1.73143625e-01
 Best parameters

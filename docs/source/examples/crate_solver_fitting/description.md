@@ -1,4 +1,4 @@
-# Fitting example - crate solver
+# CRATE Solver Example
 
 A fitting example is included to demonstrate how to use `piglot` with the clustering-based reduced-order model [`CRATE`](https://github.com/bessagroup/CRATE) solver.
 

@@ -1,4 +1,4 @@
-# Fitting example - Abaqus solver
+# Abaqus Solver Example
 
 A fitting example is included to demonstrate how to use `piglot` with the `Abaqus` solver.
 
@@ -108,7 +108,7 @@ which will generate:
 
 ![Best case plot](best_1.svg)
 
-## Fitting example - Abaqus solver with composite setting
+## Composite setting
 
 This subsection aims to show the difference in the results obtained using the composite option. Convergence is more stable, a smaller loss is achieved and the parameters are closer to the reference solution.
 

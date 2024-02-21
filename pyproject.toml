@@ -44,7 +44,7 @@ lipo = ["lipo"]
 genetic = ["geneticalgorithm"]
 pso = ["pyswarms"]
 full = ["lipo", "geneticalgorithm", "pyswarms"]
-docs = ["sphinx", "myst-parser", "pydata-sphinx-theme", "sphinx-favicon", "sphinx-autoapi"]
+docs = ["sphinx", "myst-parser", "sphinx-rtd-theme", "sphinx-favicon"]
 test = ["pytest", "pytest-cov", "flake8", "coverage"]
 
 [project.urls]

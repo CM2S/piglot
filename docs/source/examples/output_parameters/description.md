@@ -1,4 +1,4 @@
-# Minimum of an analytical expression - output parameters
+# Output parameters
 
 A simple analytical example is included to demonstrate how to use `piglot` to find the minimum value of an analytical expression using the `output_parameters` functionality.
 In this case, we aim to find the parameters `a` and `b` that minimise an analytical expression given by $f(x) = \sinh(a) + b\sin(a) - a/b$. The parameter `a` has bounds `[-10,0]` and the parameter `b` has bounds `[1,25000]`. Given the wide bounds of the parameter `b` it is convenient to optimise this parameter in a logarithmic scale. 
@@ -36,7 +36,7 @@ piglot config.yaml
 ```
 You should see an output similar to
 ```
-BoTorch: 100%|███████████████████████████████████████| 10/10 [00:00<00:00, 12.47it/s, Loss: -2.3354e+04]
+BoTorch: 100%|████████████████████████████| 10/10 [00:00<00:00, 12.47it/s, Loss: -2.3354e+04]
 Completed 10 iterations in 0.80208s
 Best loss: -2.33544803e+04
 Best parameters
