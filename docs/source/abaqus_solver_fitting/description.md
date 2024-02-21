@@ -14,15 +14,13 @@ We want to find the values for the Young's modulus (`Young`), the yield stress (
 
 The reference force-displacement response is computed using the following values for these parameters: `Young: 210`, `S1: 325` and `S2: 600`. The reference response is provided in the `examples/abaqus_solver_fitting/reference.txt` file.
 
-We run 20 iterations using the `botorch` optimiser within the [curve fitting setting](../sample_curve_fitting/description.md).
+We run 25 iterations using the `botorch` optimiser within the [curve fitting setting](../sample_curve_fitting/description.md).
 
 The configuration file (`examples/abaqus_solver_fitting/config.yaml`) for this example is:
 ```yaml
-iters: 20
+iters: 25
 
-optimiser:
-  name: botorch
-  n_initial: 1
+optimiser: botorch
 
 
 parameters:
@@ -54,7 +52,6 @@ objective:
   references:
     'reference.txt':
       prediction: reaction_x
-      loss: nmse
 ```
 The field `abaqus_path` must indicate the path to the `Abaqus` executable. The input data file for running `Abaqus` is given in `examples/abaqus_solver_fitting/sample.inp`, where the notation `<Young>`, `<S1>` and `<S2>` indicates the parameters to optimise. For each function call, and before running the solver, these template parameters are substituted by their appropriate values in the `Abaqus` input data file.
 
@@ -67,13 +64,13 @@ piglot config.yaml
 ```
 You should see an output similar to
 ```
-BoTorch: 100%|███████████████████████████████████████| 20/20 [05:01<00:00, 15.06s/it, Loss: 1.0774e-05]
-Completed 20 iterations in 5m1s
-Best loss:  1.07744751e-05                                                                              
-Best parameters                                                                                         
-- Young:   211.939427                                                                                   
--    S1:   323.541637                                                                                   
--    S2:   633.984363   
+BoTorch: 100%|███████████████████████████████████████████████████████| 25/25 [06:24<00:00, 15.38s/it, Loss: 1.0686e-06]
+Completed 25 iterations in 6m24s
+Best loss:  1.06857710e-06
+Best parameters
+- Young:   210.492621
+-    S1:   325.048144
+-    S2:   611.079583
 ```
 Note that despite the fact that the optimal parameters are not exactly the same as the ones used to compute the reference response, the loss function value is very small, and the fitting is excellent as can be seen in the figures below.
 
@@ -115,15 +112,13 @@ which will generate:
 
 This subsection aims to show the difference in the results obtained using the composite option. Convergence is more stable, a smaller loss is achieved and the parameters are closer to the reference solution.
 
-We run 20 iterations using the `botorch` optimiser within the [composite setting](../sample_curve_fitting_composite/description.md).
+We run 25 iterations using the `botorch` optimiser within the [composite setting](../sample_curve_fitting_composite/description.md).
 
 The configuration file (`examples/abaqus_solver_fitting/config_composite.yaml`) for this example is:
 ```yaml
-iters: 20
+iters: 25
 
-optimiser:
-  name: botorch
-  n_initial: 1
+optimiser: botorch
 
 
 parameters:
@@ -156,18 +151,17 @@ objective:
   references:
     'reference.txt':
       prediction: reaction_x
-      loss: nmse
 ```
 
 The output is the following
 ```
-BoTorch: 100%|███████████████████████████████████████| 20/20 [05:14<00:00, 15.70s/it, Loss: 8.2904e-08]
-Completed 20 iterations in 5m14s
-Best loss:  8.29043776e-08
+BoTorch: 100%|███████████████████████████████████████████████████████| 25/25 [07:35<00:00, 18.24s/it, Loss: 3.4894e-10]
+Completed 25 iterations in 7m35s
+Best loss:  3.48943524e-10
 Best parameters
-- Young:   210.036078
--    S1:   324.831338
--    S2:   608.508550 
+- Young:   210.001758
+-    S1:   324.987890
+-    S2:   600.530661
 ```
 
 The animation for all the function evaluations that have been made throughout the optimisation procedure are once again showed running

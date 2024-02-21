@@ -1,9 +1,7 @@
 
-iters: 20
+iters: 25
 
-optimiser:
-  name: botorch
-  n_initial: 1
+optimiser: botorch
 
 
 parameters:
