@@ -28,6 +28,10 @@ piglot
    :target: https://www.codefactor.io/repository/github/cm2s/piglot
    :alt: CodeFactor Grade
 
+.. image:: https://img.shields.io/readthedocs/piglot
+   :target: https://piglot.readthedocs.io
+   :alt: ReadTheDocs
+
 Welcome to :code:`piglot`, a Python tool taylored for the automated optimisation of responses from numerical solvers.
 We aim at providing a simple and user-friendly interface which is also easily extendable, allowing intergration with other solvers within the community.
 Whether you're working on structural analysis, material modelling, fluid dynamics, control systems or astrophysics (to name a few) using, for instance, finite element analysis, spectral methods or Monte Carlo methods, :code:`piglot` provides a versatile solution for solving inverse problems.
