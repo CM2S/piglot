@@ -1,4 +1,4 @@
-# Analytical curve fitting example - reference response reduction algorithm
+# Composite setting - Reference response reduction
 
 
 A simple analytical curve fitting problem is included to demonstrate how to use `piglot` with a modified reference response.
@@ -42,7 +42,7 @@ piglot config.yaml
 ```
 You should see an output similar to
 ```
-BoTorch: 100%|████████████████████████████████████████| 10/10 [00:25<00:00,  2.52s/it, Loss: 6.1178e-08]
+BoTorch: 100%|█████████████████████████████| 10/10 [00:25<00:00,  2.52s/it, Loss: 6.1178e-08]
 Completed 10 iterations in 25s
 Best loss:  6.11782174e-08
 Best parameters
@@ -95,7 +95,7 @@ piglot config_reduction.yaml
 You should see an output similar to
 ```
 Filtering reference reference_curve.txt ... done (from 100 to 6 points, error = 4.28e-03)
-BoTorch: 100%|████████████████████████████████████████| 10/10 [00:01<00:00,  7.90it/s, Loss: 6.6555e-09]
+BoTorch: 100%|█████████████████████████████| 10/10 [00:01<00:00,  7.90it/s, Loss: 6.6555e-09]
 Completed 10 iterations in 1s
 Best loss:  6.65547123e-09
 Best parameters

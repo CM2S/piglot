@@ -1,4 +1,7 @@
 """Main piglot module."""
 
+__title__ = 'piglot'
 __author__ = 'CM2S'
-__version__ = '0.2.1'
+__copyright__ = '2024, CM2S'
+__license__ = 'MIT'
+__version__ = '0.3.0'

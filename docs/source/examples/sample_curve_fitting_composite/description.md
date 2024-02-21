@@ -1,4 +1,4 @@
-# Curve fitting example - composite setting
+# Composite setting
 
 In curve fitting problems with a reference response, we can exploit the function composition of the objective function to drastically improve the optimisation.
 This technique has been widely explored in Bayesian optimisation (as proposed in [Astudillo and Frazier (2019)](https://doi.org/10.48550/arXiv.1906.01537)) and, for the curve fitting problem, in [Cardoso Coelho et al. (2023)](https://dx.doi.org/10.2139/ssrn.4674421).
@@ -8,6 +8,8 @@ In this example, we are heavily relying on Bayesian optimisation (if you are unf
 
 **Note:** Composite optimisation is not supported by most optimisers.
 Currently, only Bayesian optimisation with BoTorch supports the full version of the composite objective.
+
+## Background
 
 We start by defining our objective function (or *loss* in the curve fitting scenario) $\mathcal{L}\left(\boldsymbol{\theta}\right)$ as
 
@@ -61,6 +63,8 @@ The solution to this problem is Monte Carlo sampling - we draw samples from the 
 The resulting sample values should follow the posterior distribution for $\mathcal{L}\left(\boldsymbol{\theta}\right)$ and we can use them to compute approximate acquisition function values.
 We leverage BoTorch's quasi-Monte Carlo acquisition functions for this task, and you can read more details on the entire procedure in [Cardoso Coelho et al. (2023)](https://dx.doi.org/10.2139/ssrn.4674421).
 
+## Application
+
 Putting all the mathematical details aside, it is extremely simple to use the composite setting in `piglot`.
 The configuration file (`examples/sample_curve_fitting_composite/config.yaml`) for this example is:
 ```yaml
@@ -89,7 +93,7 @@ objective:
 The composite strategy is activated by setting `composite: True`.
 Running this example, you should see an output similar to
 ```
-BoTorch: 100%|████████████████████████████████████████| 10/10 [00:01<00:00,  7.94it/s, Loss: 5.6009e-08]
+BoTorch: 100%|█████████████████████████████| 10/10 [00:01<00:00,  7.94it/s, Loss: 5.6009e-08]
 Completed 10 iterations in 1s
 Best loss:  5.60089334e-08
 Best parameters

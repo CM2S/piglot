@@ -22,7 +22,7 @@ Whether you're working on structural analysis, material modelling, fluid dynamic
 The primary emphasis is on derivative-free optimisation, ensuring compatibility with black-box solvers in scenarios where gradient information is not available, and cases where the function evaluations may be noisy. We highlight:
 * **Integration with solvers:** We provide an extensible interface for coupling with physics solvers. As long as your solver can return a time-response for the fields you are interested, you can optimise it with `piglot`.
 * **Optimisation algorithms:** Off the shelf, there are several optimisers included in the package. Among them, we highlight our fully-fledged Bayesian optimisation (based on [BoTorch](https://botorch.org/)) that supports optimising stochastic and composite objectives and is highly customisable. Additional methods can also be easily implemented within `piglot`.
-* **Visualisation tools:** You can use the built-in tool `piglot-plot`` to visualise the results of the optimisation. There are native plotting utilities for the optimised responses, the parameter history, objective history and, for supported solvers, live plotting of the currently running case. Also, an animation of the optimisation process can be exported.
+* **Visualisation tools:** You can use the built-in tool `piglot-plot` to visualise the results of the optimisation. There are native plotting utilities for the optimised responses, the parameter history, objective history and, for supported solvers, live plotting of the currently running case. Also, an animation of the optimisation process can be exported.
 
 Feel free to explore, contribute, and optimize with `piglot`!
 
@@ -103,7 +103,7 @@ Hash: 2313718f75bc0445aa71df7d6d4e50ba82ad593d65f3762efdcbed01af338e30
 Objective:  8.85050592e-08
 ```
 The script will also plot the best observed response, and its comparison with the reference response: 
-![Best case plot](https://raw.githubusercontent.com/CM2S/piglot/main/docs/source/sample_curve_fitting/best.svg)
+![Best case plot](https://raw.githubusercontent.com/CM2S/piglot/main/docs/source/examples/sample_curve_fitting/best.svg)
 
 Now, try running (this may take some time)
 ```bash
@@ -111,7 +111,7 @@ piglot-plot animation config.yaml
 ```
 This generates an animation for all the function evaluations that have been made throughout the optimisation procedure.
 You can find the `.gif` file(s) inside the output directory, which should give something like:
-![Animation](https://raw.githubusercontent.com/CM2S/piglot/main/docs/source/sample_curve_fitting/animation.gif)
+![Animation](https://raw.githubusercontent.com/CM2S/piglot/main/docs/source/examples/sample_curve_fitting/animation.gif)
 
 
 ## Using Python scripts
@@ -199,3 +199,21 @@ Note that this option also provides the `piglot` and `piglot-plot` scripts, but 
   1. In your favourite terminal, run: `pip install piglot`;
   2. Confirm the package is correctly installed by calling the `piglot` and `piglot-plot` executables.
 
+### Installing additional optimisers
+
+We also support some optional external optimisers, which are not automatically installed along with `piglot` to reduce the number of dependencies and the installation cost.
+You can either install them along with `piglot`, or manually using your package manager.
+Their detection is done at runtime and, if not installed, an error will be raised.
+Currently, the following optional optimisers are supported:
+- `lipo` - LIPO optimiser
+- `geneticalgorithm` - Genetic algorithm
+- `pyswarms` - Particle swarm optimiser
+
+These can be installed directly from PyPI (with the package names above).
+If you wish to install `piglot` with one of these optimisers (which may be required when using a `pipx` install), you can run the following commands:
+- `pip install piglot[lipo]` for the LIPO optimiser
+- `pip install piglot[genetic]` for the Genetic algorithm
+- `pip install piglot[pso]` for the Particle swarm optimiser optimiser
+
+To simultaneously install more than one optimiser, for instance, the LIPO and the Particle swarm optimisers, run `pip install piglot[lipo,pso]`.
+If you wish to install all optimisers at once, you can run `pip install piglot[full]`.

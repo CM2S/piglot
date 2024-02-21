@@ -1,6 +1,9 @@
 Optimiser options
 =================
 
+For the optimisation itself, several optimisation methods are implemented and available in :code:`piglot`.
+The available optimisers and their hyperparameters, which have to be specified in the :code:`optimiser` section of the :code:`.yaml` configuration file, are presented below.
+
 AOA
 ---
 
@@ -25,7 +28,6 @@ LIPO
 .. literalinclude:: ../../../examples/templates/optimisers/lipo.yaml
   :language: yaml
 
-
 Random search
 -------------
 
@@ -37,7 +39,6 @@ SPSA
 
 .. literalinclude:: ../../../examples/templates/optimisers/spsa.yaml
   :language: yaml
-
 
 SPSA Adam
 ---------

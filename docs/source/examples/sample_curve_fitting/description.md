@@ -1,4 +1,4 @@
-# Curve fitting example - analytical curve
+# Analytical curve
 
 A simple analytical curve fitting problem is included to demonstrate how to use `piglot`.
 In this case, we aim to fit a quadratic expression of the type $f(x) = a x^2$, using as a reference, a numerically generated reference from the expression $f(x) = 2 x^2$ (provided in the `examples/sample_curve_fitting/reference_curve.txt` file).
@@ -42,7 +42,7 @@ piglot config.yaml
 ```
 You should see an output similar to
 ```
-BoTorch: 100%|██████████████████████████████████████████████████████| 10/10 [00:00<00:00, 17.66it/s, Loss: 8.8505e-08]
+BoTorch: 100%|██████████████████████████████| 10/10 [00:00<00:00, 17.66it/s, Loss: 8.8505e-08]
 Completed 10 iterations in 0.56614s
 Best loss:  8.85050592e-08
 Best parameters
@@ -67,7 +67,8 @@ Name: 18, dtype: object
 Hash: 2313718f75bc0445aa71df7d6d4e50ba82ad593d65f3762efdcbed01af338e30
 Objective:  8.85050592e-08
 ```
-The script will also plot the best observed response, and its comparison with the reference response:
+The script will also plot the best-observed response, and its comparison with the reference response:
+
 ![Best case plot](best.svg)
 
 Now, try running (this may take some time)
@@ -76,6 +77,7 @@ piglot-plot animation config.yaml
 ```
 This generates an animation for all the function evaluations that have been made throughout the optimisation procedure.
 You can find the `.gif` file(s) inside the output directory, which should give something like:
+
 ![Animation](animation.gif)
 
 
@@ -131,7 +133,7 @@ python config.py
 ```
 Example output
 ```
-BoTorch: 100%|██████████████████████████████████████████████████████| 10/10 [00:00<00:00, 16.75it/s, Loss: 8.9167e-08]
+BoTorch: 100%|█████████████████████████████| 10/10 [00:00<00:00, 16.75it/s, Loss: 8.9167e-08]
 Completed 10 iterations in 0.59692s
 Best loss:  8.91673999e-08
 Best parameters

@@ -24,7 +24,7 @@ class geneticalgorithmMod(geneticalgorithm):
         var=np.zeros(self.dim)
         for p in range(0,self.pop_s):
             for i in self.integers[0]:
-                var[i]=np.random.randint(self.var_bound[i][0],\
+                var[i]=np.random.randint(self.var_bound[i][0],
                         self.var_bound[i][1]+1)
                 solo[i]=var[i].copy()
             for i in self.reals[0]:
@@ -137,8 +137,7 @@ class geneticalgorithmMod(geneticalgorithm):
             self.best_variable=pop[0,: self.dim].copy()
         # Report
         self.report.append(pop[0,self.dim])
-        self.output_dict={'variable': self.best_variable, 'function':\
-                          self.best_function}
+        self.output_dict={'variable': self.best_variable, 'function': self.best_function}
         if self.progress_bar==True:
             show=' '*100
             sys.stdout.write('\r%s' % (show))
@@ -147,7 +146,7 @@ class geneticalgorithmMod(geneticalgorithm):
         #sys.stdout.flush()
         re=np.array(self.report)
         if self.stop_mniwi==True:
-            sys.stdout.write('\nWarning: GA is terminated due to the'+\
+            sys.stdout.write('\nWarning: GA is terminated due to the'+
                              ' maximum number of iterations without improvement was met!')
 
 
