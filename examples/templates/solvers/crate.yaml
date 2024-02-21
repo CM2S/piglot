@@ -49,7 +49,7 @@ solver:
   #
   # Path to the microstructure directory
   # By default, uses the 'microstructure' path inside the 'CRATE' input file
-  microstructure_dir: microstructure
+  microstructure_dir: .
   #
   # Generator class for advanced input file generation
   # If not passed, use the default generator (which only does parameter
