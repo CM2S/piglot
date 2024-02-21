@@ -44,9 +44,9 @@ objective:
 
     cases:
       'sample.inp':
-        job_name: Job-1
-        step_name: Step-1
-        instance_name: Part-1-1
+        job_name: Job-1 # optional field for this case
+        step_name: Step-1 # optional field for this case
+        instance_name: Part-1-1 # optional field for this case
         fields:
           'reaction_x':
             name: FieldsOutput
@@ -61,6 +61,8 @@ objective:
       loss: nmse
 ```
 The field `abaqus_path` must indicate the path to the `Abaqus` executable. The input data file for running `Abaqus` is given in `examples/abaqus_solver_fitting/sample.inp`, where the notation `<Young>`, `<S1>` and `<S2>` indicates the parameters to optimise. For each function call, and before running the solver, these template parameters are substituted by their appropriate values in the `Abaqus` input data file.
+
+Note that the `Abaqus` input file (`sample.inp`) only has one Job, Step and Instance, so, the fields `job_name`, `step_name` and `instance_name` are optional in the `config.yaml`.
 
 To run this example, open a terminal inside the `piglot` repository, enter the `examples/abaqus_solver_fitting` directory and run piglot with the given configuration file
 ```bash
@@ -148,9 +150,9 @@ objective:
 
     cases:
       'sample.inp':
-        job_name: Job-1
-        step_name: Step-1
-        instance_name: Part-1-1
+        job_name: Job-1 # optional field for this case
+        step_name: Step-1 # optional field for this case
+        instance_name: Part-1-1 # optional field for this case
         fields:
           'reaction_x':
             name: FieldsOutput
@@ -165,7 +167,7 @@ objective:
       loss: nmse
 ```
 
-The output is the following:
+The output is the following
 ```
 BoTorch: 100%|███████████████████████████████████████| 20/20 [05:14<00:00, 15.70s/it, Loss: 8.2904e-08]
 Completed 20 iterations in 5m14s
@@ -176,7 +178,7 @@ Best parameters
 -    S2:   608.508550 
 ```
 
-The animation for all the function evaluations that have been made throughout the optimisation procedure are once again showed using the:
+The animation for all the function evaluations that have been made throughout the optimisation procedure are once again showed running
 ```bash
 piglot-plot animation config_composite.yaml
 ```

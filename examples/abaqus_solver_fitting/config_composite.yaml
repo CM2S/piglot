@@ -26,9 +26,9 @@ objective:
 
     cases:
       'sample.inp':
-        job_name: Job-1
-        step_name: Step-1
-        instance_name: Part-1-1
+        job_name: Job-1 # optional field for this case
+        step_name: Step-1 # optional field for this case
+        instance_name: Part-1-1 # optional field for this case
         fields:
           'reaction_x':
             name: FieldsOutput
