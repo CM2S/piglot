@@ -38,6 +38,8 @@ We highlight:
 - **Optimisation algorithms:** Off the shelf, there are several optimisers included in the package. Among them, we highlight our fully-fledged Bayesian optimisation (based on `BoTorch <https://botorch.org/>`_) that supports optimising stochastic and composite objectives and is highly customisable. Additional methods can also be easily implemented within :code:`piglot`.
 - **Visualisation tools:** You can use the builtin tool :code:`piglot-plot` to visualise the results of the optimisation. There are native plotting utilities for the optimised responses, the parameter history, objective history and, for supported solvers, live plotting of the currently running case. Also, an animation of the optimisation process can be exported.
 
+Feel free to explore, contribute, and optimize with `piglot`!
+
 
 Installation
 ------------
