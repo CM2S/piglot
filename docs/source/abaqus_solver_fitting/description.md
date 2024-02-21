@@ -10,8 +10,7 @@ A mesh with a single CPE4 element is considered for discretisation (the body dim
 
 ![Mesh and boundary conditions applied.](mesh_and_bc.png)
 
-We want to find the values for the Young Modulus, the Yield Stress and a second stress point that will define the linear plasticity curve. The defined Poisson's ratio is 0.3 and the two strain values for the plasticity curve 0 and 0.25 respectively.
-The notation `Young`, `S1` and `S2` is respective to the Young modulus, the yield stress and the second stress value.
+We want to find the values for the Young's modulus (`Young`), the yield stress (`S1`) and a second stress point (`S2`) that will define the linear plasticity curve. The defined Poisson coefficient is 0.3 and the two strain values for the plasticity curve 0 and 0.25 respectively.
 
 The reference force-displacement response is computed using the following values for these parameters: `Young: 210`, `S1: 325` and `S2: 600`. The reference response is provided in the `examples/abaqus_solver_fitting/reference.txt` file.
 
@@ -40,6 +39,7 @@ objective:
   name: fitting
   solver:
     name: abaqus
+    # path to the Abaqus executable
     abaqus_path: C:\SIMULIA\Commands\abaqus.bat
 
     cases:
@@ -60,7 +60,7 @@ objective:
       prediction: reaction_x
       loss: nmse
 ```
-The input data file for running `Abaqus` is given in `examples/abaqus_solver_fitting/sample.inp`, where the notation `<Young>`, `<S1>` and `<S2>` indicates the parameters to optimise.
+The field `abaqus_path` must indicate the path to the `Abaqus` executable. The input data file for running `Abaqus` is given in `examples/abaqus_solver_fitting/sample.inp`, where the notation `<Young>`, `<S1>` and `<S2>` indicates the parameters to optimise. For each function call, and before running the solver, these template parameters are substituted by their appropriate values in the `Abaqus` input data file.
 
 To run this example, open a terminal inside the `piglot` repository, enter the `examples/abaqus_solver_fitting` directory and run piglot with the given configuration file
 ```bash
@@ -69,7 +69,13 @@ piglot config.yaml
 ```
 You should see an output similar to
 ```
-BoTorch: 100%|███████████████████████████████████████| 20/20 [05:01<00:00, 15.06s/it, Loss: 1.0774e-05] Completed 20 iterations in 5m1s                                                                         Best loss:  1.07744751e-05                                                                              Best parameters                                                                                         - Young:   211.939427                                                                                   -    S1:   323.541637                                                                                   -    S2:   633.984363   
+BoTorch: 100%|███████████████████████████████████████| 20/20 [05:01<00:00, 15.06s/it, Loss: 1.0774e-05]
+Completed 20 iterations in 5m1s
+Best loss:  1.07744751e-05                                                                              
+Best parameters                                                                                         
+- Young:   211.939427                                                                                   
+-    S1:   323.541637                                                                                   
+-    S2:   633.984363   
 ```
 Note that despite the fact that the optimal parameters are not exactly the same as the ones used to compute the reference response, the loss function value is very small, and the fitting is excellent as can be seen in the figures below.
 
@@ -137,6 +143,7 @@ objective:
   composite: True
   solver:
     name: abaqus
+    # path to the Abaqus executable
     abaqus_path: C:\SIMULIA\Commands\abaqus.bat
 
     cases:
@@ -160,7 +167,13 @@ objective:
 
 The output is the following:
 ```
-BoTorch: 100%|███████████████████████████████████████| 20/20 [05:14<00:00, 15.70s/it, Loss: 8.2904e-08]                              Completed 20 iterations in 5m14s                                                                                                     Best loss:  8.29043776e-08                                                                                                           Best parameters                                                                                                                      - Young:   210.036078                                                                                                                -    S1:   324.831338                                                                                                                -    S2:   608.508550 
+BoTorch: 100%|███████████████████████████████████████| 20/20 [05:14<00:00, 15.70s/it, Loss: 8.2904e-08]
+Completed 20 iterations in 5m14s
+Best loss:  8.29043776e-08
+Best parameters
+- Young:   210.036078
+-    S1:   324.831338
+-    S2:   608.508550 
 ```
 
 The animation for all the function evaluations that have been made throughout the optimisation procedure are once again showed using the:

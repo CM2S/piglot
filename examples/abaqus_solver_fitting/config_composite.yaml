@@ -21,6 +21,7 @@ objective:
   composite: True
   solver:
     name: abaqus
+    # path to the Abaqus executable
     abaqus_path: C:\SIMULIA\Commands\abaqus.bat
 
     cases:
