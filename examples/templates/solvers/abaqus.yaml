@@ -2,7 +2,8 @@
 #
 # In the example below, we register one output fields:
 # - 'reaction_x'
-# This is a quantity that is returned from the interface. When using the solver with an objective, use there names to define the prediction fields.
+# This is a quantity that is returned from the interface. When using the solver
+# with an objective, use there names to define the prediction fields.
 #
 solver:
   #
@@ -22,15 +23,20 @@ solver:
   cases:
     # Example for a input file
     'sample.inp':
-      job_name: Job-1 # Job name to extract data (if the input has only one job this field is optional)
-      step_name: Step-1 # Step name to extract data (if the input has only one step this field is optional)
-      instance_name: PART-1-1 # Step name to extract data (if the input has only one step this field is optional)
+      # If the input has only one job this field is optional
+      job_name: Job-1 # Job name to extract data
+      # If the input has only one job this field is optional
+      step_name: Step-1 # Step name to extract data
+      # If the input has only one job this field is optional
+      instance_name: PART-1-1 # Step name to extract data
       fields:
         'reaction_x':
-          name: FieldsOutput # Name of the output field for abaqus fields reader (mandatory)
+          name: FieldsOutput # Name of the output field (mandatory)
           set_name: RF_SET # Name of the set to extract the field (mandatory)
-          field: RF # Name of the Y field to extract (mandatory) (e.g. S, U, RF, E or LE)
-          x_field: U # Name of the X field to extract (mandatory) (e.g. S, U, RF, E or LE)
+          field: RF # Name of the Y field to extract (mandatory)
+          # (e.g. S, U, RF, E or LE)
+          x_field: U # Name of the X field to extract (mandatory)
+          # (e.g. S, U, RF, E or LE)
           direction: x # Direction to extract the field data (mandatory)
   #
   # (Optional) Additional options for the solver

@@ -4,10 +4,6 @@ iters: 20
 optimiser:
   name: botorch
   n_initial: 1
-  n_test: 0
-  beta: 1
-  acquisition: ucb
-
 
 
 parameters:
@@ -40,5 +36,5 @@ objective:
   references:
     'reference.txt':
       prediction: reaction_x
-      loss: nmse
+
 

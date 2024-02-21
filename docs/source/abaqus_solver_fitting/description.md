@@ -2,7 +2,7 @@
 
 A fitting example is included to demonstrate how to use `piglot` with the `Abaqus` solver.
 
-A 2D plane-strain simulation with plasticity of a ductile material (steel), is subjected to a uniaxial constant displacement of 2 mm prescribed in 100 load increments with time-steps of 0.02 seconds.
+A 2D specimen under plane strain is subjected to a uniaxial constant displacement of 2 mm prescribed in 100 load increments with time-steps of 0.02 seconds.
 
 The matrix material phase constitutive behavior is governed by the von Mises isotropic elasto-plastic constitutive model with isotropic hardening. 
 
@@ -10,7 +10,7 @@ A mesh with a single CPE4 element is considered for discretisation (the body dim
 
 ![Mesh and boundary conditions applied.](mesh_and_bc.png)
 
-We want to find the values for the Young's modulus (`Young`), the yield stress (`S1`) and a second stress point (`S2`) that will define the linear plasticity curve. The defined Poisson coefficient is 0.3 and the two strain values for the plasticity curve 0 and 0.25, respectively.
+We want to find the values for the Young's modulus (`Young`), the yield stress (`S1`) and a second stress point (`S2`) that will define the linear hardening curve. The defined Poisson coefficient is 0.3 and the two strain values for the hardening curve 0 and 0.25, respectively.
 
 The reference force-displacement response is computed using the following values for these parameters: `Young: 210`, `S1: 325` and `S2: 600`. The reference response is provided in the `examples/abaqus_solver_fitting/reference.txt` file.
 
@@ -23,10 +23,6 @@ iters: 20
 optimiser:
   name: botorch
   n_initial: 1
-  n_test: 0
-  beta: 1
-  acquisition: ucb
-
 
 
 parameters:
@@ -128,10 +124,6 @@ iters: 20
 optimiser:
   name: botorch
   n_initial: 1
-  n_test: 0
-  beta: 1
-  acquisition: ucb
-
 
 
 parameters:

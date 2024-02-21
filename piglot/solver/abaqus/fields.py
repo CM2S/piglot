@@ -63,7 +63,7 @@ class AbaqusInputData(InputData):
         Returns
         -------
         str
-            The field name.
+            The field name and field list.
 
         Raises
         ------

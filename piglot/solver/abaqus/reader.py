@@ -32,7 +32,6 @@ def input_variables():
     instance_name_list = [a for a in args if a.startswith("instance_name=")]
 
     # Checks if the input_file, job_name, step_name and instance_name are not empty
-    # (Pode ser util no futuro caso o utilizador nao introduza algum dos argumentos)
     input_file = input_file_list[0].replace('input_file=', '') \
         if input_file_list else None
     job_name = job_name_list[0].replace('job_name=', '') \

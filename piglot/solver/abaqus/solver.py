@@ -230,7 +230,7 @@ class AbaqusSolver(Solver):  # inherits from the Solver class
                 field_name: abaqus_fields_reader(field_config)
                 for field_name, field_config in case_config['fields'].items()
             }
-            # Se nao for indicado o job_name, step_name e instance_name, o valor por defeito e None
+            # If job_name, step_name and instance_name are not indicated, the default value is None
             job_name = case_config.get('job_name', None)
             step_name = case_config.get('step_name', None)
             instance_name = case_config.get('instance_name', None)
