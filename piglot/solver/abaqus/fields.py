@@ -49,6 +49,31 @@ class AbaqusInputData(InputData):
 
     @staticmethod
     def __sanitize_field(field_name: str, field_list: List[str], keyword: str) -> str:
+        """Sanitize the field name (jobs, instances and steps) in Abaqus input file.
+
+        Parameters
+        ----------
+        field_name : str
+            Field name to sanitize.
+        field_list : List[str]
+            A list of fields present in the file.
+        keyword : str
+            Keyrword to use in the error message. (job, instance, step)
+
+        Returns
+        -------
+        str
+            The field name.
+
+        Raises
+        ------
+        ValueError
+            If the field list is empty.
+        ValueError
+            If the field name is not in the field list.
+        ValueError
+            If the field name is not specified and there are multiple fields in the list.
+        """
         if len(field_list) == 0:
             raise ValueError(f"No {keyword}s found in the file.")
         if field_name is not None:
