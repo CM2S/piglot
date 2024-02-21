@@ -1,6 +1,4 @@
 """Module to extract the nodal data from the output database (.odb) file"""
-
-# Import the necessary modules
 import re
 import os
 import sys
