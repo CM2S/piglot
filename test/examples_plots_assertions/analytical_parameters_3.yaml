@@ -1,0 +1,17 @@
+
+
+iters: 1
+
+
+optimiser: random
+
+
+parameters:
+  a: [200, 100, 300]
+  b: [0.25, 0.1, 0.4]
+  c: [0.025, 0.01, 0.04]
+
+
+objective:
+  name: analytical
+  expression: ((a/b)-500)**2 + c**2

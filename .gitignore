@@ -141,3 +141,5 @@ reference/
 
 # Example results
 examples/*/config/
+test/example_init_shot/*/
+test/example_init_shot/data.out
