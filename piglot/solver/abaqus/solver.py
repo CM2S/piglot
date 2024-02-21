@@ -58,7 +58,7 @@ class AbaqusSolver(Solver):  # inherits from the Solver class
 
         Returns
         -------
-        Dict[str, Any] 
+        Dict[str, Any]
             Dictionary with the post processing variables.
         """
         input_file, ext = os.path.splitext(os.path.basename(input_data.input_file))
@@ -204,7 +204,7 @@ class AbaqusSolver(Solver):  # inherits from the Solver class
         parameters : ParameterSet
             Parameter set for this problem.
         output_dir : str
-            Path to the output directory. 
+            Path to the output directory.
 
         Returns
         -------
@@ -212,18 +212,18 @@ class AbaqusSolver(Solver):  # inherits from the Solver class
             Solver to use for this problem.
         """
         # Get the Abaqus binary path
-        if not 'abaqus_path' in config:
+        if 'abaqus_path' not in config:
             raise ValueError("Missing 'abaqus_path' in solver configuration.")
         abaqus_bin = config['abaqus_path']
         # Read the parallelism and temporary directory (if present)
         parallel = int(config.get('parallel', 1))
         tmp_dir = os.path.join(output_dir, config.get('tmp_dir', 'tmp'))
         # Read the cases
-        if not 'cases' in config:
+        if 'cases' not in config:
             raise ValueError("Missing 'cases' in solver configuration.")
         cases = []
         for case_name, case_config in config['cases'].items():
-            if not 'fields' in case_config:
+            if 'fields' not in case_config:
                 raise ValueError(
                     f"Missing 'fields' in case '{case_name}' configuration.")
             fields = {

@@ -1,6 +1,6 @@
 """Module for output fields from Abaqus solver."""
 from __future__ import annotations
-from typing import Dict, Any
+from typing import Dict, Any, List
 import os
 import re
 import glob
@@ -9,6 +9,7 @@ import pandas as pd
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import InputData, OutputField, OutputResult
 from piglot.utils.solver_utils import write_parameters, has_parameter, get_case_name
+
 
 class AbaqusInputData(InputData):
     """Container for Abaqus input data."""
@@ -24,8 +25,7 @@ class AbaqusInputData(InputData):
             self,
             values: np.ndarray,
             parameters: ParameterSet,
-            tmp_dir: str=None,
-        ) -> AbaqusInputData:
+            tmp_dir: str = None,) -> AbaqusInputData:
         """Prepare the input data for the simulation with a given set of parameters.
 
         Parameters
@@ -47,6 +47,20 @@ class AbaqusInputData(InputData):
         write_parameters(parameters.to_dict(values), self.input_file, dest_file)
         return AbaqusInputData(dest_file, self.job_name, self.step_name, self.instance_name)
 
+    @staticmethod
+    def __sanitize_field(field_name: str, field_list: List[str], keyword: str) -> str:
+        if len(field_list) == 0:
+            raise ValueError(f"No {keyword}s found in the file.")
+        if field_name is not None:
+            if field_name not in field_list:
+                raise ValueError(f"The {keyword} name '{field_name}' not found in the file.")
+        if field_name is None:
+            if len(field_list) > 1:
+                raise ValueError(f"Multiple {keyword}s found in the file. \
+                                 Please specify the {keyword} name.")
+            return field_list[0]
+        return field_name
+
     def check(self, parameters: ParameterSet) -> None:
         """Check if the input data is valid according to the given parameters.
 
@@ -65,41 +79,14 @@ class AbaqusInputData(InputData):
 
             job_list = re.findall(r'\*\* Job name: ([^M]+)', data)
             job_list = [job.strip() for job in job_list]  # Remove trailing whitespace
-            if len(job_list) == 0:
-                raise ValueError("No steps found in the file.")
-            if self.job_name is not None:
-                if self.job_name not in job_list:
-                    raise ValueError(f"Job name '{self.job_name}' not found in the file.")
-            if self.job_name is None:
-                if len(job_list) > 1:
-                    raise ValueError("Multiple jobs found in the file. \
-                                     Please specify the job name.")
-                self.job_name = job_list[0]
+            self.job_name = self.__sanitize_field(self.job_name, job_list, "job")
 
             instance_list = re.findall(r'\*Instance, name=([^,]+)', data)
-            if len(instance_list) == 0:
-                raise ValueError("No instances found in the file.")
-            if self.instance_name is not None:
-                if self.instance_name not in instance_list:
-                    raise ValueError(f"Instance name '{self.instance_name}' not found in the file.")
-            if self.instance_name is None:
-                if len(instance_list) > 1:
-                    raise ValueError("Multiple instances found in the file. \
-                                     Please specify the instance name.")
-                self.instance_name = instance_list[0]
+            self.instance_name = self.__sanitize_field(self.instance_name, instance_list,
+                                                       "instance")
 
             step_list = re.findall(r'\*Step, name=([^,]+)', data)
-            if len(step_list) == 0:
-                raise ValueError("No steps found in the file.")
-            if self.step_name is not None:
-                if self.step_name not in step_list:
-                    raise ValueError(f"Step name '{self.step_name}' not found in the file.")
-            if self.step_name is None:
-                if len(step_list) > 1:
-                    raise ValueError("Multiple steps found in the file. \
-                                     Please specify the step name.")
-                self.step_name = step_list[0]
-
+            self.step_name = self.__sanitize_field(self.step_name, step_list, "step")
 
     def name(self) -> str:
         """Return the name of the input data.
@@ -183,7 +170,7 @@ class FieldsOutput(OutputField):
         array
             2D array with load factor in the first column and reactions in the second.
         """
-        input_file = get_case_name(input_data.input_file) # sample.inp
+        input_file = get_case_name(input_data.input_file)  # sample.inp
         output_dir = os.path.dirname(input_data.input_file)
         reduction = {
             'RF': np.sum,
@@ -239,7 +226,7 @@ class FieldsOutput(OutputField):
             Output field to use for this problem.
         """
         # Read the field
-        if not 'field' in config:
+        if 'field' not in config:
             raise ValueError("Missing 'field' in reaction configuration.")
         field = config['field']
         x_field = config['x_field']
@@ -249,6 +236,7 @@ class FieldsOutput(OutputField):
         direction = config['direction']
 
         return FieldsOutput(field, x_field, set_name, direction)
+
 
 def abaqus_fields_reader(config: Dict[str, Any]) -> OutputField:
     """Read the output fields for the Abaqus solver.
@@ -264,13 +252,13 @@ def abaqus_fields_reader(config: Dict[str, Any]) -> OutputField:
         Output field to use for this problem.
     """
     # Extract name of output field
-    if not 'name' in config:
+    if 'name' not in config:
         raise ValueError("Missing 'name' in output field configuration.")
     field_name = config['name']
     # Delegate to the appropriate reader
     readers = {
         'FieldsOutput': FieldsOutput,
     }
-    if not field_name in readers:
+    if field_name not in readers:
         raise ValueError(f"Unknown output field name '{field_name}'.")
     return readers[field_name].read(config)

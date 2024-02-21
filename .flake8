@@ -11,3 +11,4 @@ max-complexity = 15
 exclude =
 	piglot/optimisers/ga.py
 	piglot/optimisers/pso.py
+	piglot\solver\abaqus\reader.py

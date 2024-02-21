@@ -14,6 +14,7 @@ import codecs
 import numpy as np
 from odbAccess import *
 
+
 def input_variables():
     """Reads the input file.
 
@@ -48,13 +49,14 @@ def input_variables():
 
     return variables
 
+
 def file_name_func(set_name, variable_name, inp_name):
     """Defines the txt file name of the extracted data.
 
     Parameters
     ----------
     set_name : str
-        name of the set 
+        name of the set
     variable_name : str
         name of the field variable
     inp_name : str
@@ -67,6 +69,7 @@ def file_name_func(set_name, variable_name, inp_name):
     """
     file_name = "{}_{}_{}.txt".format(os.path.splitext(inp_name)[0], set_name, variable_name)
     return file_name
+
 
 def field_location(i, output_variable, location):
     """It gets the node data of the specified node set.
@@ -88,11 +91,12 @@ def field_location(i, output_variable, location):
 
     if i in (0, 1):
         location_output_variable = output_variable.getSubset(region=location,
-                                                                position=ELEMENT_NODAL)
+                                                             position=ELEMENT_NODAL)
     else:
         location_output_variable = output_variable.getSubset(region=location)
 
     return location_output_variable
+
 
 def main():
     """Main function of the reader.py
@@ -158,9 +162,9 @@ def main():
 
                 # Write the column headers dynamically based on the number of nodes and
                 # output variable components
-                header = "Frame " + " ".join(header_variable % (label, v.nodeLabel)
-                                            for v in location_output_variable.values for label in
-                                            component_labels) + "\n"
+                header = "Frame " + " ".join(header_variable % (label, v.nodeLabel) for v in
+                                             location_output_variable.values for label in
+                                             component_labels) + "\n"
                 output_file.write(header)
 
                 for frame in step.frames:
@@ -177,6 +181,7 @@ def main():
                     output_file.write("\n")
 
     odb.close()
+
 
 # Run the main function
 if __name__ == "__main__":
