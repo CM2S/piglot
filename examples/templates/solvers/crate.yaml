@@ -1,0 +1,66 @@
+# Specification for the CRATE solver
+
+# At this moment, the CRATE solver registers one output fields `hresFile`,
+# corresponding to micro homogenised quantities.
+# These are the quantities that are returned from the interface. When using the
+# solver with an objective, use there names to define the prediction fields.
+
+solver:
+  #
+  # Mandatory fields
+  # ---------------------------------------------------------------------------
+  #
+  # Solver name
+  name: crate
+  #
+  # Path to the CRATE executable
+  links: CRATE/src/cratepy/main.py
+  #
+  # List of cases to run
+  # The name of each case is the path to the input file that will be used
+  # for the analysis. You can have multiple cases, each with its own input
+  # file and fields.
+  cases:
+    # Example for a input file
+    'input_file.dat':
+      fields:
+        # Register a 'micro_homogenised_quantity' output field
+        'micro_homogenised_quantity':
+          name: hresFile
+          y_field: vm_stress # Field/column to extract data (mandatory)
+          x_field: vm_strain # Optional, field/column to extract data,
+                             # by default LoadFactor
+  #
+  # (Optional) Additional options for the solver
+  # Given values are the default ones
+  # ---------------------------------------------------------------------------
+  #
+  # Number of parallel analyses to run
+  # Only available when using multiple cases
+  parallel: 1
+  #
+  # Path to store temporary analyses
+  # By default, use a 'tmp' directory inside the output directory
+  tmp_dir: output_dir/tmp
+  #
+  # Python interpreter to use
+  # By default 'python3'
+  python: python3
+  #
+  # Path to the microstructure directory
+  # By default, uses the 'microstructure' path inside the 'CRATE' input file
+  microstructure_dir: .
+  #
+  # Generator class for advanced input file generation
+  # If not passed, use the default generator (which only does parameter
+  # substitution in the input file)
+  generator:
+    #
+    # Path to the generator script
+    script: design_script.py
+    #
+    # Generator class to use
+    # This class must be derived from the InputData class of the solver
+    # interface and should generate the input file for the solver
+    # during the prepare() method.
+    class: GeneratorClass
