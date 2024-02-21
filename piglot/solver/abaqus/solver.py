@@ -11,7 +11,7 @@ from piglot.solver.solver import Solver, Case, CaseResult, OutputField, OutputRe
 from piglot.solver.abaqus.fields import abaqus_fields_reader, AbaqusInputData
 
 
-class AbaqusSolver(Solver):  # inherits from the Solver class
+class AbaqusSolver(Solver):
     """Abaqus solver."""
 
     def __init__(
@@ -44,9 +44,6 @@ class AbaqusSolver(Solver):  # inherits from the Solver class
         self.abaqus_bin = abaqus_bin
         self.parallel = parallel
         self.tmp_dir = tmp_dir
-        # The constructor first calls the constructor of the superclass Solver with the cases, \
-        # parameters, and output_dir arguments. Then, it sets the abaqus_bin, parallel, and \
-        # tmp_dir attributes of the AbaqusSolver instance to the corresponding arguments.
 
     def _post_proc_variables(self, input_data: AbaqusInputData) -> Dict[str, Any]:
         """Generate the post-processing variables.
@@ -105,7 +102,7 @@ class AbaqusSolver(Solver):  # inherits from the Solver class
             [self.abaqus_bin, f"job={input_data.job_name}", f"input={os.path.basename(input_file)}",
                 'interactive', 'ask_delete=OFF'],
             cwd=tmp_dir,
-            shell=True,  # deixar o sheel=True?
+            shell=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False
@@ -121,7 +118,7 @@ class AbaqusSolver(Solver):  # inherits from the Solver class
              f"step_name={variables['step_name']}", "--",
              f"instance_name={variables['instance_name']}"],
             cwd=tmp_dir,
-            shell=True,  # deixar o sheel=True?
+            shell=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False

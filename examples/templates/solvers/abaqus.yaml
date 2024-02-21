@@ -31,13 +31,11 @@ solver:
       instance_name: PART-1-1 # Step name to extract data
       fields:
         'reaction_x':
-          name: FieldsOutput # Name of the output field (mandatory)
-          set_name: RF_SET # Name of the set to extract the field (mandatory)
-          field: RF # Name of the Y field to extract (mandatory)
-          # (e.g. S, U, RF, E or LE)
-          x_field: U # Name of the X field to extract (mandatory)
-          # (e.g. S, U, RF, E or LE)
-          direction: x # Direction to extract the field data (mandatory)
+          name: FieldsOutput # Name of the output field for abaqus field reader
+          set_name: RF_SET # Name of the set to extract the field 
+          field: RF # Name of the Y field to extract (e.g. S, U, RF, E or LE)
+          x_field: U # Name of the X field to extract (e.g. S, U, RF, E or LE)
+          direction: x # Direction to extract the field data
   #
   # (Optional) Additional options for the solver
   # Given values are the default ones

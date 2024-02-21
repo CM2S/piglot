@@ -1,10 +1,4 @@
-####################################################################################################
-'''
-This script extracts the nodal data from the output database (.odb) file.
-
-Tiago Pires, October 2023, Initial coding
-'''
-####################################################################################################
+"""Module to extract the nodal data from the output database (.odb) file"""
 
 # Import the necessary modules
 import re
@@ -87,13 +81,11 @@ def field_location(i, output_variable, location):
     location_output_variable
         Location of the output variable.
     """
-
     if i in (0, 1):
         location_output_variable = output_variable.getSubset(region=location,
                                                              position=ELEMENT_NODAL)
     else:
         location_output_variable = output_variable.getSubset(region=location)
-
     return location_output_variable
 
 
@@ -184,5 +176,4 @@ def main():
 
 # Run the main function
 if __name__ == "__main__":
-
     main()

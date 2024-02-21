@@ -25,7 +25,8 @@ class AbaqusInputData(InputData):
             self,
             values: np.ndarray,
             parameters: ParameterSet,
-            tmp_dir: str = None,) -> AbaqusInputData:
+            tmp_dir: str = None,
+    ) -> None:
         """Prepare the input data for the simulation with a given set of parameters.
 
         Parameters
@@ -94,9 +95,12 @@ class AbaqusInputData(InputData):
         parameters : ParameterSet
             Parameter set for this problem.
         """
-        for parameter in parameters:
-            if not has_parameter(self.input_file, f'<{parameter.name}>'):
-                raise RuntimeError(f"Parameter '{parameter.name}' not found in input file.")
+        # Generate a dummy set of parameters (to ensure proper handling of output parameters)
+        values = np.array([parameter.inital_value for parameter in parameters])
+        param_dict = parameters.to_dict(values, input_normalised=False)
+        for name in param_dict:
+            if not has_parameter(self.input_file, f'<{name}>'):
+                raise RuntimeError(f"Parameter '{name}' not found in input file.")
 
         input_file, ext = os.path.splitext(os.path.basename(self.input_file))
         with open(input_file + ext, 'r', encoding='utf-8') as file:
@@ -195,7 +199,7 @@ class FieldsOutput(OutputField):
         array
             2D array with load factor in the first column and reactions in the second.
         """
-        input_file = get_case_name(input_data.input_file)  # sample.inp
+        input_file = get_case_name(input_data.input_file)
         output_dir = os.path.dirname(input_data.input_file)
         reduction = {
             'RF': np.sum,
@@ -254,10 +258,17 @@ class FieldsOutput(OutputField):
         if 'field' not in config:
             raise ValueError("Missing 'field' in reaction configuration.")
         field = config['field']
+        # Read the x_field
+        if 'x_field' not in config:
+            raise ValueError("Missing 'x_field' in reaction configuration.")
         x_field = config['x_field']
         # Read the set_name
+        if 'set_name' not in config:
+            raise ValueError("Missing 'set_name' in reaction configuration.")
         set_name = config['set_name']
-        # Read thhe direction
+        # Read the direction
+        if 'direction' not in config:
+            raise ValueError("Missing 'direction' in reaction configuration.")
         direction = config['direction']
 
         return FieldsOutput(field, x_field, set_name, direction)
