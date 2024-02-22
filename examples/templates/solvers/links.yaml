@@ -5,7 +5,7 @@
 # - 'macro_stress_strain'
 # - 'micro_homogenised_stress'
 # These are the quantities that are returned from the interface. When using the
-# solver with an objective, use there names to define the prediction fields.
+# solver with an objective, use their names to define the prediction fields.
 
 solver:
   #
@@ -39,7 +39,7 @@ solver:
           field: sigma_xx # Field to extract data (mandatory)
           x_field: F_xx # Optional, by default LoadFactor
           i_elem: 12 # Element number to extract data (mandatory for macro)
-          i_gauss: 2 # Gauss pont number to extract data (mandatory for macro)
+          i_gauss: 2 # Gauss point number to extract data (mandatory for macro)
     # Example for a macroscopic input file
     'micro_input_file.rve':
       fields:
