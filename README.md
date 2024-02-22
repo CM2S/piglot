@@ -26,7 +26,10 @@ The primary emphasis is on derivative-free optimisation, ensuring compatibility 
 * **Optimisation algorithms:** Off the shelf, there are several optimisers included in the package. Among them, we highlight our fully-fledged Bayesian optimisation (based on [BoTorch](https://botorch.org/)) that supports optimising stochastic and composite objectives and is highly customisable. Additional methods can also be easily implemented within `piglot`.
 * **Visualisation tools:** You can use the built-in tool `piglot-plot` to visualise the results of the optimisation. There are native plotting utilities for the optimised responses, the parameter history, objective history and, for supported solvers, live plotting of the currently running case. Also, an animation of the optimisation process can be exported.
 
-Feel free to explore, contribute, and optimize with `piglot`!
+Feel free to explore, [contribute](CONTRIBUTING.md), and optimise with `piglot`!
+We recommend starting by reading the [Getting started](#getting-started) section, and then checking the latest [documentation](https://piglot.readthedocs.io) for additional details.
+You can use our [discussions](https://github.com/CM2S/piglot/discussions) page for help and our [issue tracker](https://github.com/CM2S/piglot/issues) for reporting problems and suggestions.
+If you use this tool in your work, we encourage to open a PR to add it to our [list of papers](docs/source/papers.md).
 
 
 # Getting started
@@ -39,7 +42,9 @@ There are two modes of operation available: running using the given `piglot` and
 We use YAML configuration files to specify the optimisation problem to solve.
 This is the simplest form of using `piglot` and is the recommended approach unless you have a strong motive to use Python scripts (described [here](#using-python-scripts)).
 A simple analytical curve fitting problem is included to showcase how to use configuration files.
-In this case, we fit a quadratic expression of the type $f(x) = a x^2$.
+
+To keep things simple, in this case, we fit a quadratic expression of the type $f(x) = a x^2$.
+Note that this curve is generally obtained from a physics-based solver when solving an inverse problem.
 As a reference, a numerically generated reference from the expression $f(x) = 2 x^2$ is used (provided in the `examples/sample_curve_fitting/reference_curve.txt` file).
 We want to find the value for $a$ that better fits our reference (it should be 2).
 The configuration file for this example is:

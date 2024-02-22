@@ -1,9 +1,9 @@
 # Specification for the CRATE solver
 
-# At this moment, the CRATE solver registers one output fields `hresFile`,
+# At this moment, the CRATE solver registers one output field `hresFile`,
 # corresponding to micro homogenised quantities.
 # These are the quantities that are returned from the interface. When using the
-# solver with an objective, use there names to define the prediction fields.
+# solver with an objective, use their names to define the prediction fields.
 
 solver:
   #
@@ -21,7 +21,7 @@ solver:
   # for the analysis. You can have multiple cases, each with its own input
   # file and fields.
   cases:
-    # Example for a input file
+    # Example for an input file
     'input_file.dat':
       fields:
         # Register a 'micro_homogenised_quantity' output field
