@@ -45,7 +45,12 @@ jobs:
           flake8 piglot test
       - name: Test with pytest
         run: |
-          pytest test/
+          pytest --cov test/
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: CM2S/piglot
       - name: Install documentation dependencies
         run: |
           python -m pip install .[docs]
@@ -53,8 +58,3 @@ jobs:
         run: |
           cd docs
           make html
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4.0.1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: CM2S/piglot
