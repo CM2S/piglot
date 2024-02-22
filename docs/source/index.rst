@@ -28,6 +28,10 @@ piglot
    :target: https://www.codefactor.io/repository/github/cm2s/piglot
    :alt: CodeFactor Grade
 
+.. image:: https://codecov.io/github/CM2S/piglot/graph/badge.svg?token=218X85PV2B 
+   :target: https://codecov.io/github/CM2S/piglot
+   :alt: CodeCov
+
 .. image:: https://img.shields.io/readthedocs/piglot
    :target: https://piglot.readthedocs.io
    :alt: ReadTheDocs
