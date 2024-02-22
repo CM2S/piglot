@@ -10,6 +10,7 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/piglot)](https://pypi.org/project/piglot/)
 [![GitHub License](https://img.shields.io/github/license/CM2S/piglot)](https://github.com/CM2S/piglot/blob/main/LICENSE)
 [![CodeFactor Grade](https://img.shields.io/codefactor/grade/github/CM2S/piglot)](https://www.codefactor.io/repository/github/cm2s/piglot)
+[![ReadTheDocs](https://img.shields.io/readthedocs/piglot)](https://piglot.readthedocs.io)
 
 A package for the optimisation of numerical responses.
 
