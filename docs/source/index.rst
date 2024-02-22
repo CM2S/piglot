@@ -46,8 +46,10 @@ We highlight:
 - **Optimisation algorithms:** Off the shelf, there are several optimisers included in the package. Among them, we highlight our fully-fledged Bayesian optimisation (based on `BoTorch <https://botorch.org/>`_) that supports optimising stochastic and composite objectives and is highly customisable. Additional methods can also be easily implemented within :code:`piglot`.
 - **Visualisation tools:** You can use the builtin tool :code:`piglot-plot` to visualise the results of the optimisation. There are native plotting utilities for the optimised responses, the parameter history, objective history and, for supported solvers, live plotting of the currently running case. Also, an animation of the optimisation process can be exported.
 
-Feel free to explore, contribute, and optimize with :code:`piglot`!
-
+Feel free to explore, `contribute <CONTRIBUTING.md>`_, and optimise with :code:`piglot`!
+We recommend starting by reading the `Getting started <https://github.com/CM2S/piglot?tab=readme-ov-file#getting-started>`_ section, and then checking the latest `documentation <https://piglot.readthedocs.io>`_ for additional details.
+You can use our `discussions <https://github.com/CM2S/piglot/discussions>`_ page for help and our `issue tracker <https://github.com/CM2S/piglot/issues>`_ for reporting problems and suggestions.
+If you use this tool in your work, we encourage to open a PR to add it to our list of papers.
 
 Installation
 ------------
@@ -118,7 +120,8 @@ If you wish to install all optimisers at once, you can run :code:`pip install pi
 
 .. toctree::
    :maxdepth: 1
-   :caption: API
+   :caption: Reference
    :hidden:
 
-   Reference <_autosummary/piglot>
+   API <_autosummary/piglot>
+   Papers <papers.md>
