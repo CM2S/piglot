@@ -26,7 +26,7 @@ affiliations:
    index: 1
  - name: Institute of Science and Innovation in Mechanical and Industrial Engineering, Porto, Portugal
    index: 2
-date: 15 February 2024
+date: 22 February 2024
 bibliography: references.bib
 
 ---
