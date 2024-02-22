@@ -1,0 +1,45 @@
+
+iters: 50
+
+optimiser:
+  name: botorch
+  n_initial: 1
+  n_test: 0
+  beta: 1
+  acquisition: ucb
+
+
+
+parameters:
+  Young: [300, 100, 300]
+
+
+objective:
+  name: fitting
+  solver:
+    name: links
+    links: LINKS
+    cases:
+      'prediction_1d.dat':
+        fields:
+          'reaction_x':
+            name: Reaction
+            field: x
+          'reaction_y':
+            name: Reaction
+            field: y
+      'prediction_1d_1.dat':
+        fields:
+          'reaction_x':
+            name: Reaction
+            field: x
+          'reaction_y_1':
+            name: Reaction
+            field: y
+  references:
+    'ref_x.txt':
+      prediction: ['reaction_x', 'reaction_x_1']
+      filter_tol: 1e-6
+    'ref_y.txt':
+      prediction: ['reaction_y', 'reaction_y_1']
+      filter_tol: 1e-6

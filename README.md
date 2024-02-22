@@ -7,9 +7,11 @@
 </div>
 
 [![Unit and integration testing](https://github.com/CM2S/piglot/actions/workflows/test.yaml/badge.svg)](https://github.com/CM2S/piglot/actions/workflows/test.yaml)
-![PyPI - Version](https://img.shields.io/pypi/v/piglot)
-![GitHub License](https://img.shields.io/github/license/CM2S/piglot)
-![CodeFactor Grade](https://img.shields.io/codefactor/grade/github/CM2S/piglot)
+[![PyPI - Version](https://img.shields.io/pypi/v/piglot)](https://pypi.org/project/piglot/)
+[![GitHub License](https://img.shields.io/github/license/CM2S/piglot)](https://github.com/CM2S/piglot/blob/main/LICENSE)
+[![CodeFactor Grade](https://img.shields.io/codefactor/grade/github/CM2S/piglot)](https://www.codefactor.io/repository/github/cm2s/piglot)
+[![codecov](https://codecov.io/github/CM2S/piglot/graph/badge.svg?token=218X85PV2B)](https://codecov.io/github/CM2S/piglot)
+[![ReadTheDocs](https://img.shields.io/readthedocs/piglot)](https://piglot.readthedocs.io)
 
 A package for the optimisation of numerical responses.
 
@@ -17,14 +19,17 @@ A package for the optimisation of numerical responses.
 # Introduction
 
 Welcome to `piglot`, a Python tool taylored for the automated optimisation of responses from numerical solvers.
-We aim at providing a simple and user-friendly interface which is also easily extendable, allowing intergration with other solvers within the community.
+We aim to provide a simple and user-friendly interface that is also easily extendable, allowing integration with other solvers within the community.
 Whether you're working on structural analysis, material modelling, fluid dynamics, control systems or astrophysics (to name a few) using, for instance, finite element analysis, spectral methods or Monte Carlo methods, `piglot` provides a versatile solution for solving inverse problems.
 The primary emphasis is on derivative-free optimisation, ensuring compatibility with black-box solvers in scenarios where gradient information is not available, and cases where the function evaluations may be noisy. We highlight:
 * **Integration with solvers:** We provide an extensible interface for coupling with physics solvers. As long as your solver can return a time-response for the fields you are interested, you can optimise it with `piglot`.
 * **Optimisation algorithms:** Off the shelf, there are several optimisers included in the package. Among them, we highlight our fully-fledged Bayesian optimisation (based on [BoTorch](https://botorch.org/)) that supports optimising stochastic and composite objectives and is highly customisable. Additional methods can also be easily implemented within `piglot`.
-* **Visualisation tools:** You can use the builtin tool `piglot-plot` to visualise the results of the optimisation. There are native plotting utilities for the optimised responses, the parameter history, objective history and, for supported solvers, live plotting of the currently running case. Also, an animation of the optimisation process can be exported.
+* **Visualisation tools:** You can use the built-in tool `piglot-plot` to visualise the results of the optimisation. There are native plotting utilities for the optimised responses, the parameter history, objective history and, for supported solvers, live plotting of the currently running case. Also, an animation of the optimisation process can be exported.
 
-Feel free to explore, contribute, and optimize with `piglot`!
+Feel free to explore, [contribute](CONTRIBUTING.md), and optimise with `piglot`!
+We recommend starting by reading the [Getting started](#getting-started) section, and then checking the latest [documentation](https://piglot.readthedocs.io) for additional details.
+You can use our [discussions](https://github.com/CM2S/piglot/discussions) page for help and our [issue tracker](https://github.com/CM2S/piglot/issues) for reporting problems and suggestions.
+If you use this tool in your work, we encourage to open a PR to add it to our [list of papers](docs/source/papers.md).
 
 
 # Getting started
@@ -37,7 +42,9 @@ There are two modes of operation available: running using the given `piglot` and
 We use YAML configuration files to specify the optimisation problem to solve.
 This is the simplest form of using `piglot` and is the recommended approach unless you have a strong motive to use Python scripts (described [here](#using-python-scripts)).
 A simple analytical curve fitting problem is included to showcase how to use configuration files.
-In this case, we fit a quadratic expression of the type $f(x) = a x^2$.
+
+To keep things simple, in this case, we fit a quadratic expression of the type $f(x) = a x^2$.
+Note that this curve is generally obtained from a physics-based solver when solving an inverse problem.
 As a reference, a numerically generated reference from the expression $f(x) = 2 x^2$ is used (provided in the `examples/sample_curve_fitting/reference_curve.txt` file).
 We want to find the value for $a$ that better fits our reference (it should be 2).
 The configuration file for this example is:
@@ -84,7 +91,7 @@ Best parameters
 - a:     1.999508
 ```
 As you can see, piglot correctly identifies the `a` parameter close to the expected value of 2, and the error of the fitting is in the order of $10^{-8}$.
-In addition to these outputs, `piglot` creates an output directory, with the same name of the configuration file (minus the extension), where it stores the optimisation data.
+In addition to these outputs, `piglot` creates an output directory, with the same name as the configuration file (minus the extension), where it stores the optimisation data.
 
 To visualise the optimisation results, use the `piglot-plot` utility.
 In the same directory, run
@@ -103,7 +110,7 @@ Hash: 2313718f75bc0445aa71df7d6d4e50ba82ad593d65f3762efdcbed01af338e30
 Objective:  8.85050592e-08
 ```
 The script will also plot the best observed response, and its comparison with the reference response: 
-![Best case plot](docs/source/simple_example/best.svg)
+![Best case plot](https://raw.githubusercontent.com/CM2S/piglot/main/docs/source/examples/sample_curve_fitting/best.svg)
 
 Now, try running (this may take some time)
 ```bash
@@ -111,13 +118,13 @@ piglot-plot animation config.yaml
 ```
 This generates an animation for all the function evaluations that have been made throughout the optimisation procedure.
 You can find the `.gif` file(s) inside the output directory, which should give something like:
-![Best case plot](docs/source/simple_example/animation.gif)
+![Animation](https://raw.githubusercontent.com/CM2S/piglot/main/docs/source/examples/sample_curve_fitting/animation.gif)
 
 
 ## Using Python scripts
 
 Another way of using `piglot` is via its package and Python modules.
-This approach may offer increase flexibility in the setup of the optimisation problem, at the cost of increased complexity and verbosity.
+This approach may offer increased flexibility in the setup of the optimisation problem, at the cost of increased complexity and verbosity.
 A sample script equivalent to the configuration file for the problem described in [the previous section](#using-configuration-files) is provided in `examples/sample_curve_fitting/config.py`, given by:
 ```python
 import os
@@ -185,7 +192,7 @@ Currently, we require Python 3.9 onwards.
 
 ### Option 1: Install binaries
 
-This option is recomended for end-users that only need to interact with the provided `piglot` and `piglot-plot` scripts.
+This option is recommended for end-users that only need to interact with the provided `piglot` and `piglot-plot` scripts.
 We use [`pipx`](https://github.com/pypa/pipx) to install the package in an isolated environment with the required dependencies (we recommend reading the pipx documentation to check the advantages of using this approach).
   1. Install `pipx` in your system using the instructions [here](https://github.com/pypa/pipx#install-pipx);
   2. In your favourite terminal, run: `pipx install piglot`;
@@ -195,7 +202,25 @@ We use [`pipx`](https://github.com/pypa/pipx) to install the package in an isola
 ### Option 2: Install package
 
 We recommend this option for users aiming to use the `piglot` package directly.
-Note that this option also provides the `piglot` and `piglot-plot` scripts, but requires manually handling the installation environment.
+Note that this option also provides the `piglot` and `piglot-plot` scripts, but requires manual handling of the installation environment.
   1. In your favourite terminal, run: `pip install piglot`;
   2. Confirm the package is correctly installed by calling the `piglot` and `piglot-plot` executables.
 
+### Installing additional optimisers
+
+We also support some optional external optimisers, which are not automatically installed along with `piglot` to reduce the number of dependencies and the installation cost.
+You can either install them along with `piglot`, or manually using your package manager.
+Their detection is done at runtime and, if not installed, an error will be raised.
+Currently, the following optional optimisers are supported:
+- `lipo` - LIPO optimiser
+- `geneticalgorithm` - Genetic algorithm
+- `pyswarms` - Particle swarm optimiser
+
+These can be installed directly from PyPI (with the package names above).
+If you wish to install `piglot` with one of these optimisers (which may be required when using a `pipx` install), you can run the following commands:
+- `pip install piglot[lipo]` for the LIPO optimiser
+- `pip install piglot[genetic]` for the Genetic algorithm
+- `pip install piglot[pso]` for the Particle swarm optimiser optimiser
+
+To simultaneously install more than one optimiser, for instance, the LIPO and the Particle swarm optimisers, run `pip install piglot[lipo,pso]`.
+If you wish to install all optimisers at once, you can run `pip install piglot[full]`.

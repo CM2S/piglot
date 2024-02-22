@@ -1,6 +1,6 @@
 """Module for curve fitting objectives"""
 from __future__ import annotations
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List, Union, Type
 from abc import ABC, abstractmethod
 import numpy as np
 import matplotlib.pyplot as plt
@@ -70,9 +70,9 @@ class IntegralQuantity(Quantity):
         return np.trapz(result.get_data(), result.get_time())
 
 
-AVAILABLE_QUANTITIES = {
-    'max': MaxQuantity(),
-    'integral': IntegralQuantity(),
+AVAILABLE_QUANTITIES: Dict[str, Type[Quantity]] = {
+    'max': MaxQuantity,
+    'integral': IntegralQuantity,
 }
 
 
@@ -150,13 +150,14 @@ class DesignTarget:
                 raise ValueError("Missing script in quantity specification.")
             if 'class' not in quantity:
                 raise ValueError("Missing class in quantity specification.")
-            quantity_class: Quantity = load_module_from_file(quantity['script'], quantity['class'])
+            quantity_class: Type[Quantity] = load_module_from_file(quantity['script'],
+                                                                   quantity['class'])
         else:
-            quantity_class: Quantity = AVAILABLE_QUANTITIES[quantity['name']]
+            quantity_class: Type[Quantity] = AVAILABLE_QUANTITIES[quantity['name']]
         return DesignTarget(
             name,
             config['prediction'],
-            quantity_class,
+            quantity_class(),
             negate=bool(config.get('negate', False)),
         )
 

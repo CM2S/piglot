@@ -4,7 +4,7 @@
 # - 'quadratic_curve'
 # - 'exponential_curve'
 # These are the quantities that are returned from the interface. When using the
-# solver with an objective, use there names to define the prediction fields.
+# solver with an objective, use their names to define the prediction fields.
 
 solver:
   #

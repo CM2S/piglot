@@ -323,11 +323,12 @@ class GenericObjective(Objective):
         x_axis = df["Start Time /s"] + df["Run Time /s"]
         params = df[[param.name for param in self.parameters]]
         param_hash = df["Hash"].to_list()
-        return {
-            "Objective": {
-                "time": x_axis.to_numpy(),
-                "values": df["Objective"].to_numpy(),
-                "params": params.to_numpy(),
-                "hashes": param_hash,
-            }
+        result = {
+            "time": x_axis.to_numpy(),
+            "values": df["Objective"].to_numpy(),
+            "params": params.to_numpy(),
+            "hashes": param_hash,
         }
+        if self.stochastic:
+            result["variances"] = df["Variance"].to_numpy()
+        return {"Objective": result}

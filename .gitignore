@@ -70,6 +70,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/source/_autosummary/
 
 # PyBuilder
 target/
@@ -141,3 +142,5 @@ reference/
 
 # Example results
 examples/*/config/
+test/example_init_shot/*/
+test/example_init_shot/data.out

@@ -15,19 +15,16 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../'))
+sys.path.insert(0, os.path.abspath('../../'))
 
 
 # -- Project information -----------------------------------------------------
-
-project = 'piglot'
-copyright = '2022, CM2S'
-author = 'CM2S'
-
-# The short X.Y version
-version = ''
-# The full version, including alpha/beta/rc tags
-release = ''
+from piglot import __author__, __copyright__, __title__, __version__
+author = __author__
+copyright = __copyright__
+project = __title__
+release = __version__
+version = __version__
 
 
 # -- General configuration ---------------------------------------------------
@@ -41,10 +38,9 @@ release = ''
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.coverage',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.intersphinx',
     'sphinx.ext.viewcode',
-    'sphinx.ext.napoleon',
-    'autoapi.extension',
     'myst_parser',
     'sphinx_favicon',
 ]
@@ -75,40 +71,17 @@ exclude_patterns = []
 # The name of the Pygments (syntax highlighting) style to use.
 # pygments_style = None
 
-autoapi_dirs = ['../../piglot']
-
 
 # -- Options for HTML output -------------------------------------------------
 
-# The theme to use for HTML and HTML Help pages.  See the documentation for
-# a list of builtin themes.
-#
-html_theme = 'pydata_sphinx_theme'
+# Readthedocs theme
+html_theme = "sphinx_rtd_theme"
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
-html_theme_options = {
-    "secondary_sidebar_items": ["page-toc", "edit-this-page", "sourcelink"],
-    "logo": {
-        "image_light": "_static/logo.svg",
-        "image_dark": "_static/logo_dark.svg",
-        "alt_text": "piglot",
-    },
-    "icon_links": [
-        {
-            "name": "GitHub",
-            "url": "https://github.com/CM2S/piglot",
-            "icon": "fa-brands fa-github",
-        },
-        {
-            "name": "PyPI",
-            "url": "https://pypi.org/project/piglot",
-            "icon": "fa-custom fa-pypi",
-        },
-    ],
-}
+html_theme_options = {}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -130,92 +103,15 @@ favicons = [
 ]
 
 
-# -- Options for HTMLHelp output ---------------------------------------------
-
-# Output file base name for HTML help builder.
-htmlhelp_basename = 'piglotdoc'
-
-
-# -- Options for autoapi -------------------------------------------------------
-autoapi_type = "python"
-autoapi_dirs = ["../../piglot"]
-autoapi_member_order = "groupwise"
-
-
-# -- Options for LaTeX output ------------------------------------------------
-
-latex_elements = {
-    # The paper size ('letterpaper' or 'a4paper').
-    #
-    # 'papersize': 'letterpaper',
-
-    # The font size ('10pt', '11pt' or '12pt').
-    #
-    # 'pointsize': '10pt',
-
-    # Additional stuff for the LaTeX preamble.
-    #
-    # 'preamble': '',
-
-    # Latex figure (float) alignment
-    #
-    # 'figure_align': 'htbp',
-}
-
-# Grouping the document tree into LaTeX files. List of tuples
-# (source start file, target name, title,
-#  author, documentclass [howto, manual, or own class]).
-latex_documents = [
-    (master_doc, 'piglot.tex', 'piglot Documentation',
-     'CM2S', 'manual'),
-]
-
-
-# -- Options for manual page output ------------------------------------------
-
-# One entry per manual page. List of tuples
-# (source start file, name, description, authors, manual section).
-man_pages = [
-    (master_doc, 'piglot', 'piglot Documentation',
-     [author], 1)
-]
-
-
-# -- Options for Texinfo output ----------------------------------------------
-
-# Grouping the document tree into Texinfo files. List of tuples
-# (source start file, target name, title, author,
-#  dir menu entry, description, category)
-texinfo_documents = [
-    (master_doc, 'piglot', 'piglot Documentation',
-     author, 'piglot', 'One line description of project.',
-     'Miscellaneous'),
-]
-
-
-# -- Options for Epub output -------------------------------------------------
-
-# Bibliographic Dublin Core info.
-epub_title = project
-
-# The unique identifier of the text. This can be a ISBN number
-# or the project homepage.
-#
-# epub_identifier = ''
-
-# A unique identification for the text.
-#
-# epub_uid = ''
-
-# A list of files that should not be packed into the epub file.
-epub_exclude_files = ['search.html']
-
-
 # -- Extension configuration -------------------------------------------------
-napoleon_google_docstring = False
-napoleon_use_param = False
-napoleon_use_ivar = True
+autosummary_generate = True
+add_module_names = False
 
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
+    "torch": ("https://pytorch.org/docs/stable/", None),
+}
 
 myst_enable_extensions = [
     "amsmath",

@@ -80,6 +80,90 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         RuntimeError,
         "Failed to parse the config file: YAML syntax seems invalid.",
     ),
+    'missing_solver_name.yaml': (
+        ValueError,
+        "Missing name for solver.",
+    ),
+    'wrong_solver_name.yaml': (
+        ValueError,
+        "Unknown solver 'curvefit'.",
+    ),
+    'fitting_without_solver.yaml': (
+        ValueError,
+        "Missing solver for fitting objective.",
+    ),
+    'invalid_pred.yaml': (
+        ValueError,
+        "Invalid prediction '2' for reference 'reference_curve.txt'.",
+    ),
+    'invalid_pred_design.yaml': (
+        ValueError,
+        "Invalid prediction '2' for design target 'maximum_force'.",
+    ),
+    'missing_references.yaml': (
+        ValueError,
+        "Missing references for fitting objective.",
+    ),
+    'missing_pred.yaml': (
+        ValueError,
+        "Missing prediction for reference 'reference_curve.txt'.",
+    ),
+    'unexistent_reference.yaml': (
+        ValueError,
+        "Reference 'reference_curve_2.txt' is not associated to any case.",
+    ),
+    'mae_reduction.yaml': (
+        ValueError,
+        "Invalid reduction 'mae' for fitting objective.",
+    ),
+    'design_missing_pred.yaml': (
+        ValueError,
+        "Missing prediction for design target 'maximum_force'.",
+    ),
+    'design_missing_quantity.yaml': (
+        ValueError,
+        "Missing quantity for fitting objective.",
+    ),
+    'design_missing_quantity_name.yaml': (
+        ValueError,
+        "Missing name in quantity specification.",
+    ),
+    'design_missing_quantity_script.yaml': (
+        ValueError,
+        "Missing script in quantity specification.",
+    ),
+    'design_missing_quantity_class.yaml': (
+        ValueError,
+        "Missing class in quantity specification.",
+    ),
+    'design_missing_solver.yaml': (
+        ValueError,
+        "Missing solver for fitting objective.",
+    ),
+    'design_missing_targets.yaml': (
+        ValueError,
+        "Missing targets for fitting objective.",
+    ),
+    'unexistent_targets.yaml': (
+        ValueError,
+        "Design target 'integral_quantity' is not associated to any case.",
+    ),
+    'bo_unkacq.yaml': (
+        RuntimeError,
+        "Unkown acquisition function ucbb",
+    ),
+    'bo_q.yaml': (
+        RuntimeError,
+        "Can only use q != 1 for quasi-Monte Carlo acquisitions",
+    ),
+    'duplicated_field.yaml': (
+        ValueError,
+        "Duplicate output field 'reaction_x'.",
+    ),
+    'bo_equalbounds.yaml': (
+        RuntimeError,
+        "All observed points are equal: add more initial samples",
+    ),
 }
 
 
