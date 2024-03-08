@@ -61,6 +61,7 @@ class BayesianBoTorch(Optimiser):
         seed: int = 1,
         load_file: str = None,
         export: str = None,
+        device: str = 'cpu',
     ) -> None:
         if not isinstance(objective, GenericObjective):
             raise RuntimeError("Bayesian optimiser requires a GenericObjective")
@@ -75,6 +76,7 @@ class BayesianBoTorch(Optimiser):
         self.load_file = load_file
         self.export = export
         self.n_test = n_test
+        self.device = device
         if self.acquisition not in ('ucb', 'ei', 'pi', 'kg', 'qucb', 'qei', 'qpi', 'qkg'):
             raise RuntimeError(f"Unkown acquisition function {self.acquisition}")
         if not self.acquisition.startswith('q') and self.q != 1:
@@ -200,7 +202,7 @@ class BayesianBoTorch(Optimiser):
         if self.objective.composition:
             if isinstance(value, np.ndarray):
                 return self.objective.composition.composition(value)
-            return self.objective.composition.composition_torch(value)
+            return self.objective.composition.composition_torch(value).cpu().item()
         return value.item()
 
     def _build_acquisition_scalar(
@@ -307,7 +309,7 @@ class BayesianBoTorch(Optimiser):
         n_outputs = len(init_values)
 
         # Build initial dataset with the initial shot
-        dataset = BayesDataset(n_dim, n_outputs, bound, export=self.export)
+        dataset = BayesDataset(n_dim, n_outputs, bound, export=self.export, device=self.device)
         dataset.push(init_shot, init_values, init_variances)
 
         # If requested, sample some random points before starting (in parallel if possible)
@@ -322,7 +324,7 @@ class BayesianBoTorch(Optimiser):
             dataset.load(self.load_file)
 
         # Build test dataset (in parallel if possible)
-        test_dataset = BayesDataset(n_dim, n_outputs, bound)
+        test_dataset = BayesDataset(n_dim, n_outputs, bound, device=self.device)
         if self.n_test > 0:
             test_points = self._get_random_points(self.n_test, n_dim, self.seed + 1, bound)
             test_results = self._eval_candidates(test_points)
@@ -336,8 +338,17 @@ class BayesianBoTorch(Optimiser):
 
         # Optimisation loop
         for i_iter in range(n_iter):
-            # Generate and evaluate candidates (in parallel if possible)
-            candidates, cv_error = self._get_candidates(n_dim, dataset, test_dataset)
+            # Generate candidates: catch CUDA OOM errors and fall back to CPU
+            try:
+                candidates, cv_error = self._get_candidates(n_dim, dataset, test_dataset)
+            except torch.cuda.OutOfMemoryError:
+                warnings.warn('CUDA out of memory: falling back to CPU')
+                self.device = 'cpu'
+                dataset = dataset.to(self.device)
+                test_dataset = test_dataset.to(self.device)
+                candidates, cv_error = self._get_candidates(n_dim, dataset, test_dataset)
+
+            # Evaluate candidates (in parallel if possible)
             results = self._eval_candidates(candidates)
 
             # Update dataset
