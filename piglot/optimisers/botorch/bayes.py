@@ -135,7 +135,7 @@ class BayesianBoTorch(Optimiser):
         cv_error = None
         if self.n_test > 0:
             std_test_params = test_dataset.normalise(test_dataset.params)
-            std_test_values, _ = std_dataset.standardise(
+            std_test_values, _ = dataset.standardise(
                 test_dataset.values,
                 test_dataset.variances,
             )
