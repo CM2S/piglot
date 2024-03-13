@@ -278,18 +278,21 @@ class Optimiser(ABC):
         self.begin_time = time.perf_counter()
         self._optimise(n_dim, n_iter, bounds, init_shot)
         elapsed = time.perf_counter() - self.begin_time
-        # Denormalise best solution
-        new_solution = self.parameters.denormalise(self.best_solution)
+        # Denormalise best solution (if any)
+        new_solution = None
+        if self.best_solution is not None:
+            new_solution = np.array(self.parameters.denormalise(self.best_solution))
         if verbose:
             self.pbar.close()
             print(f'Completed {self.i_iter} iterations in {pretty_time(elapsed)}')
             print(f'Best loss: {self.best_value:15.8e}')
-            print('Best parameters')
-            max_width = max(len(par.name) for par in self.parameters)
-            for i, par in enumerate(self.parameters):
-                print(f'- {par.name.rjust(max_width)}: {new_solution[i]:>12.6f}')
+            if self.best_solution is not None:
+                print('Best parameters')
+                max_width = max(len(par.name) for par in self.parameters)
+                for i, par in enumerate(self.parameters):
+                    print(f'- {par.name.rjust(max_width)}: {new_solution[i]:>12.6f}')
         # Return the best value
-        return self.best_value, np.array(new_solution)
+        return self.best_value, new_solution
 
     @abstractmethod
     def _optimise(
@@ -324,8 +327,8 @@ class Optimiser(ABC):
     def __update_progress_files(
             self,
             i_iter: int,
-            curr_solution: float,
-            curr_value: np.ndarray,
+            curr_solution: np.ndarray,
+            curr_value: float,
             extra_info: str,
             ) -> None:
         """Update progress on output files.
@@ -334,16 +337,18 @@ class Optimiser(ABC):
         ----------
         i_iter : int
             Current iteration number.
+        curr_solution : np.ndarray
+            Current objective minimiser.
         curr_value : float
             Current objective value.
-        curr_solution : float
-            Current objective minimiser.
         extra_info : str
             Additional information to pass to user.
         """
         elapsed = time.perf_counter() - self.begin_time
-        denorm_curr = self.parameters.denormalise(curr_solution)
-        denorm_best = self.parameters.denormalise(self.best_solution)
+        skip_pars = curr_solution is None
+        if not skip_pars:
+            denorm_curr = self.parameters.denormalise(curr_solution)
+            denorm_best = self.parameters.denormalise(self.best_solution)
         # Update progress file
         with open(os.path.join(self.output_dir, "progress"), 'w', encoding='utf8') as file:
             file.write(f'Iteration: {i_iter}\n')
@@ -351,9 +356,10 @@ class Optimiser(ABC):
             file.write(f'Best loss: {self.best_value}\n')
             if extra_info is not None:
                 file.write(f'Optimiser info: {extra_info}\n')
-            file.write('Best parameters:\n')
-            for i, par in enumerate(self.parameters):
-                file.write(f'\t{par.name}: {denorm_best[i]}\n')
+            if not skip_pars:
+                file.write('Best parameters:\n')
+                for i, par in enumerate(self.parameters):
+                    file.write(f'\t{par.name}: {denorm_best[i]}\n')
             file.write(f'\nElapsed time: {pretty_time(elapsed)}\n')
         # Update history file
         with open(os.path.join(self.output_dir, "history"), 'a', encoding='utf8') as file:
@@ -362,7 +368,7 @@ class Optimiser(ABC):
             file.write(f'{self.best_value:>15.8e}\t')
             file.write(f'{curr_value:>15.8e}\t')
             for i, par in enumerate(self.parameters):
-                file.write(f'{denorm_curr[i]:>15.8f}\t')
+                file.write('None\t'.rjust(16) if skip_pars else f'{denorm_curr[i]:>15.8f}\t')
             file.write(f"\t{'-' if extra_info is None else extra_info}")
             file.write('\n')
 
@@ -382,7 +388,7 @@ class Optimiser(ABC):
             Current iteration number.
         curr_value : float
             Current objective value.
-        curr_solution : float
+        curr_solution : np.ndarray
             Current objective minimiser.
         extra_info : str
             Additional information to pass to user.

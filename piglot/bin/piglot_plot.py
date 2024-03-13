@@ -5,8 +5,10 @@ import time
 import argparse
 from tempfile import TemporaryDirectory
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.integrate import trapezoid
+from scipy.spatial import ConvexHull
 from PIL import Image
 import torch
 from piglot.parameter import read_parameters
@@ -321,6 +323,48 @@ def plot_gp(args):
     plt.close()
 
 
+def plot_pareto(args):
+    """Driver for plotting the Pareto front for a given multi-objective optimisation problem.
+
+    Parameters
+    ----------
+    args : dict
+        Passed arguments.
+    """
+    config = parse_config_file(args.config)
+    objective = read_objective(config["objective"], read_parameters(config), config["output"])
+    if objective.num_objectives != 2:
+        raise ValueError("Can only plot the Pareto front for a two-objective optimisation problem.")
+    data = objective.get_history()
+    fig, ax = plt.subplots()
+    # Read the Pareto front and build the Pareto hull
+    pareto = pd.read_table(os.path.join(config["output"], 'pareto_front')).to_numpy()
+    hull = ConvexHull(pareto)
+    for simplex in hull.simplices:
+        # Hacky: filter the line between the two endpoints (assuming the list is sorted by x)
+        if abs(simplex[0] - simplex[1]) < pareto.shape[0] - 1:
+            ax.plot(pareto[simplex, 0], pareto[simplex, 1], 'r', ls='--')
+    ax.scatter(pareto[:, 0], pareto[:, 1], c='r', label='Pareto front')
+    if args.all:
+        # Read the dominated points
+        total_points = np.array([entry['values'] for entry in data.values()]).T
+        # Remove the Pareto front from the dominated points
+        dominated = []
+        for point in total_points:
+            if np.isclose(point, pareto).all(axis=1).any():
+                continue
+            dominated.append(point)
+        dominated = np.array(dominated)
+        ax.scatter(dominated[:, 0], dominated[:, 1], c='k', label='Dominated points')
+    if args.log:
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+    ax.legend()
+    ax.grid()
+    fig.tight_layout()
+    plt.show()
+
+
 def main(passed_args: List[str] = None):
     """Entry point for this script."""
     # Global argument parser settings
@@ -543,6 +587,36 @@ def main(passed_args: List[str] = None):
         help=("Max number of calls to plot."),
     )
     sp_gp.set_defaults(func=plot_gp)
+
+    # Pareto front plotting
+    sp_pareto = subparsers.add_parser(
+        'pareto',
+        help='plot the Pareto front for a given multi-objective optimisation problem',
+        description=("Plot the Pareto front for a given multi-objective optimisation problem. This "
+                     "must be executed in the same path as the running piglot instance."),
+    )
+    sp_pareto.add_argument(
+        'config',
+        type=str,
+        help="Path for the used or generated configuration file.",
+    )
+    sp_pareto.add_argument(
+        '--save_fig',
+        default=None,
+        type=str,
+        help=("Path to save the generated figure. If used, graphical output is skipped."),
+    )
+    sp_pareto.add_argument(
+        '--log',
+        action='store_true',
+        help="Plot in a log scale."
+    )
+    sp_pareto.add_argument(
+        '--all',
+        action='store_true',
+        help="Plot the both the Pareto front and the dominated points."
+    )
+    sp_pareto.set_defaults(func=plot_pareto)
 
     args = parser.parse_args() if passed_args is None else parser.parse_args(passed_args)
     args.func(args)

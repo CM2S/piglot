@@ -531,10 +531,12 @@ class FittingObjective(GenericObjective):
             reduction: Reduction,
             stochastic: bool = False,
             composite: bool = False,
+            multi_objective: bool = False,
             ) -> None:
         super().__init__(
             parameters,
-            stochastic,
+            stochastic=stochastic,
+            num_objectives=len(solver.references) if multi_objective else 1,
             composition=CompositionFromReduction(reduction) if composite else None,
             output_dir=output_dir,
         )
@@ -655,4 +657,5 @@ class FittingObjective(GenericObjective):
             AVAILABLE_REDUCTIONS[config['reduction']](),
             stochastic=bool(config.get('stochastic', False)),
             composite=bool(config.get('composite', False)),
+            multi_objective=bool(config.get('multi_objective', False)),
         )

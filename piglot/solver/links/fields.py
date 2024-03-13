@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Dict, Any, Union
 import os
+import warnings
 import numpy as np
 import pandas as pd
 from piglot.parameter import ParameterSet
@@ -57,7 +58,7 @@ class LinksInputData(InputData):
         param_dict = parameters.to_dict(values, input_normalised=False)
         for name in param_dict:
             if not has_parameter(self.input_file, f'<{name}>'):
-                raise RuntimeError(f"Parameter '{name}' not found in input file.")
+                warnings.warn(f"Parameter '{name}' not found in input file.")
 
     def name(self) -> str:
         """Return the name of the input data.

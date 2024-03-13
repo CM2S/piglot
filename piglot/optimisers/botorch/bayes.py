@@ -1,7 +1,9 @@
 """Main optimiser classes for using BoTorch with piglot"""
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Type
 from multiprocessing.pool import ThreadPool as Pool
+import os
 import warnings
+import dataclasses
 import numpy as np
 import torch
 from scipy.stats import qmc
@@ -11,12 +13,17 @@ from botorch.fit import fit_gpytorch_mll
 from botorch.optim import optimize_acqf
 from botorch.models.model import Model
 from botorch.models import SingleTaskGP
+from botorch.models.converter import batched_to_model_list
 from botorch.acquisition.acquisition import AcquisitionFunction
 from botorch.acquisition import UpperConfidenceBound, qUpperConfidenceBound
 from botorch.acquisition import ExpectedImprovement, qExpectedImprovement
 from botorch.acquisition import ProbabilityOfImprovement, qProbabilityOfImprovement
 from botorch.acquisition.objective import GenericMCObjective
 from botorch.acquisition.knowledge_gradient import qKnowledgeGradient
+from botorch.acquisition.multi_objective.objective import GenericMCMultiOutputObjective
+from botorch.acquisition.multi_objective.logei import qLogExpectedHypervolumeImprovement
+from botorch.utils.multi_objective.box_decompositions.non_dominated import \
+    FastNondominatedPartitioning, NondominatedPartitioning
 from botorch.sampling import SobolQMCNormalSampler
 from piglot.objective import Objective, GenericObjective, ObjectiveResult
 from piglot.optimisers.botorch.dataset import BayesDataset
@@ -44,6 +51,27 @@ def fit_mll_pytorch_loop(mll: ExactMarginalLogLikelihood, n_iters: int = 100) ->
         optimizer.step()
     mll.model.eval()
     mll.model.likelihood.eval()
+
+
+@dataclasses.dataclass
+class MultiObjectiveData:
+    """Data class for multi-objective optimisation."""
+    ref_point: torch.Tensor
+    mapping: List[List[int]]
+    partitioning: NondominatedPartitioning
+    partitioning_type: Type[NondominatedPartitioning]
+
+    def __init__(
+        self,
+        mapping: List[List[int]],
+        partitioning_type: Type[NondominatedPartitioning],
+        ref_point: torch.Tensor = None,
+        partitioning: NondominatedPartitioning = None,
+    ) -> None:
+        self.ref_point = ref_point
+        self.mapping = mapping
+        self.partitioning = partitioning
+        self.partitioning_type = partitioning_type
 
 
 class BayesianBoTorch(Optimiser):
@@ -79,6 +107,7 @@ class BayesianBoTorch(Optimiser):
             raise RuntimeError(f"Unkown acquisition function {self.acquisition}")
         if not self.acquisition.startswith('q') and self.q != 1:
             raise RuntimeError("Can only use q != 1 for quasi-Monte Carlo acquisitions")
+        self.mo_data: MultiObjectiveData = None
         torch.set_num_threads(1)
 
     def _validate_problem(self, objective: Objective) -> None:
@@ -96,6 +125,8 @@ class BayesianBoTorch(Optimiser):
         model: Model,
         n_dim: int,
     ) -> Tuple[AcquisitionFunction, int, int]:
+        if self.objective.multi_objective:
+            return self._build_acquisition_mo(dataset, model, n_dim)
         if self.objective.composition:
             return self._build_acquisition_composite(dataset, model, n_dim)
         return self._build_acquisition_scalar(dataset, model, n_dim)
@@ -116,7 +147,7 @@ class BayesianBoTorch(Optimiser):
         except botorch.exceptions.ModelFittingError:
             warnings.warn('Optimisation of the MLL failed, falling back to PyTorch optimiser')
             fit_mll_pytorch_loop(mll)
-        return model
+        return batched_to_model_list(model) if self.objective.multi_objective else model
 
     def _get_candidates(
             self,
@@ -182,7 +213,10 @@ class BayesianBoTorch(Optimiser):
         return [point * (bound[:, 1] - bound[:, 0]) + bound[:, 0] for point in points]
 
     def _result_to_dataset(self, result: ObjectiveResult) -> Tuple[np.ndarray, np.ndarray]:
-        if self.objective.composition:
+        if self.objective.multi_objective:
+            values = np.concatenate(result.values) if self.objective.composition else result.values
+            variances = np.zeros_like(values)
+        elif self.objective.composition:
             values = np.concatenate(result.values)
             if self.objective.stochastic:
                 variances = np.concatenate(result.variances)
@@ -197,11 +231,47 @@ class BayesianBoTorch(Optimiser):
         return values, variances
 
     def _value_to_scalar(self, value: Union[np.ndarray, torch.Tensor]) -> float:
+        if self.objective.multi_objective:
+            return value[0].item()
         if self.objective.composition:
             if isinstance(value, np.ndarray):
                 return self.objective.composition.composition(value)
             return self.objective.composition.composition_torch(value)
         return value.item()
+
+    def _init_mo_data(self, init_result: ObjectiveResult, n_outputs: int) -> None:
+        # Select the partitioning scheme according to the number of objectives
+        # See https://github.com/pytorch/botorch/pull/846
+        partitioning_type = FastNondominatedPartitioning
+        if n_outputs > 4:
+            partitioning_type = NondominatedPartitioning
+        # Under composite multi-objective optimisation, store the composition mapping
+        mapping = []
+        if self.objective.composition:
+            pos = 0
+            for length in [len(result) for result in init_result.values]:
+                mapping.append(list(range(pos, pos + length)))
+                pos += length
+        self.mo_data = MultiObjectiveData(mapping, partitioning_type)
+
+    def _update_mo_data(self, dataset: BayesDataset):
+        # TODO: check how to properly handle the ref_point and best_value
+        y_points = self.__mo_mc_objective(dataset.values)
+        self.mo_data.ref_point = torch.min(y_points, dim=0).values
+        self.mo_data.partitioning = self.mo_data.partitioning_type(
+            ref_point=self.mo_data.ref_point,
+            Y=y_points,
+        )
+        hypervolume = self.mo_data.partitioning.compute_hypervolume().item()
+        pareto = self.mo_data.partitioning.pareto_Y
+        with open(os.path.join(self.output_dir, "pareto_front"), 'w', encoding='utf8') as file:
+            file.write('\t'.join(
+                [f'{"Objective_" + str(i + 1):>15}' for i in range(pareto.shape[1])]) + '\n'
+            )
+            for point in pareto:
+                file.write('\t'.join([f'{-x.item():>15.8f}' for x in point]) + '\n')
+        # TODO: after updating the parameter set, write the parameters and hash for each point
+        return -np.log(hypervolume)
 
     def _build_acquisition_scalar(
         self,
@@ -238,6 +308,51 @@ class BayesianBoTorch(Optimiser):
             raise RuntimeError(f"Unknown acquisition {self.acquisition}")
         return acq, num_restarts, raw_samples
 
+    def __mo_mc_objective(
+        self,
+        vals: torch.Tensor,
+    ) -> torch.Tensor:
+        # If no composition, simply return the values
+        if not self.objective.composition:
+            return -vals.squeeze(-1)
+        # Composition: start by evaluating each objective
+        # The objective mappings are used to select the right columns for each objective
+        # We need to reshape the input to support arbitrary shapes for every dimension but the last
+        vals_view = vals.view(-1, vals.shape[-1])
+        objectives = [
+            self.objective.composition.composition_torch(vals_view[:, indices])
+            for indices in self.mo_data.mapping
+        ]
+        # Build the proper result tensor: stack the objectives and reshape to the original shape
+        result = torch.stack(objectives, dim=-1)
+        return -result.view(vals.shape[:-1] + result.shape[-1:])
+
+    def _build_acquisition_mo(
+        self,
+        dataset: BayesDataset,
+        model: Model,
+        n_dim: int,
+    ) -> Tuple[AcquisitionFunction, int, int]:
+        # Default values for multi-restart optimisation
+        num_restarts = 12
+        raw_samples = max(256, 16 * n_dim * n_dim)
+        # Prepare standardised dataset
+        _, y_avg, y_std = dataset.get_obervation_stats()
+        # Delegate acquisition building
+        mc_objective = GenericMCMultiOutputObjective(
+            lambda vals, X: self.__mo_mc_objective(
+                dataset.expand_observations(vals * y_std + y_avg)
+            )
+        )
+        # Build acquisition
+        acq = qLogExpectedHypervolumeImprovement(
+            model,
+            self.mo_data.ref_point,
+            self.mo_data.partitioning,
+            objective=mc_objective,
+        )
+        return acq, num_restarts, raw_samples
+
     def _build_acquisition_composite(
         self,
         dataset: BayesDataset,
@@ -250,7 +365,9 @@ class BayesianBoTorch(Optimiser):
         # Build composite MC objective
         _, y_avg, y_std = dataset.get_obervation_stats()
         mc_objective = GenericMCObjective(
-            lambda vals, X: -self.objective.composition.composition_torch(vals * y_std + y_avg)
+            lambda vals, X: -self.objective.composition.composition_torch(
+                dataset.expand_observations(vals * y_std + y_avg)
+            )
         )
         # Delegate acquisition building
         best = torch.max(dataset.values).item()
@@ -306,6 +423,10 @@ class BayesianBoTorch(Optimiser):
         init_values, init_variances = self._result_to_dataset(init_result)
         n_outputs = len(init_values)
 
+        # Addtional tasks for multi-objective optimisation
+        if self.objective.multi_objective:
+            self._init_mo_data(init_result, n_outputs)
+
         # Build initial dataset with the initial shot
         dataset = BayesDataset(n_dim, n_outputs, bound, export=self.export)
         dataset.push(init_shot, init_values, init_variances)
@@ -332,7 +453,11 @@ class BayesianBoTorch(Optimiser):
 
         # Find current best point to return to the driver
         best_params, best_result = dataset.min(self._value_to_scalar)
-        self._progress_check(0, self._value_to_scalar(best_result), best_params)
+        best_value = self._value_to_scalar(best_result)
+        if self.objective.multi_objective:
+            best_value = self._update_mo_data(dataset)
+            best_params = None
+        self._progress_check(0, best_value, best_params)
 
         # Optimisation loop
         for i_iter in range(n_iter):
@@ -351,12 +476,25 @@ class BayesianBoTorch(Optimiser):
             best_idx = np.argmin(values_batch)
             best_value = values_batch[best_idx]
             best_params = candidates[best_idx, :]
+            if self.objective.multi_objective:
+                best_value = self._update_mo_data(dataset)
+                best_params = None
 
-            # Update progress (with CV data if available)
-            extra = f'Val. {cv_error:6.4}' if cv_error else None
+            # Update progress (with extra data if available)
+            extra = None
+            if cv_error:
+                extra = f'Val. {cv_error:6.4}'
+                if self.objective.multi_objective:
+                    extra += f'  Num Pareto: {self.mo_data.partitioning.pareto_Y.shape[0]}'
+            elif self.objective.multi_objective:
+                extra = f'Num Pareto: {self.mo_data.partitioning.pareto_Y.shape[0]}'
             if self._progress_check(i_iter + 1, best_value, best_params, extra_info=extra):
                 break
 
         # Return optimisation result
         best_params, best_result = dataset.min(self._value_to_scalar)
-        return best_params, self._value_to_scalar(best_result)
+        best_result = self._value_to_scalar(best_result)
+        if self.objective.multi_objective:
+            best_result = self._update_mo_data(dataset)
+            best_params = None
+        return best_params, best_result
