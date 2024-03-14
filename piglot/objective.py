@@ -161,8 +161,37 @@ class ObjectiveResult:
     values: List[np.ndarray]
     variances: Optional[List[np.ndarray]] = None
 
+    @staticmethod
+    def __mc_variance(
+        values: np.ndarray,
+        variances: np.ndarray,
+        composition: Composition,
+        num_samples: int = 1000,
+    ) -> Tuple[float, float]:
+        """Compute the objective variance using Monte Carlo (using fixed base samples).
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Objective values.
+        variances : np.ndarray
+            Objective variances.
+        composition : Composition
+            Composition functional to use.
+        num_samples : int, optional
+            Number of Monte Carlo samples, by default 1000.
+
+        Returns
+        -------
+        float
+            Estimated variance of the objective.
+        """
+        biased = [norm.rvs(loc=0, scale=1) for _ in range(num_samples)]
+        mc_objectives = [composition(values + bias * np.sqrt(variances)) for bias in biased]
+        return np.var(mc_objectives)
+
     def scalarise(self, composition: Composition = None) -> float:
-        """Scalarise the result.
+        """Scalarise the result under noise-free single-objective optimisation.
 
         Parameters
         ----------
@@ -178,8 +207,8 @@ class ObjectiveResult:
             return composition(np.concatenate(self.values))
         return np.mean(self.values)
 
-    def scalarise_mo(self, composition: Composition = None) -> float:
-        """Scalarise the result.
+    def scalarise_mo(self, composition: Composition = None) -> List[float]:
+        """Pseudo-scalarise the result under noise-free multi-objective optimisation.
 
         Parameters
         ----------
@@ -188,15 +217,15 @@ class ObjectiveResult:
 
         Returns
         -------
-        float
-            Scalarised result.
+        List[float]
+            Pseudo-scalarised result.
         """
         if composition is not None:
             return [composition(vals) for vals in self.values]
         return [np.mean(vals) for vals in self.values]
 
     def scalarise_stochastic(self, composition: Composition = None) -> Tuple[float, float]:
-        """Scalarise the result.
+        """Scalarise the result under stochastic single-objective optimisation.
 
         Parameters
         ----------
@@ -211,11 +240,28 @@ class ObjectiveResult:
         if composition is not None:
             values = np.concatenate(self.values)
             variances = np.concatenate(self.variances)
-            # Compute the objective variance using Monte Carlo (using fixed base samples)
-            biased = [norm.rvs(loc=0, scale=1) for _ in range(1000)]
-            mc_objectives = [composition(values + bias * np.sqrt(variances)) for bias in biased]
-            return composition(values), np.var(mc_objectives)
+            return composition(values), self.__mc_variance(values, variances, composition)
         return np.mean(self.values), np.sum(self.variances)
+
+    def scalarise_mo_stochastic(self, composition: Composition = None) -> List[Tuple[float, float]]:
+        """Pseudo-scalarise the result under stochastic multi-objective optimisation.
+
+        Parameters
+        ----------
+        composition : Composition, optional
+            Composition functional to use, by default None.
+
+        Returns
+        -------
+        List[Tuple[float, float]]
+            Pseudo-scalarised  mean and variance.
+        """
+        if composition is not None:
+            return [
+                (composition(vals), self.__mc_variance(vals, vars, composition))
+                for vals, vars in zip(self.values, self.variances)
+            ]
+        return [(np.mean(vals), np.sum(vars)) for vals, vars in zip(self.values, self.variances)]
 
 
 class GenericObjective(Objective):
@@ -251,6 +297,8 @@ class GenericObjective(Objective):
                 if self.multi_objective:
                     for i in range(self.num_objectives):
                         file.write(f'\t{"Objective_" + str(i + 1):>15}')
+                        if self.stochastic:
+                            file.write(f'\t{"Variance_" + str(i + 1):>15}')
                 else:
                     file.write(f'\t{"Objective":>15}')
                     if self.stochastic:
@@ -303,9 +351,13 @@ class GenericObjective(Objective):
                     file.write(f'{begin_time - self.begin_time:>15.8e}\t')
                     file.write(f'{end_time - begin_time:>15.8e}\t')
                     if self.multi_objective:
-                        vals = objective_result.scalarise_mo(self.composition)
-                        for i in range(self.num_objectives):
-                            file.write(f'{vals[i]:>15.8e}\t')
+                        if self.stochastic:
+                            vals_vars = objective_result.scalarise_mo_stochastic(self.composition)
+                            for value, var in vals_vars:
+                                file.write(f'{value:>15.8e}\t{var:>15.8e}\t')
+                        else:
+                            for val in objective_result.scalarise_mo(self.composition):
+                                file.write(f'{val:>15.8e}\t')
                     else:
                         if self.stochastic:
                             value, var = objective_result.scalarise_stochastic(self.composition)
@@ -363,6 +415,8 @@ class GenericObjective(Objective):
         # Multi-objective case
         if self.multi_objective:
             values = [df[f"Objective_{i + 1}"] for i in range(self.num_objectives)]
+            if self.stochastic:
+                variances = [df[f"Variance_{i + 1}"] for i in range(self.num_objectives)]
             return_dict = {}
             for i in range(self.num_objectives):
                 result = {
@@ -372,7 +426,7 @@ class GenericObjective(Objective):
                     "hashes": param_hash,
                 }
                 if self.stochastic:
-                    result["variances"] = df["Variance"].to_numpy()
+                    result["variances"] = variances[i]
                 return_dict[f"Objective_{i + 1}"] = result
             return return_dict
         # Single objective case

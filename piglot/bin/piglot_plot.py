@@ -337,28 +337,65 @@ def plot_pareto(args):
         raise ValueError("Can only plot the Pareto front for a two-objective optimisation problem.")
     data = objective.get_history()
     fig, ax = plt.subplots()
-    # Read the Pareto front and build the Pareto hull
+    # Read all the points and variances
+    total_points = np.array([entry['values'] for entry in data.values()]).T
+    variances = np.array([entry['variances'] for entry in data.values() if 'variances' in entry]).T
+    has_variance = variances.size > 0
+    # Separate the dominated points
+    dominated = []
+    nondominated = []
     pareto = pd.read_table(os.path.join(config["output"], 'pareto_front')).to_numpy()
+    for i, point in enumerate(total_points):
+        if np.isclose(point, pareto).all(axis=1).any():
+            nondominated.append((point, variances[i, :] if has_variance else None))
+        else:
+            dominated.append((point, variances[i, :] if has_variance else None))
+    # Build the Pareto hull
     hull = ConvexHull(pareto)
     for simplex in hull.simplices:
         # Hacky: filter the line between the two endpoints (assuming the list is sorted by x)
         if abs(simplex[0] - simplex[1]) < pareto.shape[0] - 1:
             ax.plot(pareto[simplex, 0], pareto[simplex, 1], 'r', ls='--')
-    ax.scatter(pareto[:, 0], pareto[:, 1], c='r', label='Pareto front')
-    if args.all:
-        # Read the dominated points
-        total_points = np.array([entry['values'] for entry in data.values()]).T
-        # Remove the Pareto front from the dominated points
-        dominated = []
-        for point in total_points:
-            if np.isclose(point, pareto).all(axis=1).any():
-                continue
-            dominated.append(point)
-        dominated = np.array(dominated)
-        ax.scatter(dominated[:, 0], dominated[:, 1], c='k', label='Dominated points')
+    # Plot the points
+    if has_variance:
+        ax.errorbar(
+            [point[0][0] for point in nondominated],
+            [point[0][1] for point in nondominated],
+            xerr=np.sqrt([point[1][0] for point in nondominated]),
+            yerr=np.sqrt([point[1][0] for point in nondominated]),
+            c='r',
+            fmt='o',
+            label='Pareto front',
+        )
+        if args.all:
+            ax.errorbar(
+                [point[0][0] for point in dominated],
+                [point[0][1] for point in dominated],
+                xerr=np.sqrt([point[1][0] for point in dominated]),
+                yerr=np.sqrt([point[1][0] for point in dominated]),
+                c='k',
+                fmt='o',
+                label='Dominated points',
+            )
+    else:
+        ax.scatter(
+            [point[0][0] for point in nondominated],
+            [point[0][1] for point in nondominated],
+            c='r',
+            label='Pareto front',
+        )
+        if args.all:
+            ax.scatter(
+                [point[0][0] for point in dominated],
+                [point[0][1] for point in dominated],
+                c='k',
+                label='Dominated points',
+            )
     if args.log:
         ax.set_xscale('log')
         ax.set_yscale('log')
+    ax.set_xlabel('Objective 1')
+    ax.set_ylabel('Objective 2')
     ax.legend()
     ax.grid()
     fig.tight_layout()

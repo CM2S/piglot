@@ -11,23 +11,91 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 import botorch
 from botorch.fit import fit_gpytorch_mll
 from botorch.optim import optimize_acqf
-from botorch.models.model import Model
 from botorch.models import SingleTaskGP
+from botorch.models.model import Model
 from botorch.models.converter import batched_to_model_list
-from botorch.acquisition.acquisition import AcquisitionFunction
-from botorch.acquisition import UpperConfidenceBound, qUpperConfidenceBound
-from botorch.acquisition import ExpectedImprovement, qExpectedImprovement
-from botorch.acquisition import ProbabilityOfImprovement, qProbabilityOfImprovement
+from botorch.acquisition import (
+    AcquisitionFunction,
+    UpperConfidenceBound,
+    qUpperConfidenceBound,
+    ExpectedImprovement,
+    qExpectedImprovement,
+    ProbabilityOfImprovement,
+    qProbabilityOfImprovement,
+    LogExpectedImprovement,
+    qLogExpectedImprovement,
+    qNoisyExpectedImprovement,
+    qLogNoisyExpectedImprovement,
+    qKnowledgeGradient,
+)
 from botorch.acquisition.objective import GenericMCObjective
-from botorch.acquisition.knowledge_gradient import qKnowledgeGradient
+from botorch.acquisition.multi_objective import (
+    qExpectedHypervolumeImprovement,
+    qNoisyExpectedHypervolumeImprovement,
+    qHypervolumeKnowledgeGradient,
+)
+from botorch.utils.multi_objective.box_decompositions.non_dominated import (
+    FastNondominatedPartitioning,
+    NondominatedPartitioning,
+)
+from botorch.acquisition.multi_objective.logei import (
+    qLogExpectedHypervolumeImprovement,
+    qLogNoisyExpectedHypervolumeImprovement,
+)
 from botorch.acquisition.multi_objective.objective import GenericMCMultiOutputObjective
-from botorch.acquisition.multi_objective.logei import qLogExpectedHypervolumeImprovement
-from botorch.utils.multi_objective.box_decompositions.non_dominated import \
-    FastNondominatedPartitioning, NondominatedPartitioning
 from botorch.sampling import SobolQMCNormalSampler
-from piglot.objective import Objective, GenericObjective, ObjectiveResult
-from piglot.optimisers.botorch.dataset import BayesDataset
+from piglot.objective import (
+    Objective,
+    GenericObjective,
+    ObjectiveResult,
+)
 from piglot.optimiser import Optimiser
+from piglot.optimisers.botorch.dataset import BayesDataset
+
+
+AVAILABLE_ACQUISITIONS = [
+    # Analytical acquisitions
+    'ucb', 'ei', 'logei', 'pi',
+    # Quasi-Monte Carlo acquisitions
+    'qucb', 'qei', 'qlogei', 'qpi', 'qkg',
+    # Analytical and quasi-Monte Carlo acquisitions for noisy problems
+    'qnei', 'qlognei',
+    # Multi-objective acquisitions
+    'qehvi', 'qnehvi', 'qlogehvi', 'qlognehvi', 'qhvkg'
+]
+
+
+def default_acquisition(
+    composite: bool,
+    multi_objective: bool,
+    noisy: bool,
+    q: int,
+) -> str:
+    """Return the default acquisition function for the given optimisation problem.
+
+    Parameters
+    ----------
+    composite : bool, optional
+        Whether the optimisation problem is a composition.
+    multi_objective : bool, optional
+        Whether the optimisation problem is multi-objective.
+    noisy : bool, optional
+        Whether the optimisation problem is noisy.
+    q : int, optional
+        Number of candidates to generate.
+
+    Returns
+    -------
+    str
+        Name of the default acquisition function.
+    """
+    if multi_objective:
+        return 'qlognehvi' if noisy else 'qlogehvi'
+    if noisy:
+        return 'qlognei'
+    if composite or q > 1:
+        return 'qlogei'
+    return 'logei'
 
 
 def fit_mll_pytorch_loop(mll: ExactMarginalLogLikelihood, n_iters: int = 100) -> None:
@@ -82,7 +150,7 @@ class BayesianBoTorch(Optimiser):
         objective: Objective,
         n_initial: int = 8,
         n_test: int = 0,
-        acquisition: str = 'ucb',
+        acquisition: str = None,
         beta: float = 1.0,
         noisy: float = False,
         q: int = 1,
@@ -97,13 +165,20 @@ class BayesianBoTorch(Optimiser):
         self.n_initial = n_initial
         self.acquisition = acquisition
         self.beta = beta
-        self.noisy = bool(noisy)
+        self.noisy = bool(noisy) or objective.stochastic
         self.q = q
         self.seed = seed
         self.load_file = load_file
         self.export = export
         self.n_test = n_test
-        if self.acquisition not in ('ucb', 'ei', 'pi', 'kg', 'qucb', 'qei', 'qpi', 'qkg'):
+        if acquisition is None:
+            self.acquisition = default_acquisition(
+                objective.composition,
+                objective.multi_objective,
+                self.noisy,
+                self.q,
+            )
+        elif self.acquisition not in AVAILABLE_ACQUISITIONS:
             raise RuntimeError(f"Unkown acquisition function {self.acquisition}")
         if not self.acquisition.startswith('q') and self.q != 1:
             raise RuntimeError("Can only use q != 1 for quasi-Monte Carlo acquisitions")
@@ -282,23 +357,78 @@ class BayesianBoTorch(Optimiser):
         # Default values for multi-restart optimisation
         num_restarts = 12
         raw_samples = max(256, 16 * n_dim * n_dim)
-        # Delegate acquisition building
-        best = torch.min(dataset.values).item()
-        mc_objective = GenericMCObjective(lambda vals, X: -vals.squeeze(-1))
         sampler = SobolQMCNormalSampler(torch.Size([512]), seed=self.seed)
+        # Delegate acquisition building
+        std_dataset = dataset.standardised()
+        best = torch.min(std_dataset.values).item()
+        mc_objective = GenericMCObjective(lambda vals, X: -vals.squeeze(-1))
         if self.acquisition == 'ucb':
-            acq = UpperConfidenceBound(model, self.beta, maximize=False)
-        elif self.acquisition == 'qucb':
-            acq = qUpperConfidenceBound(model, self.beta, sampler=sampler, objective=mc_objective)
+            acq = UpperConfidenceBound(
+                model,
+                self.beta,
+                maximize=False,
+            )
         elif self.acquisition == 'ei':
-            acq = ExpectedImprovement(model, best, maximize=False)
-        elif self.acquisition == 'qei':
-            acq = qExpectedImprovement(model, best, sampler=sampler, objective=mc_objective)
+            acq = ExpectedImprovement(
+                model,
+                best,
+                maximize=False,
+            )
+        elif self.acquisition == 'logei':
+            acq = LogExpectedImprovement(
+                model,
+                best,
+                maximize=False,
+            )
         elif self.acquisition == 'pi':
-            acq = ProbabilityOfImprovement(model, best, maximize=False)
+            acq = ProbabilityOfImprovement(
+                model,
+                best,
+                maximize=False,
+            )
+        elif self.acquisition == 'qucb':
+            acq = qUpperConfidenceBound(
+                model,
+                self.beta,
+                sampler=sampler,
+                objective=mc_objective,
+            )
+        elif self.acquisition == 'qei':
+            acq = qExpectedImprovement(
+                model,
+                best,
+                sampler=sampler,
+                objective=mc_objective,
+            )
+        elif self.acquisition == 'qlogei':
+            acq = qLogExpectedImprovement(
+                model,
+                best,
+                sampler=sampler,
+                objective=mc_objective,
+            )
+        elif self.acquisition == 'qnei':
+            acq = qNoisyExpectedImprovement(
+                model,
+                std_dataset.params,
+                sampler=sampler,
+                objective=mc_objective,
+            )
+        elif self.acquisition == 'qlognei':
+            acq = qLogNoisyExpectedImprovement(
+                model,
+                std_dataset.params,
+                sampler=sampler,
+                objective=mc_objective,
+            )
         elif self.acquisition == 'qpi':
-            acq = qProbabilityOfImprovement(model, best, sampler=sampler, objective=mc_objective)
-        elif self.acquisition in ('kg', 'qkg'):
+            acq = qProbabilityOfImprovement(
+                model,
+                best,
+                sampler=sampler,
+                objective=mc_objective,
+            )
+        elif self.acquisition == 'qkg':
             # Knowledge gradient is quite expensive: use less samples
             num_restarts = 6
             raw_samples = 128
@@ -336,7 +466,9 @@ class BayesianBoTorch(Optimiser):
         # Default values for multi-restart optimisation
         num_restarts = 12
         raw_samples = max(256, 16 * n_dim * n_dim)
+        sampler = SobolQMCNormalSampler(torch.Size([512]), seed=self.seed)
         # Prepare standardised dataset
+        std_dataset = dataset.standardised()
         _, y_avg, y_std = dataset.get_obervation_stats()
         # Delegate acquisition building
         mc_objective = GenericMCMultiOutputObjective(
@@ -344,13 +476,44 @@ class BayesianBoTorch(Optimiser):
                 dataset.expand_observations(vals * y_std + y_avg)
             )
         )
-        # Build acquisition
-        acq = qLogExpectedHypervolumeImprovement(
-            model,
-            self.mo_data.ref_point,
-            self.mo_data.partitioning,
-            objective=mc_objective,
-        )
+        if self.acquisition == 'qehvi':
+            acq = qExpectedHypervolumeImprovement(
+                model,
+                self.mo_data.ref_point,
+                self.mo_data.partitioning,
+                objective=mc_objective,
+                sampler=sampler,
+            )
+        elif self.acquisition == 'qlogehvi':
+            acq = qLogExpectedHypervolumeImprovement(
+                model,
+                self.mo_data.ref_point,
+                self.mo_data.partitioning,
+                objective=mc_objective,
+                sampler=sampler,
+            )
+        elif self.acquisition == 'qnehvi':
+            acq = qNoisyExpectedHypervolumeImprovement(
+                model,
+                self.mo_data.ref_point,
+                std_dataset.params,
+                objective=mc_objective,
+                sampler=sampler,
+            )
+        elif self.acquisition == 'qlognehvi':
+            acq = qLogNoisyExpectedHypervolumeImprovement(
+                model,
+                self.mo_data.ref_point,
+                std_dataset.params,
+                objective=mc_objective,
+                sampler=sampler,
+            )
+        elif self.acquisition == 'qhvkg':
+            acq = qHypervolumeKnowledgeGradient(
+                model,
+                self.mo_data.ref_point,
+                objective=mc_objective,
+            )
         return acq, num_restarts, raw_samples
 
     def _build_acquisition_composite(
@@ -362,6 +525,7 @@ class BayesianBoTorch(Optimiser):
         # Default values for multi-restart optimisation
         num_restarts = 12
         raw_samples = max(256, 16 * n_dim * n_dim)
+        sampler = SobolQMCNormalSampler(torch.Size([512]), seed=self.seed)
         # Build composite MC objective
         _, y_avg, y_std = dataset.get_obervation_stats()
         mc_objective = GenericMCObjective(
@@ -370,15 +534,51 @@ class BayesianBoTorch(Optimiser):
             )
         )
         # Delegate acquisition building
-        best = torch.max(dataset.values).item()
-        sampler = SobolQMCNormalSampler(torch.Size([512]), seed=self.seed)
-        if self.acquisition in ('ucb', 'qucb'):
-            acq = qUpperConfidenceBound(model, self.beta, sampler=sampler, objective=mc_objective)
-        elif self.acquisition in ('ei', 'qei'):
-            acq = qExpectedImprovement(model, best, sampler=sampler, objective=mc_objective)
-        elif self.acquisition in ('pi', 'qpi'):
-            acq = qProbabilityOfImprovement(model, best, sampler=sampler, objective=mc_objective)
-        elif self.acquisition in ('kg', 'qkg'):
+        std_dataset = dataset.standardised()
+        best = torch.max(mc_objective(std_dataset.values)).item()
+        if self.acquisition == 'qucb':
+            acq = qUpperConfidenceBound(
+                model,
+                self.beta,
+                sampler=sampler,
+                objective=mc_objective,
+            )
+        elif self.acquisition == 'qei':
+            acq = qExpectedImprovement(
+                model,
+                best,
+                sampler=sampler,
+                objective=mc_objective,
+            )
+        elif self.acquisition == 'qlogei':
+            acq = qLogExpectedImprovement(
+                model,
+                best,
+                sampler=sampler,
+                objective=mc_objective,
+            )
+        elif self.acquisition == 'qnei':
+            acq = qNoisyExpectedImprovement(
+                model,
+                std_dataset.params,
+                sampler=sampler,
+                objective=mc_objective,
+            )
+        elif self.acquisition == 'qlognei':
+            acq = qLogNoisyExpectedImprovement(
+                model,
+                std_dataset.params,
+                sampler=sampler,
+                objective=mc_objective,
+            )
+        elif self.acquisition == 'qpi':
+            acq = qProbabilityOfImprovement(
+                model,
+                best,
+                sampler=sampler,
+                objective=mc_objective,
+            )
+        elif self.acquisition == 'qkg':
             # Knowledge gradient is quite expensive: use less samples
             num_restarts = 6
             raw_samples = 128
