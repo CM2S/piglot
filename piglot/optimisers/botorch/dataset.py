@@ -18,19 +18,21 @@ class BayesDataset:
             dtype: torch.dtype = torch.float64,
             std_tol: float = 1e-6,
             def_variance: float = 1e-6,
+            device: str = "cpu",
             ) -> None:
         self.dtype = dtype
         self.n_points = 0
         self.n_dim = n_dim
         self.n_outputs = n_outputs
-        self.params = torch.empty((0, n_dim), dtype=dtype)
-        self.values = torch.empty((0, n_outputs), dtype=dtype)
-        self.variances = torch.empty((0, n_outputs), dtype=dtype)
-        self.lbounds = torch.tensor(bounds[:, 0], dtype=dtype)
-        self.ubounds = torch.tensor(bounds[:, 1], dtype=dtype)
+        self.params = torch.empty((0, n_dim), dtype=dtype, device=device)
+        self.values = torch.empty((0, n_outputs), dtype=dtype, device=device)
+        self.variances = torch.empty((0, n_outputs), dtype=dtype, device=device)
+        self.lbounds = torch.tensor(bounds[:, 0], dtype=dtype, device=device)
+        self.ubounds = torch.tensor(bounds[:, 1], dtype=dtype, device=device)
         self.export = export
         self.std_tol = std_tol
         self.def_variance = def_variance
+        self.device = device
 
     def load(self, filename: str) -> None:
         """Load data from a given input file.
@@ -40,7 +42,7 @@ class BayesDataset:
         filename : str
             Path to the file to read from.
         """
-        joint = torch.load(filename)
+        joint = torch.load(filename, map_location=self.device)
         idx1 = self.n_dim
         idx2 = self.n_dim + self.n_outputs
         for point in joint:
@@ -74,9 +76,9 @@ class BayesDataset:
         result : ObjectiveResult
             Result for this observation.
         """
-        torch_params = torch.tensor(params, dtype=self.dtype)
-        torch_value = torch.tensor(results, dtype=self.dtype)
-        torch_variance = torch.tensor(variance, dtype=self.dtype)
+        torch_params = torch.tensor(params, dtype=self.dtype, device=self.device)
+        torch_value = torch.tensor(results, dtype=self.dtype, device=self.device)
+        torch_variance = torch.tensor(variance, dtype=self.dtype, device=self.device)
         self.params = torch.cat([self.params, torch_params.unsqueeze(0)], dim=0)
         self.values = torch.cat([self.values, torch_value.unsqueeze(0)], dim=0)
         self.variances = torch.cat([self.variances, torch_variance.unsqueeze(0)], dim=0)
@@ -222,4 +224,26 @@ class BayesDataset:
             Parameters and values for the minimum point.
         """
         idx = np.argmin([transformer(value) for value in self.values])
-        return self.params[idx, :].numpy(), self.values[idx, :].numpy()
+        return self.params[idx, :].cpu().numpy(), self.values[idx, :].cpu().numpy()
+
+    def to(self, device: str) -> BayesDataset:
+        """Move the dataset to a given device.
+
+        Parameters
+        ----------
+        device : str
+            Device to move the dataset to.
+
+        Returns
+        -------
+        BayesDataset
+            The dataset in the new device.
+        """
+        new_dataset = copy.deepcopy(self)
+        new_dataset.params = self.params.to(device)
+        new_dataset.values = self.values.to(device)
+        new_dataset.variances = self.variances.to(device)
+        new_dataset.lbounds = self.lbounds.to(device)
+        new_dataset.ubounds = self.ubounds.to(device)
+        new_dataset.device = device
+        return new_dataset
