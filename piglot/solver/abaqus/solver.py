@@ -1,5 +1,5 @@
 """Module for Abaqus solver."""
-from typing import Dict, Any
+from typing import Dict, Any, List
 import os
 import time
 import shutil
@@ -22,6 +22,7 @@ class AbaqusSolver(Solver):
         abaqus_bin: str,
         parallel: int,
         tmp_dir: str,
+        extra_args: str = None,
     ) -> None:
         """Constructor for the Abaqus solver class.
 
@@ -44,6 +45,7 @@ class AbaqusSolver(Solver):
         self.abaqus_bin = abaqus_bin
         self.parallel = parallel
         self.tmp_dir = tmp_dir
+        self.extra_args = extra_args
 
     def _post_proc_variables(self, input_data: AbaqusInputData) -> Dict[str, Any]:
         """Generate the post-processing variables.
@@ -98,9 +100,15 @@ class AbaqusSolver(Solver):
 
         # Run ABAQUS (we don't use high precision timers here to keep track of the start time)
         begin_time = time.time()
+        extra_args: List[str] = self.extra_args.split() if self.extra_args else []
         run_inp = subprocess.run(
-            [self.abaqus_bin, f"job={input_data.job_name}", f"input={os.path.basename(input_file)}",
-                'interactive', 'ask_delete=OFF'],
+            [
+                self.abaqus_bin,
+                f"job={input_data.job_name}",
+                f"input={os.path.basename(input_file)}",
+                'interactive',
+                'ask_delete=OFF',
+            ] + extra_args,
             cwd=tmp_dir,
             shell=False,
             stdout=subprocess.DEVNULL,
@@ -215,6 +223,7 @@ class AbaqusSolver(Solver):
         # Read the parallelism and temporary directory (if present)
         parallel = int(config.get('parallel', 1))
         tmp_dir = os.path.join(output_dir, config.get('tmp_dir', 'tmp'))
+        extra_args = config.get('extra_args', None)
         # Read the cases
         if 'cases' not in config:
             raise ValueError("Missing 'cases' in solver configuration.")
@@ -235,4 +244,12 @@ class AbaqusSolver(Solver):
                                               step_name,
                                               instance_name), fields))
         # Return the solver
-        return AbaqusSolver(cases, parameters, output_dir, abaqus_bin, parallel, tmp_dir)
+        return AbaqusSolver(
+            cases,
+            parameters,
+            output_dir,
+            abaqus_bin,
+            parallel,
+            tmp_dir,
+            extra_args=extra_args,
+        )
