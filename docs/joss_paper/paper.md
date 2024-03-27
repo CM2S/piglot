@@ -37,10 +37,6 @@ This tool aims to provide a simple and user-friendly interface that seamlessly i
 `piglot` emerges as a versatile toolkit for tackling inverse problems spanning diverse research domains, such as structural analysis, material modelling, fluid dynamics, control systems, and astrophysics - fields where methodologies such as finite element analysis, spectral methods, and Monte Carlo simulations are often adopted.
 The primary emphasis is on derivative-free optimisation, ensuring compatibility with black-box solvers in scenarios lacking gradient information and when function evaluations may be noisy.
 
-
-
-![Logo of `piglot`. \label{fig:piglot_logo}](../source/media/logo.svg){width=35%}
-
 # Statement of need
 
 The increasingly growing interest in computational analysis for engineering problems has been driving the development of more accurate, robust and efficient methods and models.
