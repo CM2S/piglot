@@ -1,26 +1,98 @@
 """Main optimiser classes for using BoTorch with piglot"""
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Optional, Any
 from multiprocessing.pool import ThreadPool as Pool
 import warnings
 import numpy as np
 import torch
 from scipy.stats import qmc
+from torch.quasirandom import SobolEngine
 from gpytorch.mlls import ExactMarginalLogLikelihood
+from gpytorch.models import ExactGP
 import botorch
+from botorch.exceptions import UnsupportedError
 from botorch.fit import fit_gpytorch_mll
 from botorch.optim import optimize_acqf
 from botorch.models.model import Model
-from botorch.models import SingleTaskGP
+from botorch.models import SingleTaskGP, MultiTaskGP
 from botorch.acquisition.acquisition import AcquisitionFunction
 from botorch.acquisition import UpperConfidenceBound, qUpperConfidenceBound
 from botorch.acquisition import ExpectedImprovement, qExpectedImprovement
+from botorch.acquisition import LogExpectedImprovement, qLogExpectedImprovement
 from botorch.acquisition import ProbabilityOfImprovement, qProbabilityOfImprovement
 from botorch.acquisition.objective import GenericMCObjective
 from botorch.acquisition.knowledge_gradient import qKnowledgeGradient
-from botorch.sampling import SobolQMCNormalSampler
+from botorch.sampling import SobolQMCNormalSampler, MultivariateNormalQMCEngine
+from botorch.sampling.normal import NormalMCSampler
+from botorch.posteriors import Posterior
 from piglot.objective import Objective, GenericObjective, ObjectiveResult
 from piglot.optimisers.botorch.dataset import BayesDataset
 from piglot.optimiser import Optimiser
+
+
+AVAILABLE_ACQUISITIONS = (
+    'ucb',
+    'ei',
+    'pi',
+    'kg',
+    'qucb',
+    'qei',
+    'qpi',
+    'qkg',
+    'logei',
+    'qlogei',
+)
+
+
+class SobolQMCMultivariateNormalSampler(NormalMCSampler):
+    r"""Sampler for quasi-MC N(0,sigma) base samples using Sobol sequences.
+    """
+
+    def __init__(
+        self,
+        sample_shape: torch.Size,
+        model: ExactGP,
+        seed: Optional[int] = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(sample_shape=sample_shape, seed=seed, **kwargs)
+        self.cov = torch.corrcoef(model.train_targets)
+        if len(self.cov.shape) == 0:
+            self.cov = torch.eye(1)
+
+    def _construct_base_samples(self, posterior: Posterior) -> None:
+        r"""Generate quasi-random Normal base samples (if necessary).
+
+        This function will generate a new set of base samples and set the
+        `base_samples` buffer if one of the following is true:
+
+        - the MCSampler has no `base_samples` attribute.
+        - the output of `_get_collapsed_shape` does not agree with the shape of
+            `self.base_samples`.
+
+        Args:
+            posterior: The Posterior for which to generate base samples.
+        """
+        target_shape = self._get_collapsed_shape(posterior=posterior)
+        if self.base_samples is None or self.base_samples.shape != target_shape:
+            base_collapsed_shape = target_shape[len(self.sample_shape):]
+            output_dim = base_collapsed_shape.numel()
+            if output_dim > SobolEngine.MAXDIM:
+                raise UnsupportedError(
+                    "SobolQMCSampler only supports dimensions "
+                    f"`q * o <= {SobolEngine.MAXDIM}`. Requested: {output_dim}"
+                )
+            dtype = torch.float if posterior.dtype is None else posterior.dtype
+            normal_qmc_engine = MultivariateNormalQMCEngine(
+                torch.zeros(output_dim, dtype=dtype),
+                torch.block_diag(*[self.cov for _ in range(base_collapsed_shape[0])]),
+                seed=self.seed,
+                inv_transform=True,
+            )
+            base_samples = normal_qmc_engine.draw(self.sample_shape.numel())
+            base_samples = base_samples.to(device=posterior.device)
+            base_samples = base_samples.view(target_shape)
+            self.register_buffer("base_samples", base_samples)
+        self.to(device=posterior.device, dtype=posterior.dtype)
 
 
 def fit_mll_pytorch_loop(mll: ExactMarginalLogLikelihood, n_iters: int = 100) -> None:
@@ -62,6 +134,9 @@ class BayesianBoTorch(Optimiser):
         load_file: str = None,
         export: str = None,
         device: str = 'cpu',
+        pca_variance: float = None,
+        sampler: bool = False,
+        multitask: bool = False,
     ) -> None:
         if not isinstance(objective, GenericObjective):
             raise RuntimeError("Bayesian optimiser requires a GenericObjective")
@@ -77,7 +152,12 @@ class BayesianBoTorch(Optimiser):
         self.export = export
         self.n_test = n_test
         self.device = device
-        if self.acquisition not in ('ucb', 'ei', 'pi', 'kg', 'qucb', 'qei', 'qpi', 'qkg'):
+        self.pca_variance = pca_variance
+        self.multivariate_sampler = sampler
+        self.multitask = multitask
+        if self.multitask and self.multivariate_sampler:
+            raise RuntimeError("Cannot use both multitask and multivariate sampler")
+        if self.acquisition not in AVAILABLE_ACQUISITIONS:
             raise RuntimeError(f"Unkown acquisition function {self.acquisition}")
         if not self.acquisition.startswith('q') and self.q != 1:
             raise RuntimeError("Can only use q != 1 for quasi-Monte Carlo acquisitions")
@@ -109,15 +189,34 @@ class BayesianBoTorch(Optimiser):
         variances = std_dataset.variances
         # Clamp variances to prevent warnings from GPyTorch
         variances = torch.clamp_min(variances, 1e-6)
-        # Initialise model instance depending on noise setting
-        model = SingleTaskGP(params, values, train_Yvar=None if self.noisy else variances)
+        if self.multitask:
+            # Build multi-task dataset
+            num_points = params.shape[0]
+            num_tasks = values.shape[1]
+            params_mt = torch.cat((
+                params.repeat(num_tasks, 1),
+                torch.arange(num_tasks).unsqueeze(-1).repeat(1, num_points).reshape(-1, 1)
+            ), dim=1)
+            # Initialise model instance depending on noise setting
+            model = MultiTaskGP(
+                params_mt,
+                values.T.reshape(-1, 1),
+                task_feature=-1,
+                train_Yvar=None if self.noisy else variances.T.reshape(-1, 1),
+            )
+        else:
+            # Initialise model instance depending on noise setting
+            model = SingleTaskGP(params, values, train_Yvar=None if self.noisy else variances)
         # Fit the GP (in case of trouble, fall back to an Adam-based optimiser)
         mll = ExactMarginalLogLikelihood(model.likelihood, model)
-        try:
-            fit_gpytorch_mll(mll)
-        except botorch.exceptions.ModelFittingError:
-            warnings.warn('Optimisation of the MLL failed, falling back to PyTorch optimiser')
+        if self.multitask:
             fit_mll_pytorch_loop(mll)
+        else:
+            try:
+                fit_gpytorch_mll(mll)
+            except botorch.exceptions.ModelFittingError:
+                warnings.warn('Optimisation of the MLL failed, falling back to PyTorch optimiser')
+                fit_mll_pytorch_loop(mll)
         return model
 
     def _get_candidates(
@@ -154,7 +253,7 @@ class BayesianBoTorch(Optimiser):
             num_restarts=num_restarts,
             raw_samples=raw_samples,
             options={
-                "sample_around_best": True,
+                "sample_around_best": not self.multitask,
                 "seed": self.seed,
             },
         )
@@ -224,8 +323,12 @@ class BayesianBoTorch(Optimiser):
             acq = qUpperConfidenceBound(model, self.beta, sampler=sampler, objective=mc_objective)
         elif self.acquisition == 'ei':
             acq = ExpectedImprovement(model, best, maximize=False)
+        elif self.acquisition == 'logei':
+            acq = LogExpectedImprovement(model, best, maximize=False)
         elif self.acquisition == 'qei':
             acq = qExpectedImprovement(model, best, sampler=sampler, objective=mc_objective)
+        elif self.acquisition == 'qlogei':
+            acq = qLogExpectedImprovement(model, best, sampler=sampler, objective=mc_objective)
         elif self.acquisition == 'pi':
             acq = ProbabilityOfImprovement(model, best, maximize=False)
         elif self.acquisition == 'qpi':
@@ -250,17 +353,23 @@ class BayesianBoTorch(Optimiser):
         num_restarts = 12
         raw_samples = max(256, 16 * n_dim * n_dim)
         # Build composite MC objective
-        _, y_avg, y_std = dataset.get_obervation_stats()
+        transformation = dataset.untransform_callable()
         mc_objective = GenericMCObjective(
-            lambda vals, X: -self.objective.composition.composition_torch(vals * y_std + y_avg)
+            lambda vals, X: -self.objective.composition.composition_torch(transformation(vals))
         )
+        # Build MC sampler to use
+        if self.multivariate_sampler:
+            sampler = SobolQMCMultivariateNormalSampler(torch.Size([512]), model, seed=self.seed)
+        else:
+            sampler = SobolQMCNormalSampler(torch.Size([512]), seed=self.seed)
         # Delegate acquisition building
-        best = torch.max(dataset.values).item()
-        sampler = SobolQMCNormalSampler(torch.Size([512]), seed=self.seed)
+        best = torch.max(-self.objective.composition.composition_torch(dataset.values)).item()
         if self.acquisition in ('ucb', 'qucb'):
             acq = qUpperConfidenceBound(model, self.beta, sampler=sampler, objective=mc_objective)
         elif self.acquisition in ('ei', 'qei'):
             acq = qExpectedImprovement(model, best, sampler=sampler, objective=mc_objective)
+        elif self.acquisition in ('logei', 'qlogei'):
+            acq = qLogExpectedImprovement(model, best, sampler=sampler, objective=mc_objective)
         elif self.acquisition in ('pi', 'qpi'):
             acq = qProbabilityOfImprovement(model, best, sampler=sampler, objective=mc_objective)
         elif self.acquisition in ('kg', 'qkg'):
@@ -309,7 +418,14 @@ class BayesianBoTorch(Optimiser):
         n_outputs = len(init_values)
 
         # Build initial dataset with the initial shot
-        dataset = BayesDataset(n_dim, n_outputs, bound, export=self.export, device=self.device)
+        dataset = BayesDataset(
+            n_dim,
+            n_outputs,
+            bound,
+            export=self.export,
+            device=self.device,
+            pca_variance=self.pca_variance,
+        )
         dataset.push(init_shot, init_values, init_variances)
 
         # If requested, sample some random points before starting (in parallel if possible)

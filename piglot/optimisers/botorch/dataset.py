@@ -19,6 +19,7 @@ class BayesDataset:
             std_tol: float = 1e-6,
             def_variance: float = 1e-6,
             device: str = "cpu",
+            pca_variance: float = None,
             ) -> None:
         self.dtype = dtype
         self.n_points = 0
@@ -33,6 +34,7 @@ class BayesDataset:
         self.std_tol = std_tol
         self.def_variance = def_variance
         self.device = device
+        self.pca_variance = pca_variance
 
     def load(self, filename: str) -> None:
         """Load data from a given input file.
@@ -87,6 +89,15 @@ class BayesDataset:
         if self.export is not None:
             self.save(self.export)
 
+    def _pca_reduction_matrix(self, data, target_variance):
+        # SVD of the de-meaned data
+        data = data - torch.mean(data, dim=-2)
+        _, s, V = torch.linalg.svd(data, full_matrices=False)
+        # Compute cummulative variances and select the number of components
+        cumsum_variances = torch.cumsum(s / s.sum(), 0)
+        n_components = min(torch.searchsorted(cumsum_variances, target_variance) + 2, data.shape[1])
+        return V.T[:, :n_components], n_components
+
     def get_obervation_stats(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return statistics of the observations.
 
@@ -113,6 +124,33 @@ class BayesDataset:
         y_std = y_std[mask]
         return mask, y_avg, y_std
 
+    def expand_observations(self, reduced: torch.Tensor) -> torch.Tensor:
+        """Expand reduced observations to full size.
+
+        Parameters
+        ----------
+        reduced : torch.Tensor
+            Reduced observations.
+
+        Returns
+        -------
+        torch.Tensor
+            Expanded observations.
+        """
+        # Infer the shape of the expanded tensor: only modify the last dimension
+        new_shape = list(reduced.shape)
+        new_shape[-1] = self.n_outputs
+        expanded = torch.empty(new_shape, dtype=self.dtype, device=self.device)
+        # Collapse the tensor to a 2D array for indexing the last dimension
+        expanded_flat = expanded.view(-1, self.n_outputs)
+        mask, _, _ = self.get_obervation_stats()
+        expanded_flat[:, mask] = reduced.view(-1, reduced.shape[-1])
+        # Fill the missing values with the average of the observed ones
+        y_avg = torch.mean(self.values, dim=-2)
+        expanded_flat[:, ~mask] = y_avg[~mask]
+        # Note: we are using a view, so the expanded tensor is already modified
+        return expanded
+
     def standardised(self) -> BayesDataset:
         """Return a dataset with unit-cube parameters and standardised outputs.
 
@@ -121,12 +159,22 @@ class BayesDataset:
         BayesDataset
             The resulting dataset.
         """
-        # Build unit cube space and standardised dataset
+        # Build unit cube space
         std_dataset = copy.deepcopy(self)
         std_dataset.params = self.normalise(self.params)
-        std_dataset.values, std_dataset.variances = self.standardise(self.values, self.variances)
         std_dataset.lbounds = torch.zeros_like(self.lbounds)
         std_dataset.ubounds = torch.ones_like(self.ubounds)
+        # Standardise outputs
+        if self.pca_variance is not None:
+            transformation, _ = self._pca_reduction_matrix(self.values, self.pca_variance)
+            values = torch.matmul(self.values, transformation)
+            variances = torch.matmul(self.variances, torch.square(transformation))
+            y_avg = torch.mean(values, dim=-2)
+            y_std = torch.std(values, dim=-2)
+            std_dataset.values = (values - y_avg) / y_std
+            std_dataset.variances = variances / y_std
+        else:
+            std_dataset.values, std_dataset.variances = self.standardise(self.values, self.variances)
         return std_dataset
 
     def normalise(self, params: torch.Tensor) -> torch.Tensor:
@@ -225,6 +273,25 @@ class BayesDataset:
         """
         idx = np.argmin([transformer(value) for value in self.values])
         return self.params[idx, :].cpu().numpy(), self.values[idx, :].cpu().numpy()
+
+    def untransform_callable(self) -> Callable[[torch.Tensor], torch.Tensor]:
+        """Return a callable to untransform reduced observations.
+
+        Returns
+        -------
+        Callable[[torch.Tensor], torch.Tensor]
+            Transformation to apply to the reduced observations.
+        """
+        if self.pca_variance is None:
+            _, y_avg, y_std = self.get_obervation_stats()
+            return lambda x: self.expand_observations(x * y_std + y_avg)
+
+        n_original = self.values.shape[0]
+        T, n_final = self._pca_reduction_matrix(self.values, self.pca_variance)
+        values = torch.matmul(self.values, T)
+        y_avg = torch.mean(values, dim=-2)
+        y_std = torch.std(values, dim=-2)
+        return lambda x: torch.matmul(x * y_std + y_avg, T.T) * np.sqrt(n_original / n_final)
 
     def to(self, device: str) -> BayesDataset:
         """Move the dataset to a given device.
