@@ -113,6 +113,31 @@ class BayesDataset:
         y_std = y_std[mask]
         return mask, y_avg, y_std
 
+    def expand_observations(self, reduced: torch.Tensor) -> torch.Tensor:
+        """Expand reduced observations to full size.
+        Parameters
+        ----------
+        reduced : torch.Tensor
+            Reduced observations.
+        Returns
+        -------
+        torch.Tensor
+            Expanded observations.
+        """
+        # Infer the shape of the expanded tensor: only modify the last dimension
+        new_shape = list(reduced.shape)
+        new_shape[-1] = self.n_outputs
+        expanded = torch.empty(new_shape, dtype=self.dtype, device=self.device)
+        # Collapse the tensor to a 2D array for indexing the last dimension
+        expanded_flat = expanded.view(-1, self.n_outputs)
+        mask, _, _ = self.get_obervation_stats()
+        expanded_flat[:, mask] = reduced.view(-1, reduced.shape[-1])
+        # Fill the missing values with the average of the observed ones
+        y_avg = torch.mean(self.values, dim=-2)
+        expanded_flat[:, ~mask] = y_avg[~mask]
+        # Note: we are using a view, so the expanded tensor is already modified
+        return expanded
+
     def standardised(self) -> BayesDataset:
         """Return a dataset with unit-cube parameters and standardised outputs.
 

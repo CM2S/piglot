@@ -252,7 +252,9 @@ class BayesianBoTorch(Optimiser):
         # Build composite MC objective
         _, y_avg, y_std = dataset.get_obervation_stats()
         mc_objective = GenericMCObjective(
-            lambda vals, X: -self.objective.composition.composition_torch(vals * y_std + y_avg)
+            lambda vals, X: -self.objective.composition.composition_torch(
+                dataset.expand_observations(vals * y_std + y_avg)
+            )
         )
         # Delegate acquisition building
         best = torch.max(dataset.values).item()
