@@ -5,10 +5,12 @@ from abc import ABC, abstractmethod
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+import torch
 from piglot.parameter import ParameterSet
 from piglot.solver import read_solver
 from piglot.solver.solver import Solver, OutputResult
-from piglot.objective import DynamicPlotter, GenericObjective, ObjectiveResult
+from piglot.objective import Composition, DynamicPlotter, GenericObjective, ObjectiveResult
+from piglot.objectives.compositions import UnflattenUtility, FixedLengthTransformer
 from piglot.utils.assorted import stats_interp_to_common_grid
 from piglot.utils.solver_utils import load_module_from_file
 
@@ -16,62 +18,107 @@ from piglot.utils.solver_utils import load_module_from_file
 class Quantity(ABC):
     """Abstract class for quantities to be computed from a response."""
 
-    @abstractmethod
-    def compute(self, result: OutputResult) -> float:
+    def compute(self, time: np.ndarray, data: np.ndarray) -> float:
         """Compute this quantity for a given response.
 
         Parameters
         ----------
-        result : OutputResult
-            Output result to compute the quantity for.
+        time : np.ndarray
+            Time points of the response.
+        data : np.ndarray
+            Data points of the response.
 
         Returns
         -------
         float
             Quantity value.
+        """
+        return self.compute_torch(torch.from_numpy(time), torch.from_numpy(data)).item()
+
+    @abstractmethod
+    def compute_torch(self, time: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+        """Compute this quantity for a given response (with gradients).
+
+        Parameters
+        ----------
+        time : np.ndarray
+            Time points of the response.
+        data : np.ndarray
+            Data points of the response.
+
+        Returns
+        -------
+        torch.Tensor
+            Quantity value (with gradients).
         """
 
 
 class MaxQuantity(Quantity):
     """Maximum value of a response."""
 
-    def compute(self, result: OutputResult) -> float:
-        """Get the maximum of a given response.
+    def compute_torch(self, time: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+        """Get the maximum of a given response (with gradients).
 
         Parameters
         ----------
-        result : OutputResult
-            Output result to compute the quantity for.
+        time : np.ndarray
+            Time points of the response.
+        data : np.ndarray
+            Data points of the response.
 
         Returns
         -------
-        float
-            Quantity value.
+        torch.Tensor
+            Quantity value (with gradients).
         """
-        return np.max(result.get_data())
+        return torch.max(data, dim=-1)[0]
+
+
+class MinQuantity(Quantity):
+    """Minimum value of a response."""
+
+    def compute_torch(self, time: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+        """Get the minimum of a given response (with gradients).
+
+        Parameters
+        ----------
+        time : np.ndarray
+            Time points of the response.
+        data : np.ndarray
+            Data points of the response.
+
+        Returns
+        -------
+        torch.Tensor
+            Quantity value (with gradients).
+        """
+        return torch.min(data, dim=-1)[0]
 
 
 class IntegralQuantity(Quantity):
     """Integral of a response."""
 
-    def compute(self, result: OutputResult) -> float:
-        """Get the integral of a given response.
+    def compute_torch(self, time: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+        """Get the integral of a given response (with gradients).
 
         Parameters
         ----------
-        result : OutputResult
-            Output result to compute the quantity for.
+        time : np.ndarray
+            Time points of the response.
+        data : np.ndarray
+            Data points of the response.
 
         Returns
         -------
-        float
-            Quantity value.
+        torch.Tensor
+            Quantity value (with gradients).
         """
-        return np.trapz(result.get_data(), result.get_time())
+        return torch.trapz(data, time, dim=-1)
 
 
 AVAILABLE_QUANTITIES: Dict[str, Type[Quantity]] = {
     'max': MaxQuantity,
+    'min': MinQuantity,
     'integral': IntegralQuantity,
 }
 
@@ -86,6 +133,7 @@ class DesignTarget:
             quantity: Quantity,
             negate: bool = False,
             weight: float = 1.0,
+            n_points: int = None,
             ) -> None:
         # Sanitise prediction field
         if isinstance(prediction, str):
@@ -97,22 +145,59 @@ class DesignTarget:
         self.quantity = quantity
         self.negate = negate
         self.weight = weight
+        self.n_points = n_points
+        self.transformer = FixedLengthTransformer(n_points)  # if n_points is not None else None
 
-    def compute_quantity(self, results: OutputResult) -> float:
+    def compute_quantity(self, time: np.ndarray, data: np.ndarray) -> float:
         """Compute the design quantity for the given results.
 
         Parameters
         ----------
-        results : OutputResult
-            Results to compute the quantity for.
+        time : np.ndarray
+            Time points of the response.
+        data : np.ndarray
+            Data points of the response.
 
         Returns
         -------
         float
             Design quantity for this response.
         """
-        value = self.quantity.compute(results)
+        value = self.quantity.compute(time, data)
         return -value if self.negate else value
+
+    def compute_quantity_torch(self, time: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+        """Compute the design quantity for the given results.
+
+        Parameters
+        ----------
+        time : torch.Tensor
+            Time points of the response.
+        data : torch.Tensor
+            Data points of the response.
+
+        Returns
+        -------
+        torch.Tensor
+            Design quantity for this response.
+        """
+        value = self.quantity.compute_torch(time, data)
+        return -value if self.negate else value
+
+    def flatten(self, response: OutputResult) -> np.ndarray:
+        """Flatten the response for this target.
+
+        Parameters
+        ----------
+        response : OutputResult
+            Response to flatten.
+
+        Returns
+        -------
+        np.ndarray
+            Flattened response.
+        """
+        return self.transformer.transform(response.get_time(), response.get_data())
 
     @staticmethod
     def read(name: str, config: Dict[str, Any], output_dir: str) -> DesignTarget:
@@ -159,6 +244,8 @@ class DesignTarget:
             config['prediction'],
             quantity_class(),
             negate=bool(config.get('negate', False)),
+            weight=float(config.get('weight', 1.0)),
+            n_points=int(config['n_points']) if 'n_points' in config else None,
         )
 
 
@@ -206,6 +293,68 @@ class CurrentPlot(DynamicPlotter):
             fig.canvas.flush_events()
 
 
+class DesignComposition(Composition):
+    """Optimisation composition function for design objectives."""
+
+    def __init__(self, outmost: str, targets: List[DesignTarget]) -> None:
+        # Sanitise the number of points for each design target
+        for target in targets:
+            if target.n_points is None:
+                raise ValueError(
+                    "All targets must have a number of points specified for the composition."
+                )
+        self.targets = targets
+        self.unflatten_utility = UnflattenUtility([t.transformer.length() for t in self.targets])
+
+    def composition(self, inner: np.ndarray) -> float:
+        """Compute the outer function of the composition.
+
+        Parameters
+        ----------
+        inner : np.ndarray
+            Return value from the inner function.
+
+        Returns
+        -------
+        float
+            Scalar composition result.
+        """
+        unflatten = self.unflatten_utility.unflatten(inner)
+        responses = [
+            target.transformer.untransform(flattened)
+            for target, flattened in zip(self.targets, unflatten)
+        ]
+        quantities = [
+            target.compute_quantity(*response) * target.weight
+            for response, target in zip(responses, self.targets)
+        ]
+        return np.mean(quantities, axis=0)
+
+    def composition_torch(self, inner: torch.Tensor) -> torch.Tensor:
+        """Compute the outer function of the composition with gradients.
+
+        Parameters
+        ----------
+        inner : torch.Tensor
+            Return value from the inner function.
+
+        Returns
+        -------
+        torch.Tensor
+            Scalar composition result.
+        """
+        unflatten = self.unflatten_utility.unflatten_torch(inner)
+        responses = [
+            target.transformer.untransform_torch(flattened)
+            for target, flattened in zip(self.targets, unflatten)
+        ]
+        quantities = torch.stack([
+            target.compute_quantity_torch(*response) * target.weight
+            for response, target in zip(responses, self.targets)
+        ], dim=-1)
+        return torch.mean(quantities, dim=-1)
+
+
 class DesignObjective(GenericObjective):
     """Scalar design objective function."""
 
@@ -216,11 +365,12 @@ class DesignObjective(GenericObjective):
             targets: List[DesignTarget],
             output_dir: str,
             stochastic: bool = False,
+            composition: str = None,
             ) -> None:
         super().__init__(
             parameters,
             stochastic,
-            composition=None,
+            composition=DesignComposition(composition, targets) if composition else None,
             output_dir=output_dir,
         )
         self.solver = solver
@@ -249,10 +399,22 @@ class DesignObjective(GenericObjective):
         responses = self.solver.solve(values, concurrent)
         results = []
         variances = []
-        for target in self.targets:
-            targets = [target.compute_quantity(responses[pred]) for pred in target.prediction]
-            results.append(target.weight * np.mean(targets))
-            variances.append(target.weight * np.var(targets) / len(targets))
+        if self.composition is None:
+            for target in self.targets:
+                targets = [
+                    target.compute_quantity(responses[pred].get_time(), responses[pred].get_data())
+                    for pred in target.prediction
+                ]
+                results.append(target.weight * np.mean(targets))
+                variances.append(target.weight * np.var(targets) / len(targets))
+        else:
+            for target in self.targets:
+                flat_responses = np.array([
+                    target.flatten(responses[pred])
+                    for pred in target.prediction
+                ])
+                results.append(np.mean(flat_responses, axis=0))
+                variances.append(np.var(flat_responses, axis=0) / flat_responses.shape[0])
         return ObjectiveResult(results, variances if self.stochastic else None)
 
     def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
@@ -369,4 +531,5 @@ class DesignObjective(GenericObjective):
             list(targets.keys()),
             output_dir,
             stochastic=bool(config.get('stochastic', False)),
+            composition=config.get('composite', None),
         )

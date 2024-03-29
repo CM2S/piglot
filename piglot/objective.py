@@ -18,7 +18,6 @@ from piglot.parameter import ParameterSet
 class Composition(ABC):
     """Abstract class for defining composition functionals with gradients"""
 
-    @abstractmethod
     def composition(self, inner: np.ndarray) -> float:
         """Abstract method for computing the outer function of the composition
 
@@ -32,6 +31,9 @@ class Composition(ABC):
         float
             Scalar composition result
         """
+        inner_torch = torch.from_numpy(inner)
+        result = self.composition_torch(inner_torch)
+        return result.numpy(force=True).item()
 
     @abstractmethod
     def composition_torch(self, inner: torch.Tensor) -> torch.Tensor:
