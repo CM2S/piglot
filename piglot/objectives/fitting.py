@@ -276,15 +276,15 @@ class FittingSolver:
 
     def composition(
         self,
-        scalarise: bool,
+        multi_objective: bool,
         stochastic: bool,
     ) -> Composition:
         """Build the composition utility for the design objective.
 
         Parameters
         ----------
-        scalarise : bool
-            Whether we should scalarise the objective.
+        multi_objective : bool
+            Whether this is a multi-objective problem.
         stochastic : bool
             Whether the objective is stochastic.
         targets : List[DesignTarget]
@@ -296,7 +296,7 @@ class FittingSolver:
             Composition utility for the design objective.
         """
         return ResponseComposition(
-            scalarise=scalarise,
+            scalarise=not multi_objective,
             stochastic=stochastic,
             weights=[t.weight for t in self.references],
             reductions=[t.reduction for t in self.references],
@@ -463,11 +463,13 @@ class FittingObjective(GenericObjective):
             output_dir: str,
             stochastic: bool = False,
             composite: bool = False,
+            multi_objective: bool = False,
             ) -> None:
         super().__init__(
             parameters,
             stochastic,
-            composition=solver.composition(True, stochastic) if composite else None,
+            composition=solver.composition(multi_objective, stochastic) if composite else None,
+            num_objectives=len(solver.references) if multi_objective else 1,
             output_dir=output_dir,
         )
         self.composite = composite
@@ -479,7 +481,7 @@ class FittingObjective(GenericObjective):
         self.solver.prepare()
         # Reset the composition utility
         if self.composite:
-            self.composition = self.solver.composition(True, self.stochastic)
+            self.composition = self.solver.composition(self.multi_objective, self.stochastic)
 
     def _objective(self, values: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
         """Abstract method for objective computation.
@@ -592,4 +594,5 @@ class FittingObjective(GenericObjective):
             output_dir,
             stochastic=bool(config.get('stochastic', False)),
             composite=bool(config.get('composite', False)),
+            multi_objective=bool(config.get('multi_objective', False)),
         )

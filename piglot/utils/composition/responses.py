@@ -342,26 +342,6 @@ class ResponseComposition(Composition):
             self.concat.concat(variances) if self.stochastic else None,
         )
 
-    def composition(self, inner: np.ndarray, params: np.ndarray) -> np.ndarray:
-        """Compute the outer function of the composition.
-
-        Parameters
-        ----------
-        inner : np.ndarray
-            Return value from the inner function.
-        params : np.ndarray
-            Parameters for the given responses.
-
-        Returns
-        -------
-        np.ndarray
-            Composition result.
-        """
-        return self.composition_torch(
-            torch.from_numpy(inner),
-            torch.from_numpy(params),
-        ).numpy(force=True)
-
     def composition_torch(self, inner: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
         """Compute the outer function of the composition with gradients.
 

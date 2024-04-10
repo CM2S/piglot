@@ -18,7 +18,7 @@ from piglot.parameter import ParameterSet
 class Composition(ABC):
     """Abstract class for defining composition functionals with gradients"""
 
-    def composition(self, inner: np.ndarray, params: np.ndarray) -> float:
+    def composition(self, inner: np.ndarray, params: np.ndarray) -> np.ndarray:
         """Abstract method for computing the outer function of the composition
 
         Parameters
@@ -30,11 +30,11 @@ class Composition(ABC):
 
         Returns
         -------
-        float
-            Scalar composition result
+        np.ndarray
+            Composition result
         """
         result = self.composition_torch(torch.from_numpy(inner), torch.from_numpy(params))
-        return result.numpy(force=True).item()
+        return result.numpy(force=True)
 
     @abstractmethod
     def composition_torch(self, inner: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
@@ -50,7 +50,7 @@ class Composition(ABC):
         Returns
         -------
         torch.Tensor
-            Scalar composition result
+            Composition result
         """
 
 
@@ -152,8 +152,36 @@ class ObjectiveResult:
     values: List[np.ndarray]
     variances: Optional[List[np.ndarray]] = None
 
+    def __mc_variance(
+        self,
+        composition: Composition,
+        num_samples: int = 1024,
+    ) -> float:
+        """Compute the objective variance using Monte Carlo (using fixed base samples).
+
+        Parameters
+        ----------
+        composition : Composition
+            Composition functional to use.
+        num_samples : int, optional
+            Number of Monte Carlo samples, by default 1000.
+
+        Returns
+        -------
+        float
+            Estimated variance of the objective.
+        """
+        biased = [norm.rvs(loc=0, scale=1) for _ in range(num_samples)]
+        mc_objectives = [
+            composition.composition(
+                self.values + bias * np.sqrt(self.variances),
+                self.params,
+            ) for bias in biased
+        ]
+        return np.var(mc_objectives, axis=0)
+
     def scalarise(self, composition: Composition = None) -> float:
-        """Scalarise the result.
+        """Scalarise the result under noise-free single-objective optimisation.
 
         Parameters
         ----------
@@ -165,14 +193,30 @@ class ObjectiveResult:
         float
             Scalarised result.
         """
-        if composition is not None:
-            return composition.composition(self.values, self.params)
-        return np.mean(self.values)
+        if composition is None:
+            return np.mean(self.values)
+        return composition.composition(self.values, self.params).item()
+
+    def scalarise_mo(self, composition: Composition = None) -> List[float]:
+        """Pseudo-scalarise the result under noise-free multi-objective optimisation.
+
+        Parameters
+        ----------
+        composition : Composition, optional
+            Composition functional to use, by default None.
+
+        Returns
+        -------
+        List[float]
+            Pseudo-scalarised result.
+        """
+        if composition is None:
+            return [np.mean(vals) for vals in self.values]
+        return [val.item() for val in composition.composition(self.values, self.params)]
 
     def scalarise_stochastic(
         self,
         composition: Composition = None,
-        num_samples: int = 1024,
     ) -> Tuple[float, float]:
         """Scalarise the result.
 
@@ -180,23 +224,40 @@ class ObjectiveResult:
         ----------
         composition : Composition, optional
             Composition functional to use, by default None.
-        num_samples : int, optional
-            Number of samples to use for Monte Carlo, by default 1024.
 
         Returns
         -------
         Tuple[float, float]
             Scalarised mean and variance.
         """
-        if composition is not None:
-            # Compute the objective variance using Monte Carlo (using fixed base samples)
-            biased = [norm.rvs(loc=0, scale=1) for _ in range(num_samples)]
-            mc_objectives = [
-                composition.composition(self.values + bias * np.sqrt(self.variances), self.params)
-                for bias in biased
+        if composition is None:
+            return np.mean(self.values), np.sum(self.variances)
+        return (
+            composition.composition(self.values, self.params).item(),
+            self.__mc_variance(composition).item()
+        )
+
+    def scalarise_mo_stochastic(
+            self,
+            composition: Composition = None,
+    ) -> Tuple[List[float], List[float]]:
+        """Pseudo-scalarise the result under stochastic multi-objective optimisation.
+
+        Parameters
+        ----------
+        composition : Composition, optional
+            Composition functional to use, by default None.
+
+        Returns
+        -------
+        List[Tuple[float, float]]
+            Pseudo-scalarised means and variances.
+        """
+        if composition is None:
+            return [
+                (np.mean(vals), np.sum(vars)) for vals, vars in zip(self.values, self.variances)
             ]
-            return composition.composition(self.values, self.params), np.var(mc_objectives)
-        return np.mean(self.values), np.sum(self.variances)
+        return composition.composition(self.values, self.params), self.__mc_variance(composition)
 
 
 class GenericObjective(Objective):
@@ -207,6 +268,7 @@ class GenericObjective(Objective):
             parameters: ParameterSet,
             stochastic: bool = False,
             composition: Composition = None,
+            num_objectives: int = 1,
             output_dir: str = None,
             ) -> None:
         super().__init__()
@@ -214,6 +276,8 @@ class GenericObjective(Objective):
         self.output_dir = output_dir
         self.stochastic = stochastic
         self.composition = composition
+        self.num_objectives = num_objectives
+        self.multi_objective = num_objectives > 1
         self.func_calls = 0
         self.begin_time = time.perf_counter()
         self.__mutex = Lock()
@@ -226,9 +290,15 @@ class GenericObjective(Objective):
             # Build header for function calls file
             with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
                 file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}')
-                file.write(f'\t{"Objective":>15}')
-                if self.stochastic:
-                    file.write(f'\t{"Variance":>15}')
+                if self.multi_objective:
+                    for i in range(self.num_objectives):
+                        file.write(f'\t{"Objective_" + str(i + 1):>15}')
+                        if self.stochastic:
+                            file.write(f'\t{"Variance_" + str(i + 1):>15}')
+                else:
+                    file.write(f'\t{"Objective":>15}')
+                    if self.stochastic:
+                        file.write(f'\t{"Variance":>15}')
                 for param in self.parameters:
                     file.write(f"\t{param.name:>15}")
                 file.write(f'\t{"Hash":>64}\n')
@@ -276,14 +346,23 @@ class GenericObjective(Objective):
                 with open(os.path.join(self.func_calls_file), 'a', encoding='utf8') as file:
                     file.write(f'{begin_time - self.begin_time:>15.8e}\t')
                     file.write(f'{end_time - begin_time:>15.8e}\t')
-                    if self.stochastic:
-                        value, variance = objective_result.scalarise_stochastic(self.composition)
-                        file.write(f'{value:>15.8e}\t{variance:>15.8e}')
+                    if self.multi_objective:
+                        if self.stochastic:
+                            vals, vars = objective_result.scalarise_mo_stochastic(self.composition)
+                            for value, var in zip(vals, vars):
+                                file.write(f'{value:>15.8e}\t{var:>15.8e}\t')
+                        else:
+                            for val in objective_result.scalarise_mo(self.composition):
+                                file.write(f'{val:>15.8e}\t')
                     else:
-                        file.write(f'{objective_result.scalarise(self.composition):>15.8e}')
+                        if self.stochastic:
+                            value, var = objective_result.scalarise_stochastic(self.composition)
+                            file.write(f'{value:>15.8e}\t{var:>15.8e}\t')
+                        else:
+                            file.write(f'{objective_result.scalarise(self.composition):>15.8e}\t')
                     for i, param in enumerate(self.parameters):
-                        file.write(f"\t{param.denormalise(values[i]):>15.6f}")
-                    file.write(f'\t{self.parameters.hash(values)}\n')
+                        file.write(f"{param.denormalise(values[i]):>15.6f}\t")
+                    file.write(f'{self.parameters.hash(values)}\n')
         return objective_result
 
     def plot_best(self) -> List[Figure]:
@@ -294,18 +373,26 @@ class GenericObjective(Objective):
         List[Figure]
             List of figures with the plot.
         """
-        # Find hash associated with the best case
-        df = pd.read_table(self.func_calls_file)
-        df.columns = df.columns.str.strip()
-        min_series = df.iloc[df["Objective"].idxmin()]
-        call_hash = str(min_series["Hash"])
-        # Use the single case plotting utility
-        figures = self.plot_case(call_hash)
-        # Also display the best case
-        print("Best run:")
-        print(min_series.drop(["Objective", "Hash"]))
-        print(f"Hash: {call_hash}")
-        print(f"Objective: {min_series['Objective']:15.8e}")
+        # Build the objective list
+        objective_list = ["Objective"]
+        if self.multi_objective:
+            objective_list = [f"Objective_{i + 1}" for i in range(self.num_objectives)]
+        # Plot the best case for each objective
+        figures = []
+        for i, objective in enumerate(objective_list):
+            # Find hash associated with the best case
+            df = pd.read_table(self.func_calls_file)
+            df.columns = df.columns.str.strip()
+            min_series = df.iloc[df[objective].idxmin()]
+            call_hash = str(min_series["Hash"])
+            # Use the single case plotting utility
+            options = {'append_title': objective} if self.multi_objective else None
+            figures += self.plot_case(call_hash, options=options)
+            # Also display the best case
+            print(f"Best run{' (' + objective + ')'}:")
+            print(min_series.drop(objective_list + ["Hash"]))
+            print(f"Hash: {call_hash}")
+            print(f"{objective}: {min_series[objective]:15.8e}\n")
         return figures
 
     def get_history(self) -> Dict[str, Dict[str, Any]]:
@@ -321,6 +408,24 @@ class GenericObjective(Objective):
         x_axis = df["Start Time /s"] + df["Run Time /s"]
         params = df[[param.name for param in self.parameters]]
         param_hash = df["Hash"].to_list()
+        # Multi-objective case
+        if self.multi_objective:
+            values = [df[f"Objective_{i + 1}"] for i in range(self.num_objectives)]
+            if self.stochastic:
+                variances = [df[f"Variance_{i + 1}"] for i in range(self.num_objectives)]
+            return_dict = {}
+            for i in range(self.num_objectives):
+                result = {
+                    "time": x_axis.to_numpy(),
+                    "values": values[i],
+                    "params": params.to_numpy(),
+                    "hashes": param_hash,
+                }
+                if self.stochastic:
+                    result["variances"] = variances[i]
+                return_dict[f"Objective_{i + 1}"] = result
+            return return_dict
+        # Single objective case
         result = {
             "time": x_axis.to_numpy(),
             "values": df["Objective"].to_numpy(),

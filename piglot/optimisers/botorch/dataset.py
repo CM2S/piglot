@@ -115,10 +115,12 @@ class BayesDataset:
 
     def expand_observations(self, reduced: torch.Tensor) -> torch.Tensor:
         """Expand reduced observations to full size.
+
         Parameters
         ----------
         reduced : torch.Tensor
             Reduced observations.
+
         Returns
         -------
         torch.Tensor

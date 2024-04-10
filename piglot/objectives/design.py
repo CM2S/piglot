@@ -126,11 +126,15 @@ class DesignObjective(GenericObjective):
         output_dir: str,
         stochastic: bool = False,
         composite: bool = False,
+        multi_objective: bool = False,
     ) -> None:
         super().__init__(
             parameters,
             stochastic,
-            composition=self.__composition(True, stochastic, targets) if composite else None,
+            composition=(
+                self.__composition(not multi_objective, stochastic, targets) if composite else None
+            ),
+            num_objectives=len(targets) if multi_objective else 1,
             output_dir=output_dir,
         )
         self.solver = solver
@@ -358,4 +362,5 @@ class DesignObjective(GenericObjective):
             output_dir,
             stochastic=bool(config.get('stochastic', False)),
             composite=bool(config.get('composite', False)),
+            multi_objective=bool(config.get('multi_objective', False)),
         )
