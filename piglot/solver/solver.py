@@ -113,6 +113,35 @@ class OutputField(ABC):
         """
 
 
+class ScriptOutputField(OutputField):
+    """Class for script-based output fields."""
+
+    def check(self, input_data: InputData) -> None:
+        """Check for validity in the input data before reading.
+
+        Parameters
+        ----------
+        input_data : InputData
+            Container for the solver input data.
+        """
+
+    @staticmethod
+    def read(config: Dict[str, Any]) -> ScriptOutputField:
+        """Read the output field from the configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Configuration dictionary.
+
+        Returns
+        -------
+        ScriptOutputField
+            Output field to use for this problem.
+        """
+        raise RuntimeError("Cannot read the configuration for a script-based output field.")
+
+
 class Case:
     """Generic class for cases."""
 

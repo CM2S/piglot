@@ -5,9 +5,10 @@ import os
 import numpy as np
 import pandas as pd
 from piglot.parameter import ParameterSet
-from piglot.solver.solver import InputData, OutputField, OutputResult
+from piglot.solver.solver import InputData, OutputField, OutputResult, ScriptOutputField
 from piglot.utils.solver_utils import get_case_name, has_keyword, find_keyword, write_parameters
 from piglot.utils.solver_utils import has_parameter
+from piglot.utils.assorted import read_custom_module
 
 
 class LinksInputData(InputData):
@@ -354,6 +355,9 @@ def links_fields_reader(config: Dict[str, Any]) -> OutputField:
     if 'name' not in config:
         raise ValueError("Missing 'name' in output field configuration.")
     field_name = config['name']
+    # Load the output field from a script
+    if field_name == 'script':
+        return read_custom_module(config, ScriptOutputField)()
     # Delegate to the appropriate reader
     readers = {
         'Reaction': Reaction,
