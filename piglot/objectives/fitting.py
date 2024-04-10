@@ -1,129 +1,19 @@
 """Module for curve fitting objectives"""
 from __future__ import annotations
 from typing import Dict, Any, List, Union
-from abc import abstractmethod, ABC
 import os
 import sys
 import numpy as np
-import torch
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from piglot.parameter import ParameterSet
 from piglot.solver import read_solver
 from piglot.solver.solver import Solver, OutputResult
 from piglot.utils.assorted import stats_interp_to_common_grid
+from piglot.utils.reductions import Reduction, read_reduction
 from piglot.utils.responses import Transformer, reduce_response, interpolate_response
+from piglot.utils.composition.responses import ResponseComposition, FixedFlatteningUtility
 from piglot.objective import Composition, DynamicPlotter, GenericObjective, ObjectiveResult
-
-
-class Reduction(ABC):
-    """Abstract class for reduction functions with gradients."""
-
-    @abstractmethod
-    def reduce(self, inner: np.ndarray) -> np.ndarray:
-        """Abstract method for computing the reduction of numpy arrays.
-
-        Parameters
-        ----------
-        inner : np.ndarray
-            Reduction input.
-
-        Returns
-        -------
-        np.ndarray
-            Reduction result.
-        """
-
-    @abstractmethod
-    def reduce_torch(self, inner: torch.Tensor) -> torch.Tensor:
-        """Abstract method for computing the reduction of torch tensors with gradients.
-
-        Parameters
-        ----------
-        inner : torch.Tensor
-            Reduction input.
-
-        Returns
-        -------
-        torch.Tensor
-            Reduction result (with gradients).
-        """
-
-
-class MSE(Reduction):
-    """Mean squared error reduction function."""
-
-    def reduce(self, inner: np.ndarray) -> np.ndarray:
-        """Compute the mean squared error.
-
-        Parameters
-        ----------
-        inner : np.ndarray
-            Reduction input.
-
-        Returns
-        -------
-        np.ndarray
-            Reduction result.
-        """
-        return np.mean(np.square(inner), axis=-1)
-
-    def reduce_torch(self, inner: torch.Tensor) -> torch.Tensor:
-        """Compute the mean squared error.
-
-        Parameters
-        ----------
-        inner : torch.Tensor
-            Reduction input.
-
-        Returns
-        -------
-        torch.Tensor
-            Reduction result (with gradients).
-        """
-        return torch.mean(torch.square(inner), dim=-1)
-
-
-AVAILABLE_REDUCTIONS = {
-    'mse': MSE,
-}
-
-
-class CompositionFromReduction(Composition):
-    """Optimisation composition function from a reduction function."""
-
-    def __init__(self, reduction: Reduction):
-        self.reduction = reduction
-
-    def composition(self, inner: np.ndarray) -> float:
-        """Compute the MSE outer function of the composition
-
-        Parameters
-        ----------
-        inner : np.ndarray
-            Return value from the inner function
-
-        Returns
-        -------
-        float
-            Scalar composition result
-        """
-        return self.reduction.reduce(inner)
-
-    def composition_torch(self, inner: torch.Tensor) -> torch.Tensor:
-        """Compute the MSE outer function of the composition with gradients
-
-        Parameters
-        ----------
-        inner : torch.Tensor
-            Return value from the inner function
-
-        Returns
-        -------
-        torch.Tensor
-            Scalar composition result
-        """
-        return self.reduction.reduce_torch(inner)
 
 
 class Reference:
@@ -141,6 +31,7 @@ class Reference:
             filter_tol: float = 0.0,
             show: bool = False,
             weight: float = 1.0,
+            reduction: Reduction = None,
             ):
         # Sanitise prediction field
         if isinstance(prediction, str):
@@ -154,6 +45,7 @@ class Reference:
         self.filter_tol = filter_tol
         self.show = show
         self.weight = weight
+        self.reduction = reduction
         # Load the data right away
         data = np.genfromtxt(filename, skip_header=skip_header)[:, [x_col - 1, y_col - 1]]
         self.x_data = data[:, 0]
@@ -163,6 +55,7 @@ class Reference:
             self.x_data, self.y_data = self.transformer(self.x_data, self.y_data)
         self.x_orig = np.copy(self.x_data)
         self.y_orig = np.copy(self.y_data)
+        self.flatten_utility = FixedFlatteningUtility(self.x_data)
 
     def prepare(self) -> None:
         """Prepare the reference data."""
@@ -193,6 +86,8 @@ class Reference:
                 ),
                 np.stack((self.x_data, self.y_data), axis=1),
             )
+            # Reset the flattening utility
+            self.flatten_utility = FixedFlatteningUtility(self.x_data)
 
     def has_filtering(self) -> bool:
         """Check if the reference has filtering.
@@ -244,7 +139,7 @@ class Reference:
         """
         return self.y_orig
 
-    def compute_errors(self, results: OutputResult) -> np.ndarray:
+    def compute_errors(self, results: OutputResult) -> OutputResult:
         """Compute the pointwise normalised errors for the given results.
 
         Parameters
@@ -254,8 +149,8 @@ class Reference:
 
         Returns
         -------
-        np.ndarray
-            Error for each reference point
+        OutputResult
+            Pointwise normalised errors.
         """
         # Interpolate response to the reference grid
         resp_interp = interpolate_response(
@@ -265,7 +160,7 @@ class Reference:
         )
         # Compute normalised error
         factor = np.mean(np.abs(self.get_data()))
-        return (resp_interp - self.get_data()) / factor
+        return OutputResult(self.get_time(), (resp_interp - self.get_data()) / factor)
 
     @staticmethod
     def read(filename: str, config: Dict[str, Any], output_dir: str) -> Reference:
@@ -298,6 +193,7 @@ class Reference:
             filter_tol=float(config.get('filter_tol', 0.0)),
             show=bool(config.get('show', False)),
             weight=float(config.get('weight', 1.0)),
+            reduction=read_reduction(config['reduction']) if 'reduction' in config else None,
         )
 
 
@@ -362,15 +258,50 @@ class FittingSolver:
             self,
             solver: Solver,
             references: Dict[Reference, List[str]],
+            reduction: Reduction,
             ) -> None:
         self.solver = solver
         self.references = references
+        self.reduction = reduction
+        # Assign the reduction to non-defined references
+        for reference in self.references:
+            if reference.reduction is None:
+                reference.reduction = self.reduction
 
     def prepare(self) -> None:
         """Prepare the solver for optimisation."""
         for reference in self.references.keys():
             reference.prepare()
         self.solver.prepare()
+
+    def composition(
+        self,
+        scalarise: bool,
+        stochastic: bool,
+    ) -> Composition:
+        """Build the composition utility for the design objective.
+
+        Parameters
+        ----------
+        scalarise : bool
+            Whether we should scalarise the objective.
+        stochastic : bool
+            Whether the objective is stochastic.
+        targets : List[DesignTarget]
+            List of design targets to consider.
+
+        Returns
+        -------
+        Composition
+            Composition utility for the design objective.
+        """
+        return ResponseComposition(
+            scalarise=scalarise,
+            stochastic=stochastic,
+            weights=[t.weight for t in self.references],
+            reductions=[t.reduction for t in self.references],
+            flatten_list=[t.flatten_utility for t in self.references],
+        )
 
     def solve(self, values: np.ndarray, concurrent: bool) -> Dict[Reference, List[OutputResult]]:
         """Evaluate the solver for the given set of parameter values and get the output results.
@@ -516,8 +447,10 @@ class FittingSolver:
             # Sanitise reference: check if it is associated to at least one case
             if len(references[reference]) == 0:
                 raise ValueError(f"Reference '{reference_name}' is not associated to any case.")
+        # Read the optional reduction
+        reduction = read_reduction(config.get('reduction', 'mse'))
         # Return the solver
-        return FittingSolver(solver, references)
+        return FittingSolver(solver, references, reduction)
 
 
 class FittingObjective(GenericObjective):
@@ -528,17 +461,15 @@ class FittingObjective(GenericObjective):
             parameters: ParameterSet,
             solver: FittingSolver,
             output_dir: str,
-            reduction: Reduction,
             stochastic: bool = False,
             composite: bool = False,
             ) -> None:
         super().__init__(
             parameters,
             stochastic,
-            composition=CompositionFromReduction(reduction) if composite else None,
+            composition=solver.composition(True, stochastic) if composite else None,
             output_dir=output_dir,
         )
-        self.reduction = reduction
         self.composite = composite
         self.solver = solver
 
@@ -546,6 +477,9 @@ class FittingObjective(GenericObjective):
         """Prepare the objective for optimisation."""
         super().prepare()
         self.solver.prepare()
+        # Reset the composition utility
+        if self.composite:
+            self.composition = self.solver.composition(True, self.stochastic)
 
     def _objective(self, values: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
         """Abstract method for objective computation.
@@ -564,20 +498,26 @@ class FittingObjective(GenericObjective):
         """
         # Run the solver
         output = self.solver.solve(values, concurrent)
-        # Compute the loss
+        # Compute pointwise errors for each reference
+        errors = {
+            reference: [reference.compute_errors(result) for result in results]
+            for reference, results in output.items()
+        }
+        # Under composition, we delegate the computation to the composition utility
+        if self.composition is not None:
+            return self.composition.transform(values, list(errors.values()))
+        # Otherwise, compute the objective directly
         losses = []
         variances = []
-        for reference, results in output.items():
-            # Compute the errors for each result and apply reduction according to the objective type
-            errors = np.array([reference.compute_errors(result) for result in results])
-            if not self.composite:
-                errors = self.reduction.reduce(errors)
-            loss = np.mean(errors, axis=0)
-            variance = np.var(errors, axis=0) / errors.shape[0]
-            # Collect the weighted losses and variances
-            losses.append(reference.weight * loss)
-            variances.append(reference.weight * variance)
-        return ObjectiveResult(losses, variances if self.stochastic else None)
+        for reference, responses in errors.items():
+            targets = [
+                reference.reduction.reduce(response.get_time(), response.get_data(), values)
+                for response in responses
+            ]
+            # Build statistical model for the target
+            losses.append(reference.weight * np.mean(targets))
+            variances.append(reference.weight * np.var(targets) / len(targets))
+        return ObjectiveResult(values, losses, variances if self.stochastic else None)
 
     def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
         """Plot a given function call given the parameter hash.
@@ -646,13 +586,10 @@ class FittingObjective(GenericObjective):
         # Parse the reduction
         if 'reduction' not in config:
             config['reduction'] = 'mse'
-        elif config['reduction'] not in AVAILABLE_REDUCTIONS:
-            raise ValueError(f"Invalid reduction '{config['reduction']}' for fitting objective.")
         return FittingObjective(
             parameters,
             FittingSolver.read(config, parameters, output_dir),
             output_dir,
-            AVAILABLE_REDUCTIONS[config['reduction']](),
             stochastic=bool(config.get('stochastic', False)),
             composite=bool(config.get('composite', False)),
         )

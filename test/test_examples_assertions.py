@@ -57,8 +57,8 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         "Missing test function",
     ),
     'synthetic_unknown_composition.yaml': (
-        RuntimeError,
-        'Unknown composition none.',
+        ValueError,
+        'Reduction function "none" is not available.',
     ),
     'missing_iters.yaml': (
         RuntimeError,
@@ -112,10 +112,6 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         ValueError,
         "Reference 'reference_curve_2.txt' is not associated to any case.",
     ),
-    'mae_reduction.yaml': (
-        ValueError,
-        "Invalid reduction 'mae' for fitting objective.",
-    ),
     'design_missing_pred.yaml': (
         ValueError,
         "Missing prediction for design target 'maximum_force'.",
@@ -126,15 +122,15 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'design_missing_quantity_name.yaml': (
         ValueError,
-        "Missing name in quantity specification.",
+        "Need to pass the name of the reduction function.",
     ),
     'design_missing_quantity_script.yaml': (
         ValueError,
-        "Missing script in quantity specification.",
+        "Missing 'script' field for reading the custom module script.",
     ),
     'design_missing_quantity_class.yaml': (
         ValueError,
-        "Missing class in quantity specification.",
+        "Missing 'class' field for reading the custom module script.",
     ),
     'design_missing_solver.yaml': (
         ValueError,

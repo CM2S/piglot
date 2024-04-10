@@ -255,7 +255,7 @@ class Optimiser(ABC):
         self.iters_no_improv = 0
         # Build initial shot and bounds
         n_dim = len(self.parameters)
-        init_shot = [par.normalise(par.inital_value) for par in self.parameters]
+        init_shot = np.array([par.normalise(par.inital_value) for par in self.parameters])
         bounds = np.ones((n_dim, 2))
         bounds[:, 0] = -1
         # Build best solution

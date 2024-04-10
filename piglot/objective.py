@@ -18,52 +18,40 @@ from piglot.parameter import ParameterSet
 class Composition(ABC):
     """Abstract class for defining composition functionals with gradients"""
 
-    def composition(self, inner: np.ndarray) -> float:
+    def composition(self, inner: np.ndarray, params: np.ndarray) -> float:
         """Abstract method for computing the outer function of the composition
 
         Parameters
         ----------
         inner : np.ndarray
             Return value from the inner function
+        params : np.ndarray
+            Parameters for the given responses
 
         Returns
         -------
         float
             Scalar composition result
         """
-        inner_torch = torch.from_numpy(inner)
-        result = self.composition_torch(inner_torch)
+        result = self.composition_torch(torch.from_numpy(inner), torch.from_numpy(params))
         return result.numpy(force=True).item()
 
     @abstractmethod
-    def composition_torch(self, inner: torch.Tensor) -> torch.Tensor:
+    def composition_torch(self, inner: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
         """Abstract method for computing the outer function of the composition with gradients
 
         Parameters
         ----------
         inner : torch.Tensor
             Return value from the inner function
+        params : torch.Tensor
+            Parameters for the given responses
 
         Returns
         -------
         torch.Tensor
             Scalar composition result
         """
-
-    def __call__(self, inner: np.ndarray) -> float:
-        """Compute the composition result for the outer world
-
-        Parameters
-        ----------
-        inner : np.ndarray
-            Return value from the inner function
-
-        Returns
-        -------
-        float
-            Scalar composition result
-        """
-        return self.composition(inner)
 
 
 class DynamicPlotter(ABC):
@@ -160,6 +148,7 @@ class Objective(ABC):
 @dataclass
 class ObjectiveResult:
     """Container for objective results."""
+    params: np.ndarray
     values: List[np.ndarray]
     variances: Optional[List[np.ndarray]] = None
 
@@ -177,16 +166,22 @@ class ObjectiveResult:
             Scalarised result.
         """
         if composition is not None:
-            return composition(np.concatenate(self.values))
+            return composition.composition(self.values, self.params)
         return np.mean(self.values)
 
-    def scalarise_stochastic(self, composition: Composition = None) -> Tuple[float, float]:
+    def scalarise_stochastic(
+        self,
+        composition: Composition = None,
+        num_samples: int = 1024,
+    ) -> Tuple[float, float]:
         """Scalarise the result.
 
         Parameters
         ----------
         composition : Composition, optional
             Composition functional to use, by default None.
+        num_samples : int, optional
+            Number of samples to use for Monte Carlo, by default 1024.
 
         Returns
         -------
@@ -194,12 +189,13 @@ class ObjectiveResult:
             Scalarised mean and variance.
         """
         if composition is not None:
-            values = np.concatenate(self.values)
-            variances = np.concatenate(self.variances)
             # Compute the objective variance using Monte Carlo (using fixed base samples)
-            biased = [norm.rvs(loc=0, scale=1) for _ in range(1000)]
-            mc_objectives = [composition(values + bias * np.sqrt(variances)) for bias in biased]
-            return composition(values), np.var(mc_objectives)
+            biased = [norm.rvs(loc=0, scale=1) for _ in range(num_samples)]
+            mc_objectives = [
+                composition.composition(self.values + bias * np.sqrt(self.variances), self.params)
+                for bias in biased
+            ]
+            return composition.composition(self.values, self.params), np.var(mc_objectives)
         return np.mean(self.values), np.sum(self.variances)
 
 

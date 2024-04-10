@@ -156,7 +156,7 @@ class ParameterSet:
         array
             Normalised parameters.
         """
-        return [p.normalise(values[i]) for i, p in enumerate(self.parameters)]
+        return np.array([p.normalise(values[i]) for i, p in enumerate(self.parameters)])
 
     def denormalise(self, values):
         """Denormalises a parameter set from the internal [-1,1] bounds.
@@ -171,7 +171,7 @@ class ParameterSet:
         array
             Denormalised parameters.
         """
-        return [p.denormalise(values[i]) for i, p in enumerate(self.parameters)]
+        return np.array([p.denormalise(values[i]) for i, p in enumerate(self.parameters)])
 
     def clip(self, values):
         """Clamp the parameter set to the [lbound,ubound] interval.
@@ -186,7 +186,7 @@ class ParameterSet:
         float
             Clamped parameters.
         """
-        return [p.clip(values[i]) for i, p in enumerate(self.parameters)]
+        return np.array([p.clip(values[i]) for i, p in enumerate(self.parameters)])
 
     def to_dict(self, values, input_normalised=True):
         """Build a dict with name-value pairs given a list of values.

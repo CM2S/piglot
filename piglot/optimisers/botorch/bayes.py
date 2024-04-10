@@ -185,11 +185,8 @@ class BayesianBoTorch(Optimiser):
 
     def _result_to_dataset(self, result: ObjectiveResult) -> Tuple[np.ndarray, np.ndarray]:
         if self.objective.composition:
-            values = np.concatenate(result.values)
-            if self.objective.stochastic:
-                variances = np.concatenate(result.variances)
-            else:
-                variances = np.zeros_like(values)
+            values = result.values
+            variances = result.variances if self.objective.stochastic else np.zeros_like(values)
         else:
             if self.objective.stochastic:
                 values, variances = ObjectiveResult.scalarise_stochastic(result)
@@ -198,11 +195,15 @@ class BayesianBoTorch(Optimiser):
             values, variances = np.array([values]), np.array([variances])
         return values, variances
 
-    def _value_to_scalar(self, value: Union[np.ndarray, torch.Tensor]) -> float:
+    def _value_to_scalar(
+        self,
+        value: Union[np.ndarray, torch.Tensor],
+        params: Union[np.ndarray, torch.Tensor],
+    ) -> float:
         if self.objective.composition:
             if isinstance(value, np.ndarray):
-                return self.objective.composition.composition(value)
-            return self.objective.composition.composition_torch(value).cpu().item()
+                return self.objective.composition.composition(value, params)
+            return self.objective.composition.composition_torch(value, params).cpu().item()
         return value.item()
 
     def _build_acquisition_scalar(
@@ -253,7 +254,8 @@ class BayesianBoTorch(Optimiser):
         _, y_avg, y_std = dataset.get_obervation_stats()
         mc_objective = GenericMCObjective(
             lambda vals, X: -self.objective.composition.composition_torch(
-                dataset.expand_observations(vals * y_std + y_avg)
+                dataset.expand_observations(vals * y_std + y_avg),
+                dataset.lbounds + (dataset.ubounds - dataset.lbounds) * X,
             )
         )
         # Delegate acquisition building
@@ -336,7 +338,7 @@ class BayesianBoTorch(Optimiser):
 
         # Find current best point to return to the driver
         best_params, best_result = dataset.min(self._value_to_scalar)
-        self._progress_check(0, self._value_to_scalar(best_result), best_params)
+        self._progress_check(0, self._value_to_scalar(best_result, best_params), best_params)
 
         # Optimisation loop
         for i_iter in range(n_iter):
@@ -357,7 +359,7 @@ class BayesianBoTorch(Optimiser):
             values_batch = []
             for i, result in enumerate(results):
                 values, variances = self._result_to_dataset(result)
-                values_batch.append(self._value_to_scalar(values))
+                values_batch.append(self._value_to_scalar(values, candidates[i, :]))
                 dataset.push(candidates[i, :], values, variances)
 
             # Find best observation for this batch
@@ -372,4 +374,4 @@ class BayesianBoTorch(Optimiser):
 
         # Return optimisation result
         best_params, best_result = dataset.min(self._value_to_scalar)
-        return best_params, self._value_to_scalar(best_result)
+        return best_params, self._value_to_scalar(best_result, best_params)

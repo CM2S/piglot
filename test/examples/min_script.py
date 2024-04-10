@@ -1,24 +1,30 @@
-from __future__ import annotations
-import numpy as np
-from piglot.solver.solver import OutputResult
-from piglot.objectives.design import Quantity
+import torch
+from piglot.utils.reductions import Reduction
 
 
-class MinQuantity(Quantity):
-
+class MinQuantity(Reduction):
     """Minimum value of a response."""
 
-    def compute(self, result: OutputResult) -> float:
-        """Get the minimum of a given response.
+    def reduce_torch(
+        self,
+        time: torch.Tensor,
+        data: torch.Tensor,
+        params: torch.Tensor,
+    ) -> torch.Tensor:
+        """Reduce the input data to a single value (with gradients).
 
         Parameters
         ----------
-        result : OutputResult
-            Output result to compute the quantity for.
+        time : torch.Tensor
+            Time points of the response.
+        data : torch.Tensor
+            Data points of the response.
+        params : torch.Tensor
+            Parameters for the given responses.
 
         Returns
         -------
-        float
-            Quantity value.
+        torch.Tensor
+            Reduced value of the data.
         """
-        return np.min(result.get_data())
+        return torch.min(data, dim=-1).values

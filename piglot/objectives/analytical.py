@@ -42,7 +42,7 @@ class AnalyticalObjective(GenericObjective):
             Objective result.
         """
         value = self.expression(**self.parameters.to_dict(values))
-        return ObjectiveResult([np.array([value])])
+        return ObjectiveResult(values, [np.array([value])])
 
     def _objective_denorm(self, values: np.ndarray) -> float:
         """Objective computation for analytical functions (denormalised parameters).

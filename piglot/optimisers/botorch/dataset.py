@@ -234,7 +234,7 @@ class BayesDataset:
 
     def min(
             self,
-            transformer: Callable[[torch.Tensor], float],
+            transformer: Callable[[torch.Tensor, torch.Tensor], float],
             ) -> Tuple[np.ndarray, np.ndarray]:
         """Return the minimum value of the dataset, according to a given transformation.
 
@@ -248,7 +248,8 @@ class BayesDataset:
         Tuple[np.ndarray, np.ndarray]
             Parameters and values for the minimum point.
         """
-        idx = np.argmin([transformer(value) for value in self.values])
+        values = [transformer(value, params) for params, value in zip(self.params, self.values)]
+        idx = np.argmin(values)
         return self.params[idx, :].cpu().numpy(), self.values[idx, :].cpu().numpy()
 
     def to(self, device: str) -> BayesDataset:
