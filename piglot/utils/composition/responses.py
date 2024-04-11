@@ -342,6 +342,28 @@ class ResponseComposition(Composition):
             self.concat.concat(variances) if self.stochastic else None,
         )
 
+    @staticmethod
+    def _expand_params(time: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
+        """Expand the set of parameters to match the time grid.
+
+        Parameters
+        ----------
+        time : torch.Tensor
+            Time grid for the responses.
+        params : torch.Tensor
+            Parameters for the given responses.
+
+        Returns
+        -------
+        torch.Tensor
+            Expanded parameter values.
+        """
+        # Nothing to do when shapes are consistent
+        if len(params.shape) == len(time.shape):
+            return params
+        # Expand the parameters along the first dimensions
+        return params.expand(*([a for a in time.shape[:-1]] + [params.shape[-1]]))
+
     def composition_torch(self, inner: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
         """Compute the outer function of the composition with gradients.
 
@@ -366,7 +388,7 @@ class ResponseComposition(Composition):
         ]
         # Evaluate and stack the objective for each response
         objective = torch.stack([
-            reduction.reduce_torch(time, data, params)
+            reduction.reduce_torch(time, data, self._expand_params(time, params))
             for (time, data), reduction in zip(unflattened, self.reductions)
         ], dim=-1)
         # Apply the weights
