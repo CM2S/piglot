@@ -124,8 +124,11 @@ class Reaction(OutputField):
         RuntimeError
             If reaction output is not requested in the input file.
         """
-        # Is macroscopic file?
+        # Is the file available for checking?
         input_file = input_data.input_file
+        if not os.path.exists(input_file):
+            return
+        # Is macroscopic file?
         if not input_file.endswith('.dat'):
             raise RuntimeError("Reactions only available for macroscopic simulations.")
         # Has node groups keyword?
@@ -247,8 +250,11 @@ class OutFile(OutputField):
         RuntimeError
             If the requested element and GP has not been specified in the input file.
         """
-        # Check if appropriate scale
+        # Is the file available for checking?
         input_file = input_data.input_file
+        if not os.path.exists(input_file):
+            return
+        # Check if appropriate scale
         extension = os.path.splitext(input_file)[1]
         if extension == ".dat" and self.suffix == '':
             raise RuntimeError("Cannot extract homogenised .out from macro simulations.")
