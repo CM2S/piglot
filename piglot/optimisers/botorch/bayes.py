@@ -159,7 +159,7 @@ class BayesianBoTorch(Optimiser):
         self.n_initial = n_initial
         self.acquisition = acquisition
         self.beta = beta
-        self.noisy = bool(noisy) or objective.stochastic
+        self.noisy = bool(noisy)
         self.q = q
         self.seed = seed
         self.load_file = load_file
@@ -172,7 +172,7 @@ class BayesianBoTorch(Optimiser):
             self.acquisition = default_acquisition(
                 objective.composition,
                 objective.multi_objective,
-                self.noisy,
+                bool(noisy) or objective.stochastic,
                 self.q,
             )
         elif self.acquisition not in AVAILABLE_ACQUISITIONS:
