@@ -3,7 +3,6 @@ from typing import Tuple, List, Union, Type, Dict, Callable
 from multiprocessing.pool import ThreadPool as Pool
 import os
 import warnings
-import dataclasses
 import numpy as np
 import torch
 from scipy.stats import qmc
@@ -14,6 +13,7 @@ from botorch.optim import optimize_acqf
 from botorch.models import SingleTaskGP
 from botorch.models.model import Model
 from botorch.models.converter import batched_to_model_list
+from botorch.models.transforms import Normalize
 from botorch.acquisition import (
     AcquisitionFunction,
     UpperConfidenceBound,
@@ -36,7 +36,6 @@ from botorch.acquisition.multi_objective import (
 )
 from botorch.utils.multi_objective.box_decompositions.non_dominated import (
     FastNondominatedPartitioning,
-    NondominatedPartitioning,
 )
 from botorch.acquisition.multi_objective.logei import (
     qLogExpectedHypervolumeImprovement,
@@ -190,15 +189,17 @@ class BayesianBoTorch(Optimiser):
             Objective to optimise
         """
 
-    def _build_model(self, std_dataset: BayesDataset) -> Model:
-        # Fetch data
-        params = std_dataset.params
-        values = std_dataset.values
-        variances = std_dataset.variances
-        # Clamp variances to prevent warnings from GPyTorch
+    def _build_model(self, dataset: BayesDataset) -> Model:
+        # Transform outcomes and clamp variances to prevent warnings from GPyTorch
+        values, variances = dataset.transform_outcomes(dataset.values, dataset.variances)
         variances = torch.clamp_min(variances, 1e-6)
         # Initialise model instance depending on noise setting
-        model = SingleTaskGP(params, values, train_Yvar=None if self.noisy else variances)
+        model = SingleTaskGP(
+            dataset.params,
+            values,
+            train_Yvar=None if self.noisy else variances,
+            input_transform=Normalize(d=dataset.params.shape[-1]),
+        )
         # Fit the GP (in case of trouble, fall back to an Adam-based optimiser)
         mll = ExactMarginalLogLikelihood(model.likelihood, model)
         try:
@@ -211,24 +212,23 @@ class BayesianBoTorch(Optimiser):
     def _get_candidates(
             self,
             n_dim,
+            bounds: np.ndarray,
             dataset: BayesDataset,
             test_dataset: BayesDataset,
             ) -> Tuple[np.ndarray, float]:
 
-        # Build model on unit-cube and standardised data
-        std_dataset = dataset.standardised()
-        model = self._build_model(std_dataset)
+        # Build model
+        model = self._build_model(dataset)
 
         # Evaluate GP performance with the test dataset
         cv_error = None
         if self.n_test > 0:
-            std_test_params = test_dataset.normalise(test_dataset.params)
-            std_test_values, _ = dataset.standardise(
+            std_test_values, _ = dataset.transform_outcomes(
                 test_dataset.values,
                 test_dataset.variances,
             )
             with torch.no_grad():
-                posterior = model.posterior(std_test_params)
+                posterior = model.posterior(test_dataset.params)
                 cv_error = (posterior.mean - std_test_values).square().mean().item()
 
         # Build the acquisition function
@@ -237,7 +237,7 @@ class BayesianBoTorch(Optimiser):
         # Optimise acquisition to find next candidate(s)
         candidates, _ = optimize_acqf(
             acq,
-            bounds=torch.stack((std_dataset.lbounds, std_dataset.ubounds)),
+            bounds=torch.from_numpy(bounds.T).to(self.device).to(dataset.dtype),
             q=self.q,
             num_restarts=num_restarts,
             raw_samples=raw_samples,
@@ -247,9 +247,6 @@ class BayesianBoTorch(Optimiser):
             },
         )
 
-        # Re-map to original space
-        for i in range(self.q):
-            candidates[i, :] = dataset.denormalise(candidates[i, :])
         return candidates.cpu().numpy(), cv_error
 
     def _eval_candidates(self, candidates: np.ndarray) -> List[ObjectiveResult]:
@@ -296,27 +293,17 @@ class BayesianBoTorch(Optimiser):
             return self.objective.composition.composition_torch(value, params).cpu().item()
         return value.item()
 
-    def _get_composition(
-        self,
-        dataset: BayesDataset,
-    ) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
-        _, y_avg, y_std = dataset.get_obervation_stats()
-        # Just de-standardise and negate the values if no composition is available
+    def _composition(self, vals: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
+        # Just negate the untransformed outcomes if no composition is available
         if not self.objective.composition:
-            return lambda vals, X: -dataset.expand_observations(vals * y_std + y_avg).squeeze(-1)
+            return -vals.squeeze(-1)
         # Otherwise, use the composition function
-        return lambda vals, X: -self.objective.composition.composition_torch(
-            dataset.expand_observations(vals * y_std + y_avg),
-            dataset.lbounds + (dataset.ubounds - dataset.lbounds) * X,
-        )
+        return -self.objective.composition.composition_torch(vals, params)
 
     def _update_mo_data(self, dataset: BayesDataset) -> float:
         # Compute reference point
         # TODO: check how to properly handle the ref_point and best_value
-        composition = self._get_composition(dataset)
-        std_dataset = dataset.standardised()
-        # TODO: check how to handle this in non-composite settings
-        y_points = composition(std_dataset.values, std_dataset.params)
+        y_points = self._composition(dataset.values, dataset.params)
         self.ref_point = torch.min(y_points, dim=0).values
         # Update partitioning and Pareto front
         self.partitioning = FastNondominatedPartitioning(self.ref_point, Y=y_points)
@@ -343,17 +330,16 @@ class BayesianBoTorch(Optimiser):
         raw_samples = max(256, 16 * n_dim * n_dim)
         sampler = SobolQMCNormalSampler(torch.Size([512]), seed=self.seed)
 
-        # Build composite MC objective
-        composition = self._get_composition(dataset)
-        mc_objective = (
-            GenericMCMultiOutputObjective(composition)
-            if self.objective.multi_objective else GenericMCObjective(composition)
-        )
-
         # Find best value for the acquisition
-        std_dataset = dataset.standardised()
-        _, y_avg, y_std = dataset.get_obervation_stats()
-        best = torch.max(composition(std_dataset.values, std_dataset.params)).item()
+        best = torch.max(self._composition(dataset.values, dataset.params)).item()
+
+        # For analytical acquisitions, manually compute the destandardisation constants
+        y_avg = torch.mean(dataset.values, dim=0)
+        y_std = torch.std(dataset.values, dim=0)
+
+        # Build composite MC objective
+        def mc_objective(vals: torch.Tensor, X: torch.Tensor) -> torch.Tensor:
+            return self._composition(dataset.untransform_outcomes(vals), X)
 
         # Delegate to the correct acquisition function
         # The arguments for each acquisition are different, so we group them into families
@@ -379,50 +365,50 @@ class BayesianBoTorch(Optimiser):
                 model,
                 self.beta,
                 sampler=sampler,
-                objective=mc_objective,
+                objective=GenericMCObjective(mc_objective),
             )
         elif self.acquisition in ('qei', 'qlogei', 'qpi'):
             acq = acq_class(
                 model,
                 best,
                 sampler=sampler,
-                objective=mc_objective,
+                objective=GenericMCObjective(mc_objective),
             )
         elif self.acquisition in ('qnei', 'qlognei'):
             acq = acq_class(
                 model,
-                std_dataset.params,
+                dataset.params,
                 sampler=sampler,
-                objective=mc_objective,
+                objective=GenericMCObjective(mc_objective),
             )
         elif self.acquisition == 'qkg':
             # Knowledge gradient is quite expensive: use less samples
             num_restarts = 6
             raw_samples = 128
             sampler = SobolQMCNormalSampler(torch.Size([64]), seed=self.seed)
-            acq = acq_class(model, sampler=sampler, objective=mc_objective)
+            acq = acq_class(model, sampler=sampler, objective=GenericMCObjective(mc_objective))
         # Quasi-Monte Carlo multi-objective acquisitions
         elif self.acquisition in ('qehvi', 'qlogehvi'):
             acq = acq_class(
                 model,
                 self.ref_point,
                 self.partitioning,
-                objective=mc_objective,
+                objective=GenericMCMultiOutputObjective(mc_objective),
                 sampler=sampler,
             )
         elif self.acquisition in ('qnehvi', 'qlognehvi'):
             acq = acq_class(
                 model,
                 self.ref_point,
-                std_dataset.params,
-                objective=mc_objective,
+                dataset.params,
+                objective=GenericMCMultiOutputObjective(mc_objective),
                 sampler=sampler,
             )
         elif self.acquisition == 'qhvkg':
             acq = acq_class(
                 model,
                 self.ref_point,
-                objective=mc_objective,
+                objective=GenericMCMultiOutputObjective(mc_objective),
             )
         else:
             raise RuntimeError(f"Unknown acquisition {self.acquisition}")
@@ -464,7 +450,7 @@ class BayesianBoTorch(Optimiser):
         n_outputs = len(init_values)
 
         # Build initial dataset with the initial shot
-        dataset = BayesDataset(n_dim, n_outputs, bound, export=self.export, device=self.device)
+        dataset = BayesDataset(n_dim, n_outputs, export=self.export, device=self.device)
         dataset.push(init_shot, init_values, init_variances)
 
         # If requested, sample some random points before starting (in parallel if possible)
@@ -479,7 +465,7 @@ class BayesianBoTorch(Optimiser):
             dataset.load(self.load_file)
 
         # Build test dataset (in parallel if possible)
-        test_dataset = BayesDataset(n_dim, n_outputs, bound, device=self.device)
+        test_dataset = BayesDataset(n_dim, n_outputs, device=self.device)
         if self.n_test > 0:
             test_points = self._get_random_points(self.n_test, n_dim, self.seed + 1, bound)
             test_results = self._eval_candidates(test_points)
@@ -500,13 +486,13 @@ class BayesianBoTorch(Optimiser):
         for i_iter in range(n_iter):
             # Generate candidates: catch CUDA OOM errors and fall back to CPU
             try:
-                candidates, cv_error = self._get_candidates(n_dim, dataset, test_dataset)
+                candidates, cv_error = self._get_candidates(n_dim, bound, dataset, test_dataset)
             except torch.cuda.OutOfMemoryError:
                 warnings.warn('CUDA out of memory: falling back to CPU')
                 self.device = 'cpu'
                 dataset = dataset.to(self.device)
                 test_dataset = test_dataset.to(self.device)
-                candidates, cv_error = self._get_candidates(n_dim, dataset, test_dataset)
+                candidates, cv_error = self._get_candidates(n_dim, bound, dataset, test_dataset)
 
             # Evaluate candidates (in parallel if possible)
             results = self._eval_candidates(candidates)
