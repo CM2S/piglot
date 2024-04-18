@@ -360,8 +360,8 @@ class GenericObjective(Objective):
                             file.write(f'{value:>15.8e}\t{var:>15.8e}\t')
                         else:
                             file.write(f'{objective_result.scalarise(self.composition):>15.8e}\t')
-                    for i, param in enumerate(self.parameters):
-                        file.write(f"{param.denormalise(values[i]):>15.6f}\t")
+                    for val in values:
+                        file.write(f"{val:>15.6f}\t")
                     file.write(f'{self.parameters.hash(values)}\n')
         return objective_result
 

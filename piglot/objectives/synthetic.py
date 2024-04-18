@@ -110,7 +110,7 @@ class SyntheticObjective(GenericObjective):
         ObjectiveResult
             Objective value.
         """
-        params = torch.tensor(self.parameters.denormalise(values))
+        params = torch.from_numpy(values)
         value = self.func.evaluate_true(params)
         if self.composition is not None:
             value -= self.func.optimal_value

@@ -255,9 +255,8 @@ class Optimiser(ABC):
         self.iters_no_improv = 0
         # Build initial shot and bounds
         n_dim = len(self.parameters)
-        init_shot = np.array([par.normalise(par.inital_value) for par in self.parameters])
-        bounds = np.ones((n_dim, 2))
-        bounds[:, 0] = -1
+        init_shot = np.array([par.inital_value for par in self.parameters])
+        bounds = np.array([[par.lbound, par.ubound] for par in self.parameters])
         # Build best solution
         self.best_value = np.nan
         self.best_solution = None
@@ -278,10 +277,7 @@ class Optimiser(ABC):
         self.begin_time = time.perf_counter()
         self._optimise(n_dim, n_iter, bounds, init_shot)
         elapsed = time.perf_counter() - self.begin_time
-        # Denormalise best solution (if any)
-        new_solution = None
-        if self.best_solution is not None:
-            new_solution = np.array(self.parameters.denormalise(self.best_solution))
+        # Output progress
         if verbose:
             self.pbar.close()
             print(f'Completed {self.i_iter} iterations in {pretty_time(elapsed)}')
@@ -290,9 +286,9 @@ class Optimiser(ABC):
                 print('Best parameters')
                 max_width = max(len(par.name) for par in self.parameters)
                 for i, par in enumerate(self.parameters):
-                    print(f'- {par.name.rjust(max_width)}: {new_solution[i]:>12.6f}')
+                    print(f'- {par.name.rjust(max_width)}: {self.best_solution[i]:>12.6f}')
         # Return the best value
-        return self.best_value, new_solution
+        return self.best_value, self.best_solution
 
     @abstractmethod
     def _optimise(
@@ -346,9 +342,6 @@ class Optimiser(ABC):
         """
         elapsed = time.perf_counter() - self.begin_time
         skip_pars = curr_solution is None
-        if not skip_pars:
-            denorm_curr = self.parameters.denormalise(curr_solution)
-            denorm_best = self.parameters.denormalise(self.best_solution)
         # Update progress file
         with open(os.path.join(self.output_dir, "progress"), 'w', encoding='utf8') as file:
             file.write(f'Iteration: {i_iter}\n')
@@ -359,7 +352,7 @@ class Optimiser(ABC):
             if not skip_pars:
                 file.write('Best parameters:\n')
                 for i, par in enumerate(self.parameters):
-                    file.write(f'\t{par.name}: {denorm_best[i]}\n')
+                    file.write(f'\t{par.name}: {self.best_solution[i]}\n')
             file.write(f'\nElapsed time: {pretty_time(elapsed)}\n')
         # Update history file
         with open(os.path.join(self.output_dir, "history"), 'a', encoding='utf8') as file:
@@ -368,7 +361,7 @@ class Optimiser(ABC):
             file.write(f'{self.best_value:>15.8e}\t')
             file.write(f'{curr_value:>15.8e}\t')
             for i, par in enumerate(self.parameters):
-                file.write('None\t'.rjust(16) if skip_pars else f'{denorm_curr[i]:>15.8f}\t')
+                file.write('None\t'.rjust(16) if skip_pars else f'{curr_solution[i]:>15.8f}\t')
             file.write(f"\t{'-' if extra_info is None else extra_info}")
             file.write('\n')
 
@@ -426,6 +419,10 @@ class Optimiser(ABC):
 class ScalarOptimiser(Optimiser):
     """Base class for scalar optimisers."""
 
+    def __init__(self, name: str, objective: Objective) -> None:
+        super().__init__(name, objective)
+        self.bounds = None
+
     def _validate_problem(self, objective: Objective) -> None:
         """Validate the combination of optimiser and objective.
 
@@ -479,6 +476,36 @@ class ScalarOptimiser(Optimiser):
             Observed optimum of the objective.
         """
 
+    def _norm_params(self, params: np.ndarray) -> np.ndarray:
+        """Normalise the parameters.
+
+        Parameters
+        ----------
+        params : np.ndarray
+            Denormalised parameters.
+
+        Returns
+        -------
+        np.ndarray
+            Normalised parameters.
+        """
+        return 2.0 * (params - self.bounds[:, 0]) / (self.bounds[:, 1] - self.bounds[:, 0]) - 1.0
+
+    def _denorm_params(self, params: np.ndarray) -> np.ndarray:
+        """Denormalise the parameters.
+
+        Parameters
+        ----------
+        params : np.ndarray
+            Normalised parameters.
+
+        Returns
+        -------
+        np.ndarray
+            Denormalised parameters.
+        """
+        return self.bounds[:, 0] + (1.0 + params) * (self.bounds[:, 1] - self.bounds[:, 0]) / 2.0
+
     def _optimise(
         self,
         n_dim: int,
@@ -509,11 +536,44 @@ class ScalarOptimiser(Optimiser):
         np.ndarray
             Observed optimum of the objective.
         """
+        self.bounds = bound
         # Optimise the scalarised objective
         return self._scalar_optimise(
-            lambda x, concurrent=False: self.objective(x, concurrent=concurrent).scalarise(),
+            lambda x, concurrent=False: self.objective(
+                self._denorm_params(x),
+                concurrent=concurrent
+            ).scalarise(),
             n_dim,
             n_iter,
-            bound,
-            init_shot,
+            np.array([[-1.0, 1.0]]).repeat(n_dim, axis=0),
+            self._norm_params(init_shot),
         )
+
+    def _progress_check(
+        self,
+        i_iter: int,
+        curr_value: float,
+        curr_solution: np.ndarray,
+        extra_info: str = None,
+    ) -> bool:
+        """
+        Report the optimiser progress and check for termination (with parameter denormalisation).
+
+        Parameters
+        ----------
+        i_iter : int
+            Current iteration number.
+        curr_value : float
+            Current objective value.
+        curr_solution : np.ndarray
+            Current objective minimiser.
+        extra_info : str
+            Additional information to pass to user.
+
+        Returns
+        -------
+        bool
+            Whether any of the stopping criteria is satisfied.
+        """
+        denorm_solution = None if curr_solution is None else self._denorm_params(curr_solution)
+        super()._progress_check(i_iter, curr_value, denorm_solution, extra_info)

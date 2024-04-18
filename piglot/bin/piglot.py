@@ -63,7 +63,7 @@ def main(config_path: str = None):
     )
     # Re-run the best case
     if 'skip_last_run' not in config and best_params is not None:
-        objective(parameters.normalise(best_params))
+        objective(best_params)
 
 
 if __name__ == '__main__':

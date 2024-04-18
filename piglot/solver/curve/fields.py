@@ -70,7 +70,7 @@ class CurveInputData(InputData):
         """
         # Generate a dummy set of parameters (to ensure proper handling of output parameters)
         values = np.array([parameter.inital_value for parameter in parameters])
-        param_dict = parameters.to_dict(values, input_normalised=False)
+        param_dict = parameters.to_dict(values)
         for parameter in param_dict:
             if parameter not in self.expression:
                 raise ValueError(f"Parameter '{parameter}' not found in expression.")

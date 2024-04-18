@@ -22,7 +22,7 @@ class AnalyticalObjective(GenericObjective):
         )
         # Generate a dummy set of parameters (to ensure proper handling of output parameters)
         values = np.array([parameter.inital_value for parameter in parameters])
-        symbs = sympy.symbols(list(parameters.to_dict(values, input_normalised=False).keys()))
+        symbs = sympy.symbols(list(parameters.to_dict(values).keys()))
         self.parameters = parameters
         self.expression = sympy.lambdify(symbs, expression)
 
@@ -57,7 +57,7 @@ class AnalyticalObjective(GenericObjective):
         float
             Objective value.
         """
-        return self.expression(**self.parameters.to_dict(values, input_normalised=False))
+        return self.expression(**self.parameters.to_dict(values))
 
     def _plot_1d(self, values: np.ndarray, append_title: str) -> Figure:
         """Plot the objective in 1D.

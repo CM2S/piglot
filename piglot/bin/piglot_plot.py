@@ -344,7 +344,8 @@ def plot_pareto(args):
     # Separate the dominated points
     dominated = []
     nondominated = []
-    pareto = pd.read_table(os.path.join(config["output"], 'pareto_front')).to_numpy()
+    pareto_data = pd.read_table(os.path.join(config["output"], 'pareto_front')).to_numpy()
+    pareto = pareto_data[:, :objective.num_objectives]
     for i, point in enumerate(total_points):
         if np.isclose(point, pareto).all(axis=1).any():
             nondominated.append((point, variances[i, :] if has_variance else None))

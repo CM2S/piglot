@@ -55,7 +55,7 @@ class LinksInputData(InputData):
         """
         # Generate a dummy set of parameters (to ensure proper handling of output parameters)
         values = np.array([parameter.inital_value for parameter in parameters])
-        param_dict = parameters.to_dict(values, input_normalised=False)
+        param_dict = parameters.to_dict(values)
         for name in param_dict:
             if not has_parameter(self.input_file, f'<{name}>'):
                 raise RuntimeError(f"Parameter '{name}' not found in input file.")

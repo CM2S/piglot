@@ -312,14 +312,21 @@ class BayesianBoTorch(Optimiser):
         self.partitioning = FastNondominatedPartitioning(self.ref_point, Y=y_points)
         hypervolume = self.partitioning.compute_hypervolume().item()
         pareto = self.partitioning.pareto_Y
+        # Map each Pareto point to the original parameter space
+        param_indices = [
+            torch.argmin((y_points - pareto[i, :]).norm(dim=1)).item()
+            for i in range(pareto.shape[0])
+        ]
         # Dump the Pareto front to a file
         with open(os.path.join(self.output_dir, "pareto_front"), 'w', encoding='utf8') as file:
-            file.write('\t'.join(
-                [f'{"Objective_" + str(i + 1):>15}' for i in range(pareto.shape[1])]) + '\n'
-            )
-            for point in pareto:
-                file.write('\t'.join([f'{-x.item():>15.8f}' for x in point]) + '\n')
-        # TODO: after updating the parameter set, write the parameters and hash for each point
+            # Write header
+            num_obj = pareto.shape[1]
+            file.write('\t'.join([f'{"Objective_" + str(i + 1):>15}' for i in range(num_obj)]))
+            file.write('\t' + '\t'.join([f'{param.name:>15}' for param in self.parameters]) + '\n')
+            # Write each point
+            for i, idx in enumerate(param_indices):
+                file.write('\t'.join([f'{-x.item():>15.8f}' for x in pareto[i, :]]) + '\t')
+                file.write('\t'.join([f'{x.item():>15.8f}' for x in dataset.params[idx, :]]) + '\n')
         return -np.log(hypervolume)
 
     def _acq_func(
