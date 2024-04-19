@@ -43,7 +43,7 @@ def parse_config_file(config_file: str) -> Dict[str, Any]:
     """
     try:
         with open(config_file, 'r', encoding='utf8') as file:
-            config = yaml.load(file, Loader=UniqueKeyLoader)
+            config = yaml.load(file, Loader=UniqueKeyLoader)  # noseq B506
     except (ParserError, ScannerError) as exc:
         raise RuntimeError("Failed to parse the config file: YAML syntax seems invalid.") from exc
     # Check required terms
