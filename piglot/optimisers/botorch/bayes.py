@@ -150,6 +150,7 @@ class BayesianBoTorch(Optimiser):
         device: str = 'cpu',
         reference_point: List[float] = None,
         nadir_scale: float = 0.1,
+        skip_initial: bool = False,
     ) -> None:
         if not isinstance(objective, GenericObjective):
             raise RuntimeError("Bayesian optimiser requires a GenericObjective")
@@ -167,6 +168,7 @@ class BayesianBoTorch(Optimiser):
         self.export = export
         self.n_test = n_test
         self.device = device
+        self.skip_initial = bool(skip_initial)
         self.partitioning: FastNondominatedPartitioning = None
         self.adjusted_ref_point = reference_point is None
         self.ref_point = None if reference_point is None else -torch.tensor(reference_point)
@@ -457,17 +459,26 @@ class BayesianBoTorch(Optimiser):
         """
 
         # Evaluate initial shot and use it to infer number of dimensions
-        init_result = self.objective(init_shot)
-        init_values, init_variances = self._result_to_dataset(init_result)
-        n_outputs = len(init_values)
-
-        # Build initial dataset with the initial shot
-        dataset = BayesDataset(n_dim, n_outputs, export=self.export, device=self.device)
-        dataset.push(init_shot, init_values, init_variances)
+        if not self.skip_initial:
+            init_result = self.objective(init_shot)
+            init_values, init_variances = self._result_to_dataset(init_result)
+            n_outputs = len(init_values)
 
         # If requested, sample some random points before starting (in parallel if possible)
         random_points = self._get_random_points(self.n_initial, n_dim, self.seed, bound)
         results = self._eval_candidates(random_points)
+
+        # Infer number of points to store when skipping initial shot
+        if self.skip_initial:
+            values, variances = self._result_to_dataset(results[0])
+            n_outputs = len(values)
+
+        # Build initial dataset with the initial shot (if available)
+        dataset = BayesDataset(n_dim, n_outputs, export=self.export, device=self.device)
+        if not self.skip_initial:
+            dataset.push(init_shot, init_values, init_variances)
+
+        # Add random points to the dataset
         for i, result in enumerate(results):
             values, variances = self._result_to_dataset(result)
             dataset.push(random_points[i], values, variances)
