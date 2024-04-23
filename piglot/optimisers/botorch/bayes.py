@@ -149,6 +149,7 @@ class BayesianBoTorch(Optimiser):
         export: str = None,
         device: str = 'cpu',
         reference_point: List[float] = None,
+        nadir_scale: float = 0.1,
     ) -> None:
         if not isinstance(objective, GenericObjective):
             raise RuntimeError("Bayesian optimiser requires a GenericObjective")
@@ -169,6 +170,7 @@ class BayesianBoTorch(Optimiser):
         self.partitioning: FastNondominatedPartitioning = None
         self.adjusted_ref_point = reference_point is None
         self.ref_point = None if reference_point is None else -torch.tensor(reference_point)
+        self.nadir_scale = nadir_scale
         if acquisition is None:
             self.acquisition = default_acquisition(
                 objective.composition,
@@ -307,7 +309,7 @@ class BayesianBoTorch(Optimiser):
         # Compute reference point if needed
         if self.adjusted_ref_point:
             nadir = torch.min(y_points, dim=0).values
-            self.ref_point = nadir - 0.1 * (torch.max(y_points, dim=0).values - nadir)
+            self.ref_point = nadir - self.nadir_scale * (torch.max(y_points, dim=0).values - nadir)
         # Update partitioning and Pareto front
         self.partitioning = FastNondominatedPartitioning(self.ref_point, Y=y_points)
         hypervolume = self.partitioning.compute_hypervolume().item()
