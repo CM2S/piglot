@@ -219,7 +219,7 @@ class CaseResult:
             "begin_time": self.begin_time,
             "run_time": self.run_time,
             "run_time (pretty)": pretty_time(self.run_time),
-            "parameters": {n: float(v) for n, v in parameters.to_dict(self.values).items()},
+            "parameters": {p.name: float(v) for p, v in zip(parameters, self.values)},
             "success": "true" if self.success else "false",
             "param_hash": self.param_hash,
         }
@@ -233,13 +233,15 @@ class CaseResult:
             safe_dump_all((metadata, responses), file)
 
     @staticmethod
-    def read(filename: str) -> CaseResult:
+    def read(filename: str, parameters: ParameterSet) -> CaseResult:
         """Read a case result file.
 
         Parameters
         ----------
         filename : str
             Path to the case result file.
+        parameters : ParameterSet
+            Set of parameters for this case.
 
         Returns
         -------
@@ -257,7 +259,7 @@ class CaseResult:
         return CaseResult(
             metadata["begin_time"],
             metadata["run_time"],
-            np.array(metadata["parameters"].values()),
+            np.array([float(metadata["parameters"][p.name]) for p in parameters]),
             metadata["success"] == "true",
             metadata["param_hash"],
             responses,
@@ -371,7 +373,10 @@ class Solver(ABC):
         responses = {}
         for case in self.cases:
             # Read the case result
-            result = CaseResult.read(os.path.join(self.cases_hist, f'{case.name()}-{param_hash}'))
+            result = CaseResult.read(
+                os.path.join(self.cases_hist, f'{case.name()}-{param_hash}'),
+                self.parameters,
+            )
             for name, response in result.responses.items():
                 responses[name] = response
         return responses
