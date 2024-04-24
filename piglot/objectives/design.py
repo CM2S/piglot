@@ -8,7 +8,7 @@ from piglot.parameter import ParameterSet
 from piglot.solver import read_solver
 from piglot.solver.solver import Solver, OutputResult
 from piglot.objective import Composition, DynamicPlotter, GenericObjective, ObjectiveResult
-from piglot.utils.assorted import stats_interp_to_common_grid
+from piglot.utils.assorted import stats_interp_to_common_grid, read_custom_module
 from piglot.utils.reductions import Reduction, NegateReduction, read_reduction
 from piglot.utils.composition.responses import ResponseComposition, EndpointFlattenUtility
 
@@ -355,7 +355,11 @@ class DesignObjective(GenericObjective):
             # Sanitise target: check if it is associated to at least one case
             if len(targets[target]) == 0:
                 raise ValueError(f"Design target '{target_name}' is not associated to any case.")
-        return DesignObjective(
+        # Read custom class (if any)
+        target_class: type[DesignObjective] = DesignObjective
+        if 'custom_class' in config:
+            target_class = read_custom_module(config['custom_class'], DesignObjective)
+        return target_class(
             parameters,
             solver,
             list(targets.keys()),
