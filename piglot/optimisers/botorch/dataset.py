@@ -197,7 +197,5 @@ class BayesDataset:
         new_dataset.params = self.params.to(device)
         new_dataset.values = self.values.to(device)
         new_dataset.variances = self.variances.to(device)
-        new_dataset.lbounds = self.lbounds.to(device)
-        new_dataset.ubounds = self.ubounds.to(device)
         new_dataset.device = device
         return new_dataset
