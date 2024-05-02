@@ -151,6 +151,7 @@ class BayesianBoTorch(Optimiser):
         reference_point: List[float] = None,
         nadir_scale: float = 0.1,
         skip_initial: bool = False,
+        pca_variance: float = None,
     ) -> None:
         if not isinstance(objective, GenericObjective):
             raise RuntimeError("Bayesian optimiser requires a GenericObjective")
@@ -173,6 +174,7 @@ class BayesianBoTorch(Optimiser):
         self.adjusted_ref_point = reference_point is None
         self.ref_point = None if reference_point is None else -torch.tensor(reference_point)
         self.nadir_scale = nadir_scale
+        self.pca_variance = pca_variance
         if acquisition is None:
             self.acquisition = default_acquisition(
                 objective.composition,
@@ -474,7 +476,13 @@ class BayesianBoTorch(Optimiser):
             n_outputs = len(values)
 
         # Build initial dataset with the initial shot (if available)
-        dataset = BayesDataset(n_dim, n_outputs, export=self.export, device=self.device)
+        dataset = BayesDataset(
+            n_dim,
+            n_outputs,
+            export=self.export,
+            device=self.device,
+            pca_variance=self.pca_variance,
+        )
         if not self.skip_initial:
             dataset.push(init_shot, init_values, init_variances)
 
@@ -546,8 +554,14 @@ class BayesianBoTorch(Optimiser):
                 extra = f'Val. {cv_error:6.4}'
                 if self.objective.multi_objective:
                     extra += f'  Num Pareto: {self.partitioning.pareto_Y.shape[0]}'
+                if self.pca_variance:
+                    extra += f'  Num PCA: {dataset.pca_components}'
             elif self.objective.multi_objective:
                 extra = f'Num Pareto: {self.partitioning.pareto_Y.shape[0]}'
+                if self.pca_variance:
+                    extra += f'  Num PCA: {dataset.pca_components}'
+            elif self.pca_variance:
+                extra = f'Num PCA: {dataset.pca_components}'
             if self._progress_check(i_iter + 1, best_value, best_params, extra_info=extra):
                 break
 

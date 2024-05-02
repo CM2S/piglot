@@ -16,7 +16,7 @@ class BayesDataset:
             export: str = None,
             dtype: torch.dtype = torch.float64,
             std_tol: float = 1e-6,
-            def_variance: float = 1e-6,
+            pca_variance: float = None,
             device: str = "cpu",
             ) -> None:
         self.dtype = dtype
@@ -31,22 +31,37 @@ class BayesDataset:
         self.outcome_stds = torch.empty(n_outputs, dtype=dtype, device=device)
         self.export = export
         self.std_tol = std_tol
-        self.def_variance = def_variance
+        self.pca_variance = pca_variance
+        self.pca_transformation = None
+        self.pca_components = None
+        self.pca_means = None
         self.device = device
 
     def __update_stats(self) -> None:
         """Update the statistics of the dataset."""
-
+        values = torch.clone(self.values)
+        # Update PCA transformation
+        if self.pca_variance is not None and values.shape[0] > 1:
+            # De-mean data and compute eigenvalues and vectors of the covariance matrix
+            data = values - torch.mean(values, dim=-2)
+            vals, vecs = torch.linalg.eigh(torch.cov(data.T))
+            # Sory by decreasing variance
+            idx = torch.argsort(vals, descending=True)
+            vals = vals[idx]
+            vecs = vecs[:, idx]
+            # Compute cummulative variances and select the number of components
+            variances = torch.cumsum(vals / vals.sum(), 0)
+            n_components = torch.searchsorted(variances, self.pca_variance) + 2
+            # Update the transformation matrix and compute transformed data
+            self.pca_components = min(n_components, data.shape[1])
+            self.pca_transformation = vecs[:, :self.pca_components]
+            values = torch.matmul(values, self.pca_transformation)
         # Get observation statistics
-        y_avg = torch.mean(self.values, dim=-2)
-        y_std = torch.std(self.values, dim=-2)
+        self.outcome_means = torch.mean(values, dim=-2)
+        self.outcome_stds = torch.std(values, dim=-2)
         # Build mask of points with near-null variance
-        y_abs_avg = torch.mean(torch.abs(self.values), dim=-2)
-        mask = torch.abs(y_std / y_abs_avg) > self.std_tol
-        # Update the dataset statistics
-        self.outcome_mask = mask
-        self.outcome_means = y_avg
-        self.outcome_stds = y_std
+        y_abs_avg = torch.mean(torch.abs(values), dim=-2)
+        self.outcome_mask = torch.abs(self.outcome_stds / y_abs_avg) > self.std_tol
 
     def load(self, filename: str) -> None:
         """Load data from a given input file.
@@ -124,6 +139,9 @@ class BayesDataset:
         """
         if not torch.any(self.outcome_mask):
             raise RuntimeError("All observed points are equal: add more initial samples")
+        if self.pca_transformation is not None:
+            values = torch.matmul(values, self.pca_transformation)
+            variances = torch.matmul(variances, self.pca_transformation)
         means = self.outcome_means[self.outcome_mask]
         stds = self.outcome_stds[self.outcome_mask]
         std_values = (values[:, self.outcome_mask] - means) / stds
@@ -149,16 +167,19 @@ class BayesDataset:
         values = values * stds + means
         # Infer the shape of the expanded tensor: only modify the last dimension
         new_shape = list(values.shape)
-        new_shape[-1] = self.n_outputs
+        new_shape[-1] = self.outcome_means.numel()
         expanded = torch.empty(new_shape, dtype=self.dtype, device=self.device)
         # Fill the tensor using a 2D view:
         # i) modelled outcomes are directly inserted
         # ii) missing outcomes are filled with the average of the observed ones
-        expanded_flat = expanded.view(-1, self.n_outputs)
+        expanded_flat = expanded.view(-1, new_shape[-1])
         expanded_flat[:, self.outcome_mask] = values.view(-1, values.shape[-1])
         expanded_flat[:, ~self.outcome_mask] = self.outcome_means[~self.outcome_mask]
         # Note: we are using a view, so the expanded tensor is already modified
-        return expanded
+        if self.pca_transformation is None:
+            return expanded
+        # De-PCA values
+        return torch.matmul(expanded, self.pca_transformation.T)
 
     def min(
         self,
