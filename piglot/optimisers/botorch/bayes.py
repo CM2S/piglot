@@ -186,6 +186,9 @@ class BayesianBoTorch(Optimiser):
             raise RuntimeError(f"Unkown acquisition function {self.acquisition}")
         if not self.acquisition.startswith('q') and self.q != 1:
             raise RuntimeError("Can only use q != 1 for quasi-Monte Carlo acquisitions")
+        if self.pca_variance and not (objective.composition or objective.multi_objective):
+            warnings.warn("Ignoring PCA variance for non-composite single-objective problem")
+            self.pca_variance = None
         torch.set_num_threads(1)
 
     def _validate_problem(self, objective: Objective) -> None:
