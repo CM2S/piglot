@@ -392,6 +392,6 @@ class ResponseComposition(Composition):
             for (time, data), reduction in zip(unflattened, self.reductions)
         ], dim=-1)
         # Apply the weights
-        objective = objective * torch.tensor(self.weights)
+        objective = objective * torch.tensor(self.weights).to(inner.device)
         # If needed, scalarise the objectives
         return torch.mean(objective, dim=-1) if self.scalarise else objective
