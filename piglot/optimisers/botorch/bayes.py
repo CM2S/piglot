@@ -560,13 +560,13 @@ class BayesianBoTorch(Optimiser):
                 if self.objective.multi_objective:
                     extra += f'  Num Pareto: {self.partitioning.pareto_Y.shape[0]}'
                 if self.pca_variance:
-                    extra += f'  Num PCA: {dataset.pca_components}'
+                    extra += f'  Num PCA: {dataset.pca.num_components}'
             elif self.objective.multi_objective:
                 extra = f'Num Pareto: {self.partitioning.pareto_Y.shape[0]}'
                 if self.pca_variance:
-                    extra += f'  Num PCA: {dataset.pca_components}'
+                    extra += f'  Num PCA: {dataset.pca.num_components}'
             elif self.pca_variance:
-                extra = f'Num PCA: {dataset.pca_components}'
+                extra = f'Num PCA: {dataset.pca.num_components}'
             if self._progress_check(i_iter + 1, best_value, best_params, extra_info=extra):
                 break
 

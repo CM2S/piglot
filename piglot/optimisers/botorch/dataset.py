@@ -5,6 +5,158 @@ import copy
 import numpy as np
 import torch
 
+class Standardiser:
+    """Standardisation transformation."""
+
+    def __init__(self, std_tol: float = 1e-6) -> None:
+        self.mean: torch.Tensor = None
+        self.stds: torch.Tensor = None
+        self.mask: torch.Tensor = None
+        self.std_tol = std_tol
+
+    def fit(self, data: torch.Tensor) -> None:
+        """Fit the standardisation transformation to the given data.
+
+        Parameters
+        ----------
+        data : torch.Tensor
+            Data to fit the standardisation transformation to.
+        """
+        self.mean = torch.mean(data, dim=-2)
+        self.stds = torch.std(data, dim=-2)
+        y_abs_avg = torch.mean(torch.abs(data), dim=-2)
+        self.mask = torch.abs(self.stds / y_abs_avg) > self.std_tol
+
+    def transform(
+        self,
+        values: torch.Tensor,
+        variances: torch.Tensor | None = None,
+    ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
+        """Standardise data.
+
+        Parameters
+        ----------
+        values : torch.Tensor
+            Values to transform.
+        variances : torch.Tensor | None
+            Variances to transform, if any.
+
+        Returns
+        -------
+        torch.Tensor | Tuple[torch.Tensor, torch.Tensor]
+            Transformed values and variances (if any).
+        """
+        means = (values[:, self.mask] - self.mean[self.mask]) / self.stds[self.mask]
+        if variances is None:
+            return means
+        stds = variances[:, self.mask] / self.stds[self.mask]
+        return means, stds
+
+    def untransform(self, data: torch.Tensor) -> torch.Tensor:
+        """Unstandardise data.
+
+        Parameters
+        ----------
+        data : torch.Tensor
+            Data to unstandardise.
+
+        Returns
+        -------
+        torch.Tensor
+            Unstandardised data.
+        """
+        values = data * self.stds[self.mask] + self.mean[self.mask]
+        # Nothing more to do if no outputs are suppressed
+        if torch.all(self.mask):
+            return values
+        # Infer the shape of the expanded tensor: only modify the last dimension
+        new_shape = list(values.shape)
+        new_shape[-1] = self.mean.numel()
+        expanded = torch.empty(new_shape, dtype=values.dtype, device=values.device)
+        # Fill the tensor using a 2D view:
+        # i) modelled outcomes are directly inserted
+        # ii) missing outcomes are filled with the average of the observed ones
+        expanded_flat = expanded.view(-1, new_shape[-1])
+        expanded_flat[:, self.mask] = values.view(-1, values.shape[-1])
+        expanded_flat[:, ~self.mask] = self.mean[~self.mask]
+        # Note: we are using a view, so the expanded tensor is already modified
+        return expanded
+
+
+class PCA:
+    """Principal Component Analysis transformation."""
+
+    def __init__(self, variance: float) -> None:
+        self.variance = variance
+        self.standardiser = Standardiser()
+        self.num_components: int = None
+        self.transformation: torch.Tensor = None
+
+    def fit(self, data: torch.Tensor) -> None:
+        """Fit the PCA transformation to the given data.
+
+        Parameters
+        ----------
+        data : torch.Tensor
+            Data to fit the PCA transformation to.
+        """
+        # Standardise data
+        self.standardiser.fit(data)
+        data_std: torch.Tensor = self.standardiser.transform(data)
+        # Compute eigenvalues and vectors of the covariance matrix and sort by decreasing variance
+        vals, vecs = torch.linalg.eigh(torch.cov(data_std.T))
+        idx = torch.argsort(vals, descending=True)
+        vals = vals[idx]
+        vecs = vecs[:, idx]
+        # Select the number of components and update the transformation matrix
+        vals_norm = vals / vals.sum()
+        cumsum = torch.cumsum(vals_norm, dim=0)
+        # self.num_components = torch.count_nonzero(vals_norm[vals_norm > 0])
+        self.num_components = torch.searchsorted(cumsum, 1.0 - self.variance) + 1
+        self.transformation = vecs[:, :self.num_components]
+
+    def transform(
+        self,
+        values: torch.Tensor,
+        variances: torch.Tensor | None = None,
+    ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
+        """Transform data to the latent space.
+
+        Parameters
+        ----------
+        values : torch.Tensor
+            Values to transform.
+        variances : torch.Tensor | None
+            Variances to transform, if any.
+
+        Returns
+        -------
+        torch.Tensor | Tuple[torch.Tensor, torch.Tensor]
+            Transformed values and variances (if any).
+        """
+        if variances is None:
+            return torch.matmul(self.standardiser.transform(values), self.transformation)
+        values, variances = self.standardiser.transform(values, variances)
+        return (
+            torch.matmul(values, self.transformation),
+            torch.matmul(variances, self.transformation),
+        )
+
+    def untransform(self, data: torch.Tensor) -> torch.Tensor:
+        """Transform data back to the original space.
+
+        Parameters
+        ----------
+        data : torch.Tensor
+            Data to untransform.
+
+        Returns
+        -------
+        torch.Tensor
+            Untransformed data.
+        """
+        return self.standardiser.untransform(torch.matmul(data, self.transformation.T))
+
 
 class BayesDataset:
     """Dataset class for multi-outcome data."""
@@ -26,15 +178,11 @@ class BayesDataset:
         self.params = torch.empty((0, n_dim), dtype=dtype, device=device)
         self.values = torch.empty((0, n_outputs), dtype=dtype, device=device)
         self.variances = torch.empty((0, n_outputs), dtype=dtype, device=device)
-        self.outcome_mask = torch.empty(n_outputs, dtype=torch.bool, device=device)
-        self.outcome_means = torch.empty(n_outputs, dtype=dtype, device=device)
-        self.outcome_stds = torch.empty(n_outputs, dtype=dtype, device=device)
         self.export = export
         self.std_tol = std_tol
         self.pca_variance = pca_variance
-        self.pca_transformation = None
-        self.pca_components = None
-        self.pca_means = None
+        self.standardiser = Standardiser(std_tol)
+        self.pca = PCA(pca_variance) if pca_variance is not None else None
         self.device = device
 
     def __update_stats(self) -> None:
@@ -42,26 +190,10 @@ class BayesDataset:
         values = torch.clone(self.values)
         # Update PCA transformation
         if self.pca_variance is not None and values.shape[0] > 1:
-            # De-mean data and compute eigenvalues and vectors of the covariance matrix
-            data = values - torch.mean(values, dim=-2)
-            vals, vecs = torch.linalg.eigh(torch.cov(data.T))
-            # Sory by decreasing variance
-            idx = torch.argsort(vals, descending=True)
-            vals = vals[idx]
-            vecs = vecs[:, idx]
-            # Compute cummulative variances and select the number of components
-            variances = torch.cumsum(vals / vals.sum(), 0)
-            n_components = torch.searchsorted(variances, self.pca_variance) + 2
-            # Update the transformation matrix and compute transformed data
-            self.pca_components = min(n_components, data.shape[1])
-            self.pca_transformation = vecs[:, :self.pca_components]
-            values = torch.matmul(values, self.pca_transformation)
-        # Get observation statistics
-        self.outcome_means = torch.mean(values, dim=-2)
-        self.outcome_stds = torch.std(values, dim=-2)
-        # Build mask of points with near-null variance
-        y_abs_avg = torch.mean(torch.abs(values), dim=-2)
-        self.outcome_mask = torch.abs(self.outcome_stds / y_abs_avg) > self.std_tol
+            self.pca.fit(values)
+            values = self.pca.transform(self.values)
+        # Update standardisation transformation
+        self.standardiser.fit(values)
 
     def load(self, filename: str) -> None:
         """Load data from a given input file.
@@ -137,16 +269,9 @@ class BayesDataset:
         Tuple[torch.Tensor, torch.Tensor]
             Transformed values and variances.
         """
-        if not torch.any(self.outcome_mask):
-            raise RuntimeError("All observed points are equal: add more initial samples")
-        if self.pca_transformation is not None:
-            values = torch.matmul(values, self.pca_transformation)
-            variances = torch.matmul(variances, self.pca_transformation)
-        means = self.outcome_means[self.outcome_mask]
-        stds = self.outcome_stds[self.outcome_mask]
-        std_values = (values[:, self.outcome_mask] - means) / stds
-        std_variances = variances[:, self.outcome_mask] / stds
-        return std_values, std_variances
+        if self.pca is not None:
+            values, variances = self.pca.transform(values, variances)
+        return self.standardiser.transform(values, variances)
 
     def untransform_outcomes(self, values: torch.Tensor) -> torch.Tensor:
         """Transform outcomes back to the original space.
@@ -161,25 +286,10 @@ class BayesDataset:
         torch.Tensor
             Transformed values.
         """
-        # Destandardise the values
-        means = self.outcome_means[self.outcome_mask]
-        stds = self.outcome_stds[self.outcome_mask]
-        values = values * stds + means
-        # Infer the shape of the expanded tensor: only modify the last dimension
-        new_shape = list(values.shape)
-        new_shape[-1] = self.outcome_means.numel()
-        expanded = torch.empty(new_shape, dtype=self.dtype, device=self.device)
-        # Fill the tensor using a 2D view:
-        # i) modelled outcomes are directly inserted
-        # ii) missing outcomes are filled with the average of the observed ones
-        expanded_flat = expanded.view(-1, new_shape[-1])
-        expanded_flat[:, self.outcome_mask] = values.view(-1, values.shape[-1])
-        expanded_flat[:, ~self.outcome_mask] = self.outcome_means[~self.outcome_mask]
-        # Note: we are using a view, so the expanded tensor is already modified
-        if self.pca_transformation is None:
-            return expanded
-        # De-PCA values
-        return torch.matmul(expanded, self.pca_transformation.T)
+        values = self.standardiser.untransform(values)
+        if self.pca is not None:
+            values = self.pca.untransform(values)
+        return values
 
     def min(
         self,
