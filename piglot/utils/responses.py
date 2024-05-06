@@ -63,12 +63,12 @@ class Transformer:
             Transformer instance.
         """
         return Transformer(
-            x_scale=config.get("x_scale", 1.0),
-            y_scale=config.get("y_scale", 1.0),
-            x_offset=config.get("x_offset", 0.0),
-            y_offset=config.get("y_offset", 0.0),
-            x_min=config.get("x_min", -np.inf),
-            x_max=config.get("x_max", np.inf),
+            x_scale=float(config.get("x_scale", 1.0)),
+            y_scale=float(config.get("y_scale", 1.0)),
+            x_offset=float(config.get("x_offset", 0.0)),
+            y_offset=float(config.get("y_offset", 0.0)),
+            x_min=float(config["x_min"]) if "x_min" in config else -np.inf,
+            x_max=float(config["x_max"]) if "x_max" in config else np.inf,
         )
 
 
