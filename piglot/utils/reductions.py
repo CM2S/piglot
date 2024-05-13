@@ -3,6 +3,7 @@ from typing import Callable, Dict, Any, Union
 from abc import ABC, abstractmethod
 import numpy as np
 import torch
+from torch.autograd.gradcheck import gradcheck, GradcheckError
 from piglot.utils.assorted import read_custom_module
 
 
@@ -55,6 +56,33 @@ class Reduction(ABC):
             torch.from_numpy(data),
             torch.from_numpy(params),
         ).numpy(force=True)
+
+    def test_reduction(self) -> None:
+        """Test the reduction function to check batch processing."""
+        # Sanitise the shape after applying the reduction
+        test_params = [2, 6]
+        test_shapes = [(4,), (2, 4), (3, 2, 4), (6, 3, 2, 4)]
+        for num_params in test_params:
+            for shape in test_shapes:
+                time = torch.arange(shape[-1]).repeat(shape[:-1] + (1,))
+                data = torch.randn(*shape)
+                params = torch.randn(num_params).repeat(shape[:-1] + (1,))
+                reduced = self.reduce_torch(time, data, params)
+                if reduced.shape != shape[:-1]:
+                    raise ValueError(
+                        f"Bad shape after reduction for {type(self)}. "
+                        f"While reducing a tensor of shape {shape}, "
+                        f"got {reduced.shape} instead of {shape[:-1]}."
+                    )
+        # Check if the gradient is computed
+        time = torch.tensor([[0, 1], [1, 2]], requires_grad=True, dtype=torch.float64)
+        data = torch.tensor([[2, 3], [4, 3]], requires_grad=True, dtype=torch.float64)
+        params = torch.tensor([[1, 2], [3, 4]], requires_grad=True, dtype=torch.float64)
+        try:
+            if not gradcheck(self.reduce_torch, (time, data, params)):
+                raise ValueError(f"Gradient check failed for {type(self)}.")
+        except GradcheckError as exc:
+            raise ValueError(f"Gradient check failed for {type(self)}.") from exc
 
 
 class NegateReduction(Reduction):
@@ -170,7 +198,11 @@ def read_reduction(config: Union[str, Dict[str, Any]]) -> Reduction:
     name = config['name']
     # Read script reduction
     if name == 'script':
-        return read_custom_module(config, Reduction)()
+        instance = read_custom_module(config, Reduction)()
+        # Sanitise external reductions
+        if not bool(config.get('skip_test', False)):
+            instance.test_reduction()
+        return instance
     if name not in AVAILABLE_REDUCTIONS:
         raise ValueError(f'Reduction function "{name}" is not available.')
     return AVAILABLE_REDUCTIONS[name]
