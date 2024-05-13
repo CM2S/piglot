@@ -67,7 +67,10 @@ class Reduction(ABC):
                 time = torch.arange(shape[-1]).repeat(shape[:-1] + (1,))
                 data = torch.randn(*shape)
                 params = torch.randn(num_params).repeat(shape[:-1] + (1,))
-                reduced = self.reduce_torch(time, data, params)
+                try:
+                    reduced = self.reduce_torch(time, data, params)
+                except Exception as exc:
+                    raise ValueError(f"Test failed for reduction {type(self)}.") from exc
                 if reduced.shape != shape[:-1]:
                     raise ValueError(
                         f"Bad shape after reduction for {type(self)}. "
