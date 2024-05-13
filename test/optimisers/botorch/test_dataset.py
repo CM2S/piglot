@@ -23,7 +23,7 @@ class TestBayesDataset(unittest.TestCase):
         self.assertTrue(torch.all(diff < 1e-6))
 
     def test_transform_pca(self):
-        dataset = BayesDataset(6, 2 * self.n_outs, pca_variance=0.999)
+        dataset = BayesDataset(6, 2 * self.n_outs, pca_variance=1e-6)
         for i in range(self.n_points * self.repeats):
             dataset.push(self.params[i, :], self.values[i, :], self.variances[i, :])
         values, variances = dataset.transform_outcomes(self.values, self.variances)
