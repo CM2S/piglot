@@ -212,7 +212,7 @@ class EndpointFlattenUtility(FlattenUtility):
         data_gridless = data[..., :-2]
         lbounds = data[..., -2].unsqueeze(-1).expand_as(data_gridless)
         ubounds = data[..., -1].unsqueeze(-1).expand_as(data_gridless)
-        reg_grid = torch.linspace(0, 1, self.n_points).expand_as(data_gridless)
+        reg_grid = torch.linspace(0, 1, self.n_points, device=data.device).expand_as(data_gridless)
         grid = lbounds + reg_grid * (ubounds - lbounds)
         return grid, data_gridless
 
