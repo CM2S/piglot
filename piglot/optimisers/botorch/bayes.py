@@ -76,6 +76,17 @@ AVAILABLE_ACQUISITIONS: Dict[str, Type[AcquisitionFunction]] = {
 }
 
 
+def get_default_torch_device() -> str:
+    """Utility to return the default PyTorch device (pre Pytorch v2.3).
+
+    Returns
+    -------
+    str
+        Name of the default PyTorch device.
+    """
+    return str(torch.tensor([0.0]).device)
+
+
 def default_acquisition(
     composite: bool,
     multi_objective: bool,
@@ -147,7 +158,7 @@ class BayesianBoTorch(Optimiser):
         seed: int = 1,
         load_file: str = None,
         export: str = None,
-        device: str = 'cpu',
+        device: str = None,
         reference_point: List[float] = None,
         nadir_scale: float = 0.1,
         skip_initial: bool = False,
@@ -168,7 +179,7 @@ class BayesianBoTorch(Optimiser):
         self.load_file = load_file
         self.export = export
         self.n_test = n_test
-        self.device = device
+        self.device = get_default_torch_device() if device is None else device
         self.skip_initial = bool(skip_initial)
         self.partitioning: FastNondominatedPartitioning = None
         self.adjusted_ref_point = reference_point is None
