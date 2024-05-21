@@ -257,6 +257,7 @@ class BayesianBoTorch(Optimiser):
             options={
                 "sample_around_best": True,
                 "seed": self.seed,
+                "init_batch_limit": 4 * num_restarts,
             },
         )
 
