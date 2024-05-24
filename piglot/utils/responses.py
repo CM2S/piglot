@@ -213,14 +213,14 @@ def interpolate_response(
     """
     # Do we have sufficient points to interpolate?
     if len(x_resp) < 2:
-        return np.zeros_like(x_grid)
+        return np.ones_like(x_grid) * y_resp.item()
     # Filter out points with the same x coordinate (to prevent issues during interpolation)
     mask = np.append(np.abs(np.diff(x_resp)) > 1e-16, np.array([True]), axis=0)
     x_resp = x_resp[mask]
     y_resp = y_resp[mask]
     # Re-check the number of points
     if len(x_resp) < 2:
-        return np.zeros_like(x_grid)
+        return np.ones_like(x_grid) * y_resp.item()
     # Ensure the grid is sorted
     idx = np.argsort(x_resp)
     x_resp = x_resp[idx]
