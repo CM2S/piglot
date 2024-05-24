@@ -26,6 +26,9 @@ class Standardiser:
         self.stds = torch.std(data, dim=-2)
         y_abs_avg = torch.mean(torch.abs(data), dim=-2)
         self.mask = torch.abs(self.stds / y_abs_avg) > self.std_tol
+        # Are all observed points equal?
+        if torch.all(~self.mask):
+            raise ValueError("All observed points are equal!.")
 
     def transform(
         self,
