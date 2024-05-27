@@ -12,6 +12,7 @@ from piglot.solver.solver import Solver, OutputResult
 from piglot.utils.assorted import stats_interp_to_common_grid
 from piglot.utils.reductions import Reduction, read_reduction
 from piglot.utils.responses import Transformer, reduce_response, interpolate_response
+from piglot.utils.response_transformer import ResponseTransformer, read_response_transformer
 from piglot.utils.composition.responses import ResponseComposition, FixedFlatteningUtility
 from piglot.objective import Composition, DynamicPlotter, GenericObjective, ObjectiveResult
 
@@ -47,9 +48,12 @@ class Reference:
         self.weight = weight
         self.reduction = reduction
         # Load the data right away
-        data = np.genfromtxt(filename, skip_header=skip_header)[:, [x_col - 1, y_col - 1]]
-        self.x_data = data[:, 0]
-        self.y_data = data[:, 1]
+        data = np.genfromtxt(filename, skip_header=skip_header)
+        # Sanitise to ensure it is a 2D array
+        if len(data.shape) == 1:
+            data = data.reshape(1, -1)
+        self.x_data = data[:, x_col - 1]
+        self.y_data = data[:, y_col - 1]
         # Apply the transformer
         if self.transformer is not None:
             self.x_data, self.y_data = self.transformer(self.x_data, self.y_data)
@@ -259,10 +263,12 @@ class FittingSolver:
             solver: Solver,
             references: Dict[Reference, List[str]],
             reduction: Reduction,
+            transformers: Dict[str, ResponseTransformer] = None,
             ) -> None:
         self.solver = solver
         self.references = references
         self.reduction = reduction
+        self.transformers = transformers if transformers is not None else {}
         # Assign the reduction to non-defined references
         for reference in self.references:
             if reference.reduction is None:
@@ -319,6 +325,10 @@ class FittingSolver:
             Output results.
         """
         result = self.solver.solve(values, concurrent)
+        # Transform responses
+        for name, transformer in self.transformers.items():
+            if name in result:
+                result[name] = transformer.transform(result[name])
         # Populate output results
         output = {}
         for reference, cases in self.references.items():
@@ -348,6 +358,10 @@ class FittingSolver:
         figures = []
         # Load all responses
         responses = self.solver.get_output_response(case_hash)
+        # Transform responses if necessary
+        for name, transformer in self.transformers.items():
+            if name in responses:
+                responses[name] = transformer.transform(responses[name])
         # Plot each reference
         for reference, names in self.references.items():
             # Build figure, index axes and plot response
@@ -390,8 +404,9 @@ class FittingSolver:
             else:
                 # Plot the individual responses
                 for name in names:
+                    marker = 'o' if len(responses[name].get_time()) < 2 else None
                     axis.plot(responses[name].get_time(), responses[name].get_data(),
-                              label=f'{name}')
+                              label=f'{name}', marker=marker)
             if reference_limits:
                 axis.set_xlim(xlim)
                 axis.set_ylim(ylim)
@@ -449,8 +464,13 @@ class FittingSolver:
                 raise ValueError(f"Reference '{reference_name}' is not associated to any case.")
         # Read the optional reduction
         reduction = read_reduction(config.get('reduction', 'mse'))
+        # Read the optional transformers
+        transformers: Dict[str, ResponseTransformer] = {}
+        if 'transformers' in config:
+            for name, transformer_config in config['transformers'].items():
+                transformers[name] = read_response_transformer(transformer_config)
         # Return the solver
-        return FittingSolver(solver, references, reduction)
+        return FittingSolver(solver, references, reduction, transformers=transformers)
 
 
 class FittingObjective(GenericObjective):

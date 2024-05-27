@@ -10,6 +10,7 @@ from piglot.solver.solver import Solver, OutputResult
 from piglot.objective import Composition, DynamicPlotter, GenericObjective, ObjectiveResult
 from piglot.utils.assorted import stats_interp_to_common_grid, read_custom_module
 from piglot.utils.reductions import Reduction, NegateReduction, read_reduction
+from piglot.utils.response_transformer import ResponseTransformer, read_response_transformer
 from piglot.utils.composition.responses import ResponseComposition, EndpointFlattenUtility
 
 
@@ -127,6 +128,7 @@ class DesignObjective(GenericObjective):
         stochastic: bool = False,
         composite: bool = False,
         multi_objective: bool = False,
+        transformers: Dict[str, ResponseTransformer] = None,
     ) -> None:
         super().__init__(
             parameters,
@@ -139,6 +141,7 @@ class DesignObjective(GenericObjective):
         )
         self.solver = solver
         self.targets = targets
+        self.transformers = transformers if transformers is not None else {}
 
     def prepare(self) -> None:
         """Prepare the objective for optimisation."""
@@ -221,6 +224,10 @@ class DesignObjective(GenericObjective):
             Objective result.
         """
         raw_responses = self.solver.solve(values, concurrent)
+        # Transform responses
+        for name, transformer in self.transformers.items():
+            if name in raw_responses:
+                raw_responses[name] = transformer.transform(raw_responses[name])
         # Interpolate responses to common grid and map to targets
         responses_interp = {
             target: [
@@ -268,12 +275,22 @@ class DesignObjective(GenericObjective):
         figures = []
         # Load all responses
         responses = self.solver.get_output_response(case_hash)
+        # Transform responses if necessary
+        for name, transformer in self.transformers.items():
+            if name in responses:
+                responses[name] = transformer.transform(responses[name])
         # Plot each target
         for target in self.targets:
             # Build figure with individual responses for this target
             fig, axis = plt.subplots()
             for pred in target.prediction:
-                axis.plot(responses[pred].get_time(), responses[pred].get_data(), label=f'{pred}')
+                marker = 'o' if len(responses[pred].get_time()) < 2 else None
+                axis.plot(
+                    responses[pred].get_time(),
+                    responses[pred].get_data(),
+                    label=f'{pred}',
+                    marker=marker,
+                )
             # Under stochasticity, plot response stats and mean confidence interval
             if self.stochastic:
                 stats = stats_interp_to_common_grid([
@@ -355,6 +372,11 @@ class DesignObjective(GenericObjective):
             # Sanitise target: check if it is associated to at least one case
             if len(targets[target]) == 0:
                 raise ValueError(f"Design target '{target_name}' is not associated to any case.")
+        # Read transformers
+        transformers: Dict[str, ResponseTransformer] = {}
+        if 'transformers' in config:
+            for name, transformer_config in config.pop('transformers').items():
+                transformers[name] = read_response_transformer(transformer_config)
         # Read custom class (if any)
         target_class: type[DesignObjective] = DesignObjective
         if 'custom_class' in config:
@@ -367,4 +389,5 @@ class DesignObjective(GenericObjective):
             stochastic=bool(config.get('stochastic', False)),
             composite=bool(config.get('composite', False)),
             multi_objective=bool(config.get('multi_objective', False)),
+            transformers=transformers,
         )
