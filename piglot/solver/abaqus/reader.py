@@ -74,7 +74,7 @@ def file_name_func(set_name, variable_name, inp_name):
     return file_name
 
 
-def field_location(i, output_variable, location):
+def field_location(output_variable, location):
     """It gets the node data of the specified node set.
 
     Parameters
@@ -91,7 +91,7 @@ def field_location(i, output_variable, location):
     location_output_variable
         Location of the output variable.
     """
-    if i in (0, 1):
+    if output_variable in ('S', 'E', 'LE'):
         location_output_variable = output_variable.getSubset(region=location,
                                                              position=ELEMENT_NODAL)
     else:
@@ -109,6 +109,7 @@ def main():
     inp_name = variables["input_file"]
     job_name = variables["job_name"]
     step_name = variables["step_name"]
+    instance_name = variables["instance_name"]
     if instance_name is not None:
         instance_name = variables["instance_name"].upper()
     else:
@@ -149,7 +150,7 @@ def main():
     # Create a variable that refers to the first step.
     step = odb.steps[step_name]
 
-    for i, var in enumerate(variables_array):
+    for var in variables_array:
 
         header_variable = "%s_%d"
         variable = var
@@ -173,7 +174,7 @@ def main():
                     # Create a variable that refers to the output variable of the node set. If the
                     # field is S or E it extrapolates the data to the nodes, if the field is U or RF
                     # the data is already on the nodes so it doesn't need extrapolation.
-                    location_output_variable = field_location(i, output_variable, location)
+                    location_output_variable = field_location(output_variable, location)
 
                     # Get the component labels
                     component_labels = output_variable.componentLabels
@@ -190,7 +191,7 @@ def main():
 
                         # Create a variable that refers to the output_variable of the node
                         # set in the current frame.
-                        location_output_variable = field_location(i, output_variable, location)
+                        location_output_variable = field_location(output_variable, location)
 
                         output_file.write("%d " % frame.frameId)
                         for v in location_output_variable.values:
