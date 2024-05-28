@@ -180,7 +180,7 @@ class FieldsOutput(OutputField):
         with open(input_file + ext, 'r', encoding='utf-8') as file:
             data = file.read()
 
-            nsets_list = re.findall(r'\*Nset, nset=([^,]+)', data)
+            nsets_list = re.findall(r'\*Nset, nset="?([^",\s]+)"?', data)
             if len(nsets_list) == 0:
                 raise ValueError("No sets found in the file.")
             if self.set_name not in nsets_list:
