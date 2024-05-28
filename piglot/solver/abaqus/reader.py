@@ -133,7 +133,7 @@ def main():
             raise ValueError("'nlgeom' setting not found in the input file.")
 
     if nlgeom == 0 and (x_field == 'LE' or field == 'LE'):
-        raise ValueError("Error: 'LE' is not allowed when nlgeom is 0, use 'E' instead.")
+        raise ValueError("Error: 'LE' is not allowed when nlgeom is OFF, use 'E' instead.")
 
     variables_array = np.array([field, x_field])
 
