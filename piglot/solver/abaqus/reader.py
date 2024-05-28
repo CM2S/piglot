@@ -22,6 +22,9 @@ def input_variables():
     job_name_list = [a for a in args if a.startswith("job_name=")]
     step_name_list = [a for a in args if a.startswith("step_name=")]
     instance_name_list = [a for a in args if a.startswith("instance_name=")]
+    set_name_list = [a for a in args if a.startswith("set_name=")]
+    field_list = [a for a in args if a.startswith("field=")]
+    x_field_list = [a for a in args if a.startswith("x_field=")]
 
     # Checks if the input_file, job_name, step_name and instance_name are not empty
     input_file = input_file_list[0].replace('input_file=', '') \
@@ -32,11 +35,20 @@ def input_variables():
         if step_name_list else None
     instance_name = instance_name_list[0].replace('instance_name=', '') \
         if instance_name_list else None
+    set_name = set_name_list[0].replace('set_name=', '') \
+        if set_name_list else None
+    field = field_list[0].replace('field=', '') \
+        if field_list else None
+    x_field = x_field_list[0].replace('x_field=', '') \
+        if x_field_list else None
 
     variables['input_file'] = input_file
     variables['job_name'] = job_name
     variables['step_name'] = step_name
     variables['instance_name'] = instance_name
+    variables['set_name'] = set_name
+    variables['field'] = field
+    variables['x_field'] = x_field
 
     return variables
 
@@ -93,13 +105,14 @@ def main():
 
     variables = input_variables()
 
-    # Data defined by the user
-    job_name = variables["job_name"]  # Replace with the actual job name
-    # Replace with the actual step name
-    step_name = variables["step_name"]
-
-    # Read the input file to check if the nlgeom setting is on or off
+    # Data defined by the user in the .yaml file
     inp_name = variables["input_file"]
+    job_name = variables["job_name"]
+    step_name = variables["step_name"]
+    instance_name = variables["instance_name"]
+    set_name_case = str(variables["set_name"])
+    field = str(variables["field"])
+    x_field = str(variables["x_field"])
 
     with codecs.open(inp_name, 'r', encoding='utf-8') as input_file:
         file_content = input_file.read()
@@ -113,12 +126,18 @@ def main():
             nlgeom = 1 if nlgeom_setting.upper() == 'YES' else 0
         else:
             print("nlgeom setting not found in the input file.")
-            sys.exit(1)  # Stop the script with an exit code
+            sys.exit(1)
 
     if nlgeom == 0:
-        variables_array = np.array(["S", "E", "U", "RF"])
-    else:
-        variables_array = np.array(["S", "LE", "U", "RF"])
+        if x_field == 'LE' or field == 'LE':
+            print("Error: 'LE' is not allowed when nlgeom is 0, use 'E' instead.")
+            sys.exit(1)
+    elif nlgeom == 1:
+        if x_field == 'E' or field == 'E':
+            print("Error: 'E' is not allowed when nlgeom is 1, use 'LE' instead.")
+            sys.exit(1)
+
+    variables_array = np.array([field, x_field])
 
     # Open the output database
     odb_name = job_name + ".odb"
@@ -132,42 +151,49 @@ def main():
         header_variable = "%s_%d"
         variable = var
 
-        for set_name, location in odb.rootAssembly.nodeSets.items():
+        if instance_name is not None:
+            node_sets = odb.rootAssembly.instances[instance_name].nodeSets.items()
+        else:
+            node_sets = odb.rootAssembly.nodeSets.items()
 
-            file_name = file_name_func(set_name, var, inp_name)
+        for set_name, location in node_sets:
 
-            # Create a text file to save the output data
-            with codecs.open(file_name, 'w', encoding='utf-8') as output_file:
+            if set_name == set_name_case:
 
-                output_variable = step.frames[0].fieldOutputs[variable]
+                file_name = file_name_func(set_name, var, inp_name)
 
-                # Create a variable that refers to the output variable of the node set. If the
-                # field is S or E it extrapolates the data to the nodes, if the field is U or RF
-                # the data is already on the nodes so it doesn't need to be specified.
-                location_output_variable = field_location(i, output_variable, location)
+                # Create a text file to save the output data
+                with codecs.open(file_name, 'w', encoding='utf-8') as output_file:
 
-                # Get the component labels
-                component_labels = output_variable.componentLabels
+                    output_variable = step.frames[0].fieldOutputs[variable]
 
-                # Write the column headers dynamically based on the number of nodes and
-                # output variable components
-                header = "Frame " + " ".join(header_variable % (label, v.nodeLabel) for v in
-                                             location_output_variable.values for label in
-                                             component_labels) + "\n"
-                output_file.write(header)
-
-                for frame in step.frames:
-                    output_variable = frame.fieldOutputs[variable]
-
-                    # Create a variable that refers to the output_variable of the node
-                    # set in the current frame.
+                    # Create a variable that refers to the output variable of the node set. If the
+                    # field is S or E it extrapolates the data to the nodes, if the field is U or RF
+                    # the data is already on the nodes so it doesn't need extrapolation.
                     location_output_variable = field_location(i, output_variable, location)
 
-                    output_file.write("%d " % frame.frameId)
-                    for v in location_output_variable.values:
-                        output_file.write(" ".join("%.9f" % value for value in v.data))
-                        output_file.write(" ")
-                    output_file.write("\n")
+                    # Get the component labels
+                    component_labels = output_variable.componentLabels
+
+                    # Write the column headers dynamically based on the number of nodes and
+                    # output variable components
+                    header = "Frame " + " ".join(header_variable % (label, v.nodeLabel) for v in
+                                                location_output_variable.values for label in
+                                                component_labels) + "\n"
+                    output_file.write(header)
+
+                    for frame in step.frames:
+                        output_variable = frame.fieldOutputs[variable]
+
+                        # Create a variable that refers to the output_variable of the node
+                        # set in the current frame.
+                        location_output_variable = field_location(i, output_variable, location)
+
+                        output_file.write("%d " % frame.frameId)
+                        for v in location_output_variable.values:
+                            output_file.write(" ".join("%.9f" % value for value in v.data))
+                            output_file.write(" ")
+                        output_file.write("\n")
 
     odb.close()
 
