@@ -112,8 +112,7 @@ class AbaqusInputData(InputData):
             instance_list = re.findall(r'\*Instance, name=([^,]+)', data)
             self.instance_name = self.__sanitize_field(self.instance_name,
                                                        instance_list,
-                                                       "instance"
-                                                    )
+                                                       "instance")
 
             step_list = re.findall(r'\*Step, name=([^,]+)', data)
             self.step_name = self.__sanitize_field(self.step_name, step_list, "step")

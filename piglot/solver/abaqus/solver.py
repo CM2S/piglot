@@ -103,10 +103,7 @@ class AbaqusSolver(Solver):
         os.mkdir(tmp_dir)
 
         # Copy input file replacing parameters by passed value
-        input_data = case.input_data.prepare(values,
-            self.parameters,
-            tmp_dir=tmp_dir
-        )
+        input_data = case.input_data.prepare(values, self.parameters, tmp_dir=tmp_dir)
         input_file = input_data.input_file
 
         # Run ABAQUS (we don't use high precision timers here to keep track of the start time)
@@ -138,8 +135,7 @@ class AbaqusSolver(Solver):
              f"instance_name={variables['instance_name']}", "--",
              f"set_name={variables['set_name']}", "--",
              f"field={variables['field']}", "--",
-             f"x_field={variables['x_field']}"
-            ],
+             f"x_field={variables['x_field']}"],
             cwd=tmp_dir,
             shell=False,
             stdout=subprocess.DEVNULL,

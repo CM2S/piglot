@@ -27,28 +27,20 @@ def input_variables():
     x_field_list = [a for a in args if a.startswith("x_field=")]
 
     # Checks if the input_file, job_name, step_name and instance_name are not empty
-    input_file = input_file_list[0].replace('input_file=', '') \
+    variables['input_file'] = input_file_list[0].replace('input_file=', '') \
         if input_file_list else None
-    job_name = job_name_list[0].replace('job_name=', '') \
+    variables['job_name'] = job_name_list[0].replace('job_name=', '') \
         if job_name_list else None
-    step_name = step_name_list[0].replace('step_name=', '') \
+    variables['step_name'] = step_name_list[0].replace('step_name=', '') \
         if step_name_list else None
-    instance_name = instance_name_list[0].replace('instance_name=', '') \
+    variables['instance_name'] = instance_name_list[0].replace('instance_name=', '') \
         if instance_name_list else None
-    set_name = set_name_list[0].replace('set_name=', '') \
+    variables['set_name'] = set_name_list[0].replace('set_name=', '') \
         if set_name_list else None
-    field = field_list[0].replace('field=', '') \
+    variables['field'] = field_list[0].replace('field=', '') \
         if field_list else None
-    x_field = x_field_list[0].replace('x_field=', '') \
+    variables['x_field']  = x_field_list[0].replace('x_field=', '') \
         if x_field_list else None
-
-    variables['input_file'] = input_file
-    variables['job_name'] = job_name
-    variables['step_name'] = step_name
-    variables['instance_name'] = instance_name
-    variables['set_name'] = set_name
-    variables['field'] = field
-    variables['x_field'] = x_field
 
     return variables
 
