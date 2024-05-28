@@ -74,7 +74,7 @@ def file_name_func(set_name, variable_name, inp_name):
     return file_name
 
 
-def field_location(output_variable, location):
+def field_location(i, variables_array, output_variable, location):
     """It gets the node data of the specified node set.
 
     Parameters
@@ -91,7 +91,8 @@ def field_location(output_variable, location):
     location_output_variable
         Location of the output variable.
     """
-    if output_variable in ('S', 'E', 'LE'):
+    variable = variables_array[i]
+    if variable in ['S', 'E', 'LE']:
         location_output_variable = output_variable.getSubset(region=location,
                                                              position=ELEMENT_NODAL)
     else:
@@ -129,17 +130,10 @@ def main():
             nlgeom_setting = match.group(1)
             nlgeom = 1 if nlgeom_setting.upper() == 'YES' else 0
         else:
-            print("nlgeom setting not found in the input file.")
-            sys.exit(1)
+            raise ValueError("'nlgeom' setting not found in the input file.")
 
-    if nlgeom == 0:
-        if x_field == 'LE' or field == 'LE':
-            print("Error: 'LE' is not allowed when nlgeom is 0, use 'E' instead.")
-            sys.exit(1)
-    elif nlgeom == 1:
-        if x_field == 'E' or field == 'E':
-            print("Error: 'E' is not allowed when nlgeom is 1, use 'LE' instead.")
-            sys.exit(1)
+    if nlgeom == 0 and (x_field == 'LE' or field == 'LE'):
+        raise ValueError("Error: 'LE' is not allowed when nlgeom is 0, use 'E' instead.")
 
     variables_array = np.array([field, x_field])
 
@@ -150,7 +144,7 @@ def main():
     # Create a variable that refers to the first step.
     step = odb.steps[step_name]
 
-    for var in variables_array:
+    for i, var in enumerate(variables_array):
 
         header_variable = "%s_%d"
         variable = var
@@ -174,7 +168,11 @@ def main():
                     # Create a variable that refers to the output variable of the node set. If the
                     # field is S or E it extrapolates the data to the nodes, if the field is U or RF
                     # the data is already on the nodes so it doesn't need extrapolation.
-                    location_output_variable = field_location(output_variable, location)
+                    location_output_variable = field_location(i,
+                                                              variables_array,
+                                                              output_variable,
+                                                              location
+                                                            )
 
                     # Get the component labels
                     component_labels = output_variable.componentLabels
@@ -191,7 +189,11 @@ def main():
 
                         # Create a variable that refers to the output_variable of the node
                         # set in the current frame.
-                        location_output_variable = field_location(output_variable, location)
+                        location_output_variable = field_location(i,
+                                                                  variables_array,
+                                                                  output_variable,
+                                                                  location
+                                                                )
 
                         output_file.write("%d " % frame.frameId)
                         for v in location_output_variable.values:

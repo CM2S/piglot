@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Dict, Any, List
 import os
 import re
-import glob
 import numpy as np
 import pandas as pd
 from piglot.parameter import ParameterSet
