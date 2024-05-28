@@ -234,12 +234,6 @@ class FieldsOutput(OutputField):
         data_group = data[columns].to_numpy()
         y_field = reduction[self.field](data_group, axis=1)
 
-        # Delete the extra temporary files
-        files = glob.glob(output_dir + '/' + input_file + '*.txt')
-        for file in files:
-            if self.set_name not in file:
-                os.remove(file)
-
         return OutputResult(x_field, y_field)
 
     @staticmethod
