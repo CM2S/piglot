@@ -111,7 +111,7 @@ class AbaqusInputData(InputData):
             self.job_name = self.__sanitize_field(self.job_name, job_list, "job")
 
             instance_list = re.findall(r'\*Instance, name=([^,]+)', data)
-            self.instance_name = self.__sanitize_field(self.instance_name.upper(),
+            self.instance_name = self.__sanitize_field(self.instance_name,
                                                        instance_list,
                                                        "instance"
                                                     )

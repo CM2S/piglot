@@ -109,7 +109,10 @@ def main():
     inp_name = variables["input_file"]
     job_name = variables["job_name"]
     step_name = variables["step_name"]
-    instance_name = variables["instance_name"]
+    if instance_name is not None:
+        instance_name = variables["instance_name"].upper()
+    else:
+        pass
     set_name_case = str(variables["set_name"])
     field = str(variables["field"])
     x_field = str(variables["x_field"])
