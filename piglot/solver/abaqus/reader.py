@@ -39,7 +39,7 @@ def input_variables():
         if set_name_list else None
     variables['field'] = field_list[0].replace('field=', '') \
         if field_list else None
-    variables['x_field']  = x_field_list[0].replace('x_field=', '') \
+    variables['x_field'] = x_field_list[0].replace('x_field=', '') \
         if x_field_list else None
 
     return variables
