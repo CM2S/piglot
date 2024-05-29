@@ -111,8 +111,8 @@ class AbaqusSolver(Solver):
             ] + extra_args,
             cwd=tmp_dir,
             shell=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=self.stdout,
+            stderr=self.stderr,
             check=False
         )
 
@@ -127,8 +127,8 @@ class AbaqusSolver(Solver):
              f"instance_name={variables['instance_name']}"],
             cwd=tmp_dir,
             shell=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=self.stdout,
+            stderr=self.stderr,
             check=False
         )
         end_time = time.time()

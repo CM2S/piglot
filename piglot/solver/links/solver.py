@@ -71,8 +71,8 @@ class LinksSolver(Solver):
         begin_time = time.time()
         process_result = subprocess.run(
             [self.links_bin, input_file],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=self.stdout,
+            stderr=self.stderr,
             check=False
         )
         end_time = time.time()

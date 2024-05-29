@@ -6,10 +6,20 @@ from abc import ABC, abstractmethod
 import os
 import time
 import shutil
+import subprocess
 import numpy as np
 from yaml import safe_dump_all, safe_load_all
 from piglot.parameter import ParameterSet
 from piglot.utils.assorted import pretty_time
+
+
+DEFAULT_VERBOSITY = 'none'
+AVAILABLE_VERBOSITIES = [
+    'none',
+    'file',
+    'error',
+    'all',
+]
 
 
 class InputData(ABC):
@@ -261,6 +271,23 @@ class Solver(ABC):
         self.begin_time = time.time()
         self.cases_dir = os.path.join(output_dir, "cases")
         self.cases_hist = os.path.join(output_dir, "cases_hist")
+        self.stdout_dir = os.path.join(output_dir, 'solver_output')
+        self.verbosity = DEFAULT_VERBOSITY
+        self.stdout = None
+        self.stderr = None
+
+    def set_verbosity(self, verbosity: str) -> None:
+        """Set the verbosity level for the solver.
+
+        Parameters
+        ----------
+        verbosity : str
+            Verbosity level.
+        """
+        if verbosity not in AVAILABLE_VERBOSITIES:
+            raise ValueError(f"Unknown verbosity setting '{self.verbosity}'. "
+                             f"Must be one of {AVAILABLE_VERBOSITIES}.")
+        self.verbosity = verbosity
 
     def prepare(self) -> None:
         """Prepare data for the optimisation."""
@@ -269,6 +296,14 @@ class Solver(ABC):
         if os.path.isdir(self.cases_hist):
             shutil.rmtree(self.cases_hist)
         os.mkdir(self.cases_hist)
+        # If needed, create directory for solver output and prepare streams
+        if os.path.isdir(self.stdout_dir):
+            shutil.rmtree(self.stdout_dir)
+        if self.verbosity in ('file', 'error'):
+            os.mkdir(self.stdout_dir)
+            self.stdout = open(os.path.join(self.stdout_dir, 'stdout'), 'w', encoding='utf8')
+            if self.verbosity == 'file':
+                self.stderr = open(os.path.join(self.stdout_dir, 'stderr'), 'w', encoding='utf8')
         # Build headers for case log files
         for case in self.cases:
             case_dir = os.path.join(self.cases_dir, case.name())
@@ -282,6 +317,19 @@ class Solver(ABC):
         # Prepare individual cases and output fields
         for case in self.cases:
             case.check(self.parameters)
+        # Prepare output streams
+        if self.verbosity in ('file', 'error'):
+            self.stdout = open(os.path.join(self.stdout_dir, 'stdout'), 'w', encoding='utf8')
+            self.stderr = (
+                open(os.path.join(self.stdout_dir, 'stderr'), 'w', encoding='utf8')
+                if self.verbosity == 'file' else None
+            )
+        elif self.verbosity == 'all':
+            self.stdout = None
+            self.stderr = None
+        elif self.verbosity == 'none':
+            self.stdout = subprocess.DEVNULL
+            self.stderr = subprocess.DEVNULL
 
     def _write_history_entry(
             self,
@@ -309,6 +357,11 @@ class Solver(ABC):
             for i, param in enumerate(self.parameters):
                 file.write(f"{param.denormalise(result.values[i]):>15.6f}\t")
             file.write(f'{param_hash}\n')
+        # Flush solver outputs, if any
+        if self.verbosity in ('file', 'error'):
+            self.stdout.flush()
+            if self.stderr is not None:
+                self.stderr.flush()
 
     def get_output_fields(self) -> Dict[str, Tuple[Case, OutputField]]:
         """Get all output fields.

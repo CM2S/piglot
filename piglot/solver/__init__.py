@@ -1,7 +1,7 @@
 """Interface for solvers."""
 from typing import Any, Dict, Type
 from piglot.parameter import ParameterSet
-from piglot.solver.solver import Solver
+from piglot.solver.solver import Solver, AVAILABLE_VERBOSITIES, DEFAULT_VERBOSITY
 from piglot.solver.links.solver import LinksSolver
 from piglot.solver.abaqus.solver import AbaqusSolver
 from piglot.solver.curve.solver import CurveSolver
@@ -40,4 +40,8 @@ def read_solver(config: Dict[str, Any], parameters: ParameterSet, output_dir: st
     # Delegate to the solver reader
     if name not in AVAILABLE_SOLVERS:
         raise ValueError(f"Unknown solver '{name}'.")
-    return AVAILABLE_SOLVERS[name].read(config, parameters, output_dir)
+    solver = AVAILABLE_SOLVERS[name].read(config, parameters, output_dir)
+    # Set the verbosity before returning the solver
+    if 'verbosity' in config:
+        solver.set_verbosity(config['verbosity'])
+    return solver

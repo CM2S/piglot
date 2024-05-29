@@ -81,8 +81,8 @@ class CrateSolver(Solver):
         begin_time = time.time()
         process_result = subprocess.run(
             [self.python_interp, self.crate_bin, input_file, self.microstructure_dir],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=self.stdout,
+            stderr=self.stderr,
             check=False
         )
         end_time = time.time()
