@@ -1,4 +1,6 @@
-"""Module to extract the nodal data from the output database (.odb) file"""
+"""Module to extract the nodal data from the output database (.odb) file
+Note: This script has older python syntax because it is used in Abaqus, which uses Python 2.7.
+"""
 import re
 import os
 import sys
@@ -18,13 +20,15 @@ def input_variables():
     args = sys.argv
     variables = {}
 
-    variable_names = ['input_file',
-                      'job_name',
-                      'step_name',
-                      'instance_name',
-                      'set_name',
-                      'field',
-                      'x_field']
+    variable_names = [
+        'input_file',
+        'job_name',
+        'step_name',
+        'instance_name',
+        'set_name',
+        'field',
+        'x_field',
+    ]
 
     for var_name in variable_names:
         var_list = [a for a in args if a.startswith(var_name + "=")]
