@@ -158,7 +158,7 @@ def get_node_sets(instance_name, odb):
 
     return odb.rootAssembly.nodeSets.items()
 
-def write_output_file(i, variables_array, step, location, file_name):
+def write_output_file(i, variables_array, variable, step, location, file_name):
     """Writes the output file with the nodal data of the specified node set.
 
     Parameters
@@ -175,27 +175,26 @@ def write_output_file(i, variables_array, step, location, file_name):
         It is a string that represents the name of the output file.
     """
     with codecs.open(file_name, 'w', encoding='utf-8') as output_file:
-        for var in variables_array:
-            output_variable = step.frames[0].fieldOutputs[var]
-            location_output_variable = field_location(i, variables_array, output_variable, location)
-            component_labels = output_variable.componentLabels
-            # Write the column headers dynamically based on the number of nodes and output
-            # variable components
-            header = "Frame " + " ".join("%s_%d" % (label, v.nodeLabel)
-                                         for v in location_output_variable.values
-                                         for label in component_labels) + "\n"
-            output_file.write(header)
-            for frame in step.frames:
-                output_variable = frame.fieldOutputs[var]
-                location_output_variable = field_location(i,
-                                                          variables_array,
-                                                          output_variable,
-                                                          location)
-                output_file.write("%d " % frame.frameId)
-                for v in location_output_variable.values:
-                    output_file.write(" ".join("%.9f" % value for value in v.data))
-                    output_file.write(" ")
-                output_file.write("\n")
+        output_variable = step.frames[0].fieldOutputs[variable]
+        location_output_variable = field_location(i, variables_array, output_variable, location)
+        component_labels = output_variable.componentLabels
+        # Write the column headers dynamically based on the number of nodes and output
+        # variable components
+        header = "Frame " + " ".join("%s_%d" % (label, v.nodeLabel)
+                                        for v in location_output_variable.values
+                                        for label in component_labels) + "\n"
+        output_file.write(header)
+        for frame in step.frames:
+            output_variable = frame.fieldOutputs[variable]
+            location_output_variable = field_location(i,
+                                                        variables_array,
+                                                        output_variable,
+                                                        location)
+            output_file.write("%d " % frame.frameId)
+            for v in location_output_variable.values:
+                output_file.write(" ".join("%.9f" % value for value in v.data))
+                output_file.write(" ")
+            output_file.write("\n")
 
 def main():
     """Main function to extract the nodal data from the output database (.odb) file.
@@ -219,11 +218,12 @@ def main():
     step = odb.steps[variables["step_name"]]
 
     for i, var in enumerate(variables_array):
+        variable = var
         node_sets = get_node_sets(instance_name, odb)
         for set_name, location in node_sets:
             if set_name == str(variables["set_name"]):
                 file_name = file_name_func(set_name, var, variables["input_file"])
-                write_output_file(i, variables_array, step, location, file_name)
+                write_output_file(i, variables_array, variable, step, location, file_name)
 
     odb.close()
 
