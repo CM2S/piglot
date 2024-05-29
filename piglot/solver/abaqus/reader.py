@@ -18,29 +18,17 @@ def input_variables():
     args = sys.argv
     variables = {}
 
-    input_file_list = [a for a in args if a.startswith("input_file=")]
-    job_name_list = [a for a in args if a.startswith("job_name=")]
-    step_name_list = [a for a in args if a.startswith("step_name=")]
-    instance_name_list = [a for a in args if a.startswith("instance_name=")]
-    set_name_list = [a for a in args if a.startswith("set_name=")]
-    field_list = [a for a in args if a.startswith("field=")]
-    x_field_list = [a for a in args if a.startswith("x_field=")]
+    variable_names = ['input_file',
+                      'job_name',
+                      'step_name',
+                      'instance_name',
+                      'set_name',
+                      'field',
+                      'x_field']
 
-    # Checks if the input_file, job_name, step_name and instance_name are not empty
-    variables['input_file'] = input_file_list[0].replace('input_file=', '') \
-        if input_file_list else None
-    variables['job_name'] = job_name_list[0].replace('job_name=', '') \
-        if job_name_list else None
-    variables['step_name'] = step_name_list[0].replace('step_name=', '') \
-        if step_name_list else None
-    variables['instance_name'] = instance_name_list[0].replace('instance_name=', '') \
-        if instance_name_list else None
-    variables['set_name'] = set_name_list[0].replace('set_name=', '') \
-        if set_name_list else None
-    variables['field'] = field_list[0].replace('field=', '') \
-        if field_list else None
-    variables['x_field'] = x_field_list[0].replace('x_field=', '') \
-        if x_field_list else None
+    for var_name in variable_names:
+        var_list = [a for a in args if a.startswith(f"{var_name}=")]
+        variables[var_name] = var_list[0].replace(f'{var_name}=', '') if var_list else None
 
     return variables
 
@@ -67,12 +55,16 @@ def file_name_func(set_name, variable_name, inp_name):
 
 
 def field_location(i, variables_array, output_variable, location):
-    """It gets the node data of the specified node set.
+    """It gets the node data of the specified node set. Create a variable that refers to the output 
+    variable of the node set. If the field is S or E it extrapolates the data to the nodes, if the 
+    field is U or RF the data is already on the nodes so it doesn't need extrapolation.
 
     Parameters
     ----------
     i : int
-        It is an int number, 0 or 1 in the case of the stresses and strains.
+        It is an int number that represents the index of the variables_array.
+    variables_array : list
+        It is a list that contains the field variables (S, U, RF, E or LE)
     output_variable : str
         Its the output variable (S, U, RF, E or LE) of the nodes.
     location : str
@@ -92,106 +84,146 @@ def field_location(i, variables_array, output_variable, location):
     return location_output_variable
 
 
-def main():
-    """Main function of the reader.py
-    """
+def get_nlgeom_setting(inp_name):
+    """It verifies if the 'nlgeom' setting is set to 'YES' in the input file.
 
+    Parameters
+    ----------
+    inp_name : str
+        The name of the input file.
+
+    Returns
+    -------
+    int
+        It returns 1 if the 'nlgeom' setting is set to 'YES' in the input file, otherwise it 
+        returns 0.
+
+    Raises
+    ------
+    ValueError
+        Raises an error if the 'nlgeom' setting is not found in the input file.
+    """
+    with codecs.open(inp_name, 'r', encoding='utf-8') as input_file:
+        file_content = input_file.read()
+        match = re.search(r'\*Step.*nlgeom=(\w+)', file_content)
+        if match:
+            nlgeom_setting = match.group(1)
+            return 1 if nlgeom_setting.upper() == 'YES' else 0
+
+        raise ValueError("'nlgeom' setting not found in the input file.")
+
+def check_nlgeom(nlgeom, field, x_field):
+    """Checks if the user is trying to extract the logaritmic strain ('LE') when the 'nlgeom' is 
+    OFF.
+
+    Parameters
+    ----------
+    nlgeom : int
+        It is an int number that represents the 'nlgeom' setting. If it is 1 the 'nlgeom' is ON,
+        if it is 0 it is OFF.
+    field : str
+        Name of the y-axis field variable.
+    x_field : str
+        Name of the x-axis field variable.
+
+    Raises
+    ------
+    ValueError
+        Raises an error if the user is trying to extract the logaritmic strain ('LE') when the 
+        'nlgeom' is OFF.
+    """
+    if nlgeom == 0 and (x_field == 'LE' or field == 'LE'):
+        raise ValueError("'LE' is not allowed when nlgeom is OFF, use 'E' instead.")
+
+def get_node_sets(instance_name, odb):
+    """Gets the node sets of the instance. If the instance_name is None it gets the node sets of the
+    assembly. If the instance_name is not None it gets the node sets of the instance specified by
+    the user.
+
+    Parameters
+    ----------
+    instance_name : str
+        Name of the instance.
+    odb : Odb
+        An instance of the Odb class from the Abaqus scripting interface, representing the output
+        database.
+
+    Returns
+    -------
+    list
+        List of the node sets of the instance.
+    """
+    if instance_name is not None:
+        return odb.rootAssembly.instances[instance_name].nodeSets.items()
+
+    return odb.rootAssembly.nodeSets.items()
+
+def write_output_file(i, variables_array, step, location, file_name):
+    """Writes the output file with the nodal data of the specified node set.
+
+    Parameters
+    ----------
+    i : int
+        It is an int number that represents the index of the variables_array.
+    variables_array : list
+        It is a list that contains two field variables (S, U, RF, E or LE).
+    step : str
+        It is a string that represents the step of the output database.
+    location : str
+        It is a string that represents the location of the node set.
+    file_name : str
+        It is a string that represents the name of the output file.
+    """
+    with codecs.open(file_name, 'w', encoding='utf-8') as output_file:
+        for var in variables_array:
+            output_variable = step.frames[0].fieldOutputs[var]
+            location_output_variable = field_location(i, variables_array, output_variable, location)
+            component_labels = output_variable.componentLabels
+            # Write the column headers dynamically based on the number of nodes and output
+            # variable components
+            header = "Frame " + " ".join("%s_%d" % (label, v.nodeLabel)
+                                         for v in location_output_variable.values
+                                         for label in component_labels) + "\n"
+            output_file.write(header)
+            for frame in step.frames:
+                output_variable = frame.fieldOutputs[var]
+                location_output_variable = field_location(i,
+                                                          variables_array,
+                                                          output_variable,
+                                                          location)
+                output_file.write("%d " % frame.frameId)
+                for v in location_output_variable.values:
+                    output_file.write(" ".join("%.9f" % value for value in v.data))
+                    output_file.write(" ")
+                output_file.write("\n")
+
+def main():
+    """Main function to extract the nodal data from the output database (.odb) file.
+    """
     variables = input_variables()
 
-    # Data defined by the user in the .yaml file
-    inp_name = variables["input_file"]
-    job_name = variables["job_name"]
-    step_name = variables["step_name"]
     instance_name = variables["instance_name"]
     if instance_name is not None:
         instance_name = variables["instance_name"].upper()
-    else:
-        pass
-    set_name_case = str(variables["set_name"])
-    field = str(variables["field"])
-    x_field = str(variables["x_field"])
 
-    with codecs.open(inp_name, 'r', encoding='utf-8') as input_file:
-        file_content = input_file.read()
+    nlgeom = get_nlgeom_setting(variables["input_file"])
+    check_nlgeom(nlgeom, variables["field"], variables["x_field"])
 
-        # Use a regular expression to find the nlgeom setting
-        match = re.search(r'\*Step.*nlgeom=(\w+)', file_content)
-
-        # Check if the match is found and extract the value
-        if match:
-            nlgeom_setting = match.group(1)
-            nlgeom = 1 if nlgeom_setting.upper() == 'YES' else 0
-        else:
-            raise ValueError("'nlgeom' setting not found in the input file.")
-
-    if nlgeom == 0 and (x_field == 'LE' or field == 'LE'):
-        raise ValueError("Error: 'LE' is not allowed when nlgeom is OFF, use 'E' instead.")
-
-    variables_array = np.array([field, x_field])
+    variables_array = np.array([variables["field"], variables["x_field"]])
 
     # Open the output database
-    odb_name = job_name + ".odb"
+    odb_name = variables["job_name"] + ".odb"
     odb = openOdb(path=odb_name)
 
-    # Create a variable that refers to the first step.
-    step = odb.steps[step_name]
+    # Create a variable that refers to the respective step
+    step = odb.steps[variables["step_name"]]
 
     for i, var in enumerate(variables_array):
-
-        header_variable = "%s_%d"
-        variable = var
-
-        if instance_name is not None:
-            node_sets = odb.rootAssembly.instances[instance_name].nodeSets.items()
-        else:
-            node_sets = odb.rootAssembly.nodeSets.items()
-
+        node_sets = get_node_sets(instance_name, odb)
         for set_name, location in node_sets:
-
-            if set_name == set_name_case:
-
-                file_name = file_name_func(set_name, var, inp_name)
-
-                # Create a text file to save the output data
-                with codecs.open(file_name, 'w', encoding='utf-8') as output_file:
-
-                    output_variable = step.frames[0].fieldOutputs[variable]
-
-                    # Create a variable that refers to the output variable of the node set. If the
-                    # field is S or E it extrapolates the data to the nodes, if the field is U or RF
-                    # the data is already on the nodes so it doesn't need extrapolation.
-                    location_output_variable = field_location(i,
-                                                              variables_array,
-                                                              output_variable,
-                                                              location
-                                                            )
-
-                    # Get the component labels
-                    component_labels = output_variable.componentLabels
-
-                    # Write the column headers dynamically based on the number of nodes and
-                    # output variable components
-                    header = "Frame " + " ".join(header_variable % (label, v.nodeLabel) for v in
-                                                location_output_variable.values for label in
-                                                component_labels) + "\n"
-                    output_file.write(header)
-
-                    for frame in step.frames:
-                        output_variable = frame.fieldOutputs[variable]
-
-                        # Create a variable that refers to the output_variable of the node
-                        # set in the current frame.
-                        location_output_variable = field_location(i,
-                                                                  variables_array,
-                                                                  output_variable,
-                                                                  location
-                                                                )
-
-                        output_file.write("%d " % frame.frameId)
-                        for v in location_output_variable.values:
-                            output_file.write(" ".join("%.9f" % value for value in v.data))
-                            output_file.write(" ")
-                        output_file.write("\n")
+            if set_name == str(variables["set_name"]):
+                file_name = file_name_func(set_name, var, variables["input_file"])
+                write_output_file(i, variables_array, step, location, file_name)
 
     odb.close()
 
