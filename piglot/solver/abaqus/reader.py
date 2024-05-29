@@ -218,12 +218,11 @@ def main():
     step = odb.steps[variables["step_name"]]
 
     for i, var in enumerate(variables_array):
-        variable = var
         node_sets = get_node_sets(instance_name, odb)
         for set_name, location in node_sets:
             if set_name == str(variables["set_name"]):
                 file_name = file_name_func(set_name, var, variables["input_file"])
-                write_output_file(i, variables_array, variable, step, location, file_name)
+                write_output_file(i, variables_array, var, step, location, file_name)
 
     odb.close()
 
