@@ -27,8 +27,8 @@ def input_variables():
                       'x_field']
 
     for var_name in variable_names:
-        var_list = [a for a in args if a.startswith(f"{var_name}=")]
-        variables[var_name] = var_list[0].replace(f'{var_name}=', '') if var_list else None
+        var_list = [a for a in args if a.startswith(var_name + "=")]
+        variables[var_name] = var_list[0].replace(var_name + '=', '') if var_list else None
 
     return variables
 
