@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Dict, Any, List
 import os
 import re
-import glob
 import numpy as np
 import pandas as pd
 from piglot.parameter import ParameterSet
@@ -97,7 +96,7 @@ class AbaqusInputData(InputData):
         """
         # Generate a dummy set of parameters (to ensure proper handling of output parameters)
         values = np.array([parameter.inital_value for parameter in parameters])
-        param_dict = parameters.to_dict(values, input_normalised=False)
+        param_dict = parameters.to_dict(values)
         for name in param_dict:
             if not has_parameter(self.input_file, f'<{name}>'):
                 raise RuntimeError(f"Parameter '{name}' not found in input file.")
@@ -111,7 +110,8 @@ class AbaqusInputData(InputData):
             self.job_name = self.__sanitize_field(self.job_name, job_list, "job")
 
             instance_list = re.findall(r'\*Instance, name=([^,]+)', data)
-            self.instance_name = self.__sanitize_field(self.instance_name, instance_list,
+            self.instance_name = self.__sanitize_field(self.instance_name,
+                                                       instance_list,
                                                        "instance")
 
             step_list = re.findall(r'\*Step, name=([^,]+)', data)
@@ -180,7 +180,7 @@ class FieldsOutput(OutputField):
         with open(input_file + ext, 'r', encoding='utf-8') as file:
             data = file.read()
 
-            nsets_list = re.findall(r'\*Nset, nset=([^,]+)', data)
+            nsets_list = re.findall(r'\*Nset, nset="?([^",\s]+)"?', data)
             if len(nsets_list) == 0:
                 raise ValueError("No sets found in the file.")
             if self.set_name not in nsets_list:
@@ -231,12 +231,6 @@ class FieldsOutput(OutputField):
         # Extract columns from data frame
         data_group = data[columns].to_numpy()
         y_field = reduction[self.field](data_group, axis=1)
-
-        # Delete the extra temporary files
-        files = glob.glob(output_dir + '/' + input_file + '*.txt')
-        for file in files:
-            if self.set_name not in file:
-                os.remove(file)
 
         return OutputResult(x_field, y_field)
 
