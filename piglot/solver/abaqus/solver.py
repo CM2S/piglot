@@ -8,7 +8,7 @@ from multiprocessing.pool import ThreadPool as Pool
 import numpy as np
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import Solver, Case, CaseResult, OutputField, OutputResult
-from piglot.solver.abaqus.fields import abaqus_fields_reader, AbaqusInputData
+from piglot.solver.abaqus.fields import abaqus_fields_reader, AbaqusInputData, FieldsOutput
 
 
 class AbaqusSolver(Solver):
@@ -47,13 +47,19 @@ class AbaqusSolver(Solver):
         self.tmp_dir = tmp_dir
         self.extra_args = extra_args
 
-    def _post_proc_variables(self, input_data: AbaqusInputData) -> Dict[str, Any]:
+    def _post_proc_variables(
+        self,
+        input_data: AbaqusInputData,
+        field_data: FieldsOutput
+    ) -> Dict[str, Any]:
         """Generate the post-processing variables.
 
         Parameters
         ----------
         input_data : AbaqusInputData
             Input data for the simulation.
+        field_data : FieldsOutput
+            Field data for the simulation.
 
         Returns
         -------
@@ -66,6 +72,9 @@ class AbaqusSolver(Solver):
         variables['job_name'] = input_data.job_name
         variables['step_name'] = input_data.step_name
         variables['instance_name'] = input_data.instance_name
+        variables['set_name'] = field_data.set_name
+        variables['field'] = field_data.field
+        variables['x_field'] = field_data.x_field
 
         return variables
 
@@ -94,8 +103,7 @@ class AbaqusSolver(Solver):
         os.mkdir(tmp_dir)
 
         # Copy input file replacing parameters by passed value
-        input_data = case.input_data.prepare(
-            values, self.parameters, tmp_dir=tmp_dir)
+        input_data = case.input_data.prepare(values, self.parameters, tmp_dir=tmp_dir)
         input_file = input_data.input_file
 
         # Run ABAQUS (we don't use high precision timers here to keep track of the start time)
@@ -116,7 +124,7 @@ class AbaqusSolver(Solver):
             check=False
         )
 
-        variables = self._post_proc_variables(input_data)
+        variables = self._post_proc_variables(input_data, list(case.fields.values())[0])
         python_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reader.py')
 
         run_odb = subprocess.run(
@@ -124,7 +132,10 @@ class AbaqusSolver(Solver):
              f"input_file={variables['input_file']}", "--",
              f"job_name={variables['job_name']}", "--",
              f"step_name={variables['step_name']}", "--",
-             f"instance_name={variables['instance_name']}"],
+             f"instance_name={variables['instance_name']}", "--",
+             f"set_name={variables['set_name']}", "--",
+             f"field={variables['field']}", "--",
+             f"x_field={variables['x_field']}"],
             cwd=tmp_dir,
             shell=False,
             stdout=self.stdout,
