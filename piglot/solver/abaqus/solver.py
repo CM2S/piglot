@@ -139,6 +139,7 @@ class AbaqusSolver(Solver):
             cwd=tmp_dir,
             shell=False,
             stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             check=False
         )
         end_time = time.time()
