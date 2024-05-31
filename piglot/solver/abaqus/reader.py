@@ -32,7 +32,7 @@ def input_variables():
 
     for var_name in variable_names:
         var_list = [a for a in args if a.startswith(var_name + "=")]
-        variables[var_name] = var_list[0].replace(var_name + '=', '') if var_list else None
+        variables[var_name] = var_list[0].replace(var_name + '=', '')
 
     return variables
 
@@ -200,14 +200,100 @@ def write_output_file(i, variables_array, variable, step, location, file_name):
                 output_file.write(" ")
             output_file.write("\n")
 
+def get_step(odb, variables):
+    """Create a variable that refers to the respective step.
+
+    Parameters
+    ----------
+    odb : Odb
+        An instance of the Odb class from the Abaqus scripting interface, representing the output 
+        database.
+    variables : dict
+        A dictionary containing the step name under the key "step_name".
+
+    Returns
+    -------
+    step : Step
+        The step from the output database that matches the name provided in the variables 
+        dictionary.
+
+    Raises
+    ------
+    ValueError
+        Raises an error if the step name is not found in the output database.
+    """
+    step_names_list = list(odb.steps.keys())
+    step_names_list_upper = [stepName.upper() for stepName in step_names_list]
+    step_name_upper = variables["step_name"].upper()
+    if step_name_upper not in step_names_list_upper:
+        raise ValueError("Step name not found in the output database.")
+
+    return step_names_list[step_names_list_upper.index(step_name_upper)]
+
+def get_instance(odb, variables):
+    """Create a variable that refers to the respective instance.
+
+    Parameters
+    ----------
+    odb : Odb
+        An instance of the Odb class from the Abaqus scripting interface, representing the output 
+        database.
+    variables : dict
+        A dictionary containing the instance name under the key "instance_name".
+
+    Returns
+    -------
+    instance : str
+        The instance from the output database that matches the name provided in the variables 
+        dictionary.
+
+    Raises
+    ------
+    ValueError
+        Raises an error if the instance name is not found in the output database.
+    """
+    instance_names_list = list(odb.rootAssembly.instances.keys())
+    instance_names_list_upper = [instanceName.upper() for instanceName in instance_names_list]
+    instance_name_upper = variables["instance_name"].upper()
+    if instance_name_upper not in instance_names_list_upper:
+        raise ValueError("Instance name not found in the output database.")
+
+    return instance_names_list[instance_names_list_upper.index(instance_name_upper)]
+
+def get_set(odb, variables, instance):
+    """Create a variable that refers to the respective set.
+
+    Parameters
+    ----------
+    odb : Odb
+        An instance of the Odb class from the Abaqus scripting interface, representing the output 
+        database.
+    variables : dict
+        A dictionary containing the set name under the key "set_name".
+
+    Returns
+    -------
+    set : str
+        The set from the output database that matches the name provided in the variables 
+        dictionary.
+
+    Raises
+    ------
+    ValueError
+        Raises an error if the set name is not found in the output database.
+    """
+    set_names_list = list(odb.rootAssembly.instances[instance].nodeSets.keys())
+    set_names_list_upper = [setName.upper() for setName in set_names_list]
+    set_name_upper = variables["set_name"].upper()
+    if set_name_upper not in set_names_list_upper:
+        raise ValueError("Set name not found in the output database.")
+
+    return set_names_list[set_names_list_upper.index(set_name_upper)]
+
 def main():
     """Main function to extract the nodal data from the output database (.odb) file.
     """
     variables = input_variables()
-
-    instance_name = variables["instance_name"]
-    if instance_name is not None:
-        instance_name = variables["instance_name"].upper()
 
     nlgeom = get_nlgeom_setting(variables["input_file"])
     check_nlgeom(nlgeom, variables["field"], variables["x_field"])
@@ -219,12 +305,14 @@ def main():
     odb = openOdb(path=odb_name)
 
     # Create a variable that refers to the respective step
-    step = odb.steps[variables["step_name"]]
+    step = get_step(odb, variables)
+    instance_name = get_instance(odb, variables)
+    set_name = get_set(odb, variables, instance_name)
 
     for i, var in enumerate(variables_array):
         node_sets = get_node_sets(instance_name, odb)
         for set_name, location in node_sets:
-            if set_name == str(variables["set_name"]):
+            if set_name == str(set_name):
                 file_name = file_name_func(set_name, var, variables["input_file"])
                 write_output_file(i, variables_array, var, step, location, file_name)
 

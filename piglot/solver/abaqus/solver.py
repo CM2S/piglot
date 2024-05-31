@@ -248,12 +248,10 @@ class AbaqusSolver(Solver):
                 for field_name, field_config in case_config['fields'].items()
             }
             # If job_name, step_name and instance_name are not indicated, the default value is None
-            job_name = case_config.get('job_name', None)
             step_name = case_config.get('step_name', None)
             instance_name = case_config.get('instance_name', None)
-            cases.append(Case(AbaqusInputData(case_name, job_name,
-                                              step_name,
-                                              instance_name), fields))
+            cases.append(Case(AbaqusInputData(case_name, step_name, instance_name), fields))
+
         # Return the solver
         return AbaqusSolver(
             cases,
