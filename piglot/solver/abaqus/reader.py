@@ -227,8 +227,8 @@ def get_step(odb, variables):
     step_name_upper = variables["step_name"].upper()
     if step_name_upper not in step_names_list_upper:
         raise ValueError("Step name not found in the output database.")
-
-    return step_names_list[step_names_list_upper.index(step_name_upper)]
+    step_name = step_names_list[step_names_list_upper.index(step_name_upper)]
+    return odb.steps[step_name]
 
 def get_instance(odb, variables):
     """Create a variable that refers to the respective instance.
@@ -287,7 +287,6 @@ def get_set(odb, variables, instance):
     set_name_upper = variables["set_name"].upper()
     if set_name_upper not in set_names_list_upper:
         raise ValueError("Set name not found in the output database.")
-
     return set_names_list[set_names_list_upper.index(set_name_upper)]
 
 def main():
@@ -307,12 +306,12 @@ def main():
     # Create a variable that refers to the respective step
     step = get_step(odb, variables)
     instance_name = get_instance(odb, variables)
-    set_name = get_set(odb, variables, instance_name)
+    nodeset_name = get_set(odb, variables, instance_name)
 
     for i, var in enumerate(variables_array):
         node_sets = get_node_sets(instance_name, odb)
         for set_name, location in node_sets:
-            if set_name == str(set_name):
+            if set_name == str(nodeset_name):
                 file_name = file_name_func(set_name, var, variables["input_file"])
                 write_output_file(i, variables_array, var, step, location, file_name)
 
