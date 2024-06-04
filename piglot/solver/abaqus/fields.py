@@ -191,11 +191,16 @@ class FieldsOutput(OutputField):
         input_data : AbaqusInputData
             Input data for this case.
         """
+        has_space = ' ' in self.set_name
         input_file, ext = os.path.splitext(os.path.basename(input_data.input_file))
         with open(input_file + ext, 'r', encoding='utf-8') as file:
             data = file.read()
 
-            nsets_list = re.findall(r'\*Nset, nset="?([^",\s]+)"?', data)
+            if has_space:
+                nsets_list = re.findall(r'\*Nset, nset="?([^",]+)"?', data)
+            else:
+                nsets_list = re.findall(r'\*Nset, nset="?([^",\s]+)"?', data)
+
             if len(nsets_list) == 0:
                 raise ValueError("No sets found in the file.")
             if self.set_name not in nsets_list:
