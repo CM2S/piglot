@@ -125,4 +125,5 @@ If you wish to install all optimisers at once, you can run :code:`pip install pi
    :hidden:
 
    API <_autosummary/piglot>
+   Integration with solvers <solvers/solvers>
    Papers <papers.md>
