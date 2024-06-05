@@ -74,7 +74,7 @@ Whereas the optimisers are responsible for providing a candidate solution for th
 The results of the optimisation can then be visualised using the `piglot-plot` tool.
 
 
-![Schematic illustration of `piglot`. \label{fig:piglot_example}](piglot.svg){width=100%}
+![Schematic illustration of `piglot`. \label{fig:piglot_example}](piglot.pdf){width=100%}
 
 
 The `piglot` package has been successfully used for the identification of constitutive parameters for classical elasto-plastic models from multi-scale simulations, crystal plasticity models with mechanically-induced martensitic transformations [@cardosocoelhoMultiscaleModelCombining2023] and models for amorphous polymers [@ALVES2023112488].
