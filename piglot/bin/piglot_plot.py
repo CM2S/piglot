@@ -295,7 +295,9 @@ def plot_gp(args):
     x_max = max(par.ubound for par in parameters)
     x = torch.linspace(x_min, x_max, 1000)
     for name, data_dict in data.items():
-        max_calls = args.max_calls if args.max_calls else len(data_dict['values'])
+        max_calls = len(data_dict['values'])
+        if args.max_calls:
+            max_calls = min(max_calls, args.max_calls)
         values = data_dict['values'][:max_calls]
         param_values = data_dict['params'][:max_calls]
         variances = data_dict['variances'][:max_calls] if 'variances' in data_dict else None

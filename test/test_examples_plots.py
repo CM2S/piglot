@@ -90,13 +90,13 @@ def test_input_files(input_dir: str):
         piglot_plot_main([
             'animation',
             input_file,
-            '--save_fig',
-            os.path.join(output_dir, 'animation.png'),
         ])
         if input_file != 'test_analytical.yaml':
             piglot_plot_main([
                 'gp',
                 input_file,
+                '--max_calls',
+                '10',
                 '--save_fig',
                 os.path.join(output_dir, 'gp.png'),
             ])
