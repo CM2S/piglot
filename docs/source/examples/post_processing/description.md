@@ -146,6 +146,7 @@ In addition, you can save the figure (without graphical output) to the `case.png
 piglot-plot case config.yaml e1c54f41b449d2997ce426b22b0e24103c258a4e35632dcce8da80d964140bd8 --save_fig case.png
 ```
 If the optimisation requires evaluating more than one response, each plot is saved and the file names are automatically updated to, for example, `case_0.png` and `case_1.png`.
+Image output is not limited to PNG -- other formats supported by matplotlib can be used.
 This option is supported by most plotting utilities, as shown below.
 
 
