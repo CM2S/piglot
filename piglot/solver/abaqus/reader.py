@@ -32,7 +32,7 @@ def input_variables():
 
     for var_name in variable_names:
         var_list = [a for a in args if a.startswith(var_name + "=")]
-        variables[var_name] = var_list[0].replace(var_name + '=', '') if var_list else None
+        variables[var_name] = var_list[0].replace(var_name + '=', '')
 
     return variables
 
@@ -200,14 +200,37 @@ def write_output_file(i, variables_array, variable, step, location, file_name):
                 output_file.write(" ")
             output_file.write("\n")
 
+def find_case_insensitive_key(key_name, keys_list):
+    """
+    Find the original key name in a list of keys, ignoring case sensitivity.
+    
+    Parameters
+    ----------
+    key_name : str
+        The name of the key to find, case-insensitively.
+    keys_list : list
+        A list of keys (strings) to search through.
+    
+    Returns
+    -------
+    str
+        The original key name from the list that matches the provided key_name, ignoring case.
+    
+    Raises
+    ------
+    ValueError
+        If the key_name is not found in the keys_list, ignoring case.
+    """
+    keys_list_upper = [key.upper() for key in keys_list]
+    key_name_upper = key_name.upper()
+    if key_name_upper not in keys_list_upper:
+        raise ValueError(f"{key_name} not found.")
+    return keys_list[keys_list_upper.index(key_name_upper)]
+
 def main():
     """Main function to extract the nodal data from the output database (.odb) file.
     """
     variables = input_variables()
-
-    instance_name = variables["instance_name"]
-    if instance_name is not None:
-        instance_name = variables["instance_name"].upper()
 
     nlgeom = get_nlgeom_setting(variables["input_file"])
     check_nlgeom(nlgeom, variables["field"], variables["x_field"])
@@ -219,12 +242,21 @@ def main():
     odb = openOdb(path=odb_name)
 
     # Create a variable that refers to the respective step
-    step = odb.steps[variables["step_name"]]
+    step = odb.steps[find_case_insensitive_key(variables["step_name"], list(odb.steps.keys()))]
+    instance_name = find_case_insensitive_key(
+        variables["instance_name"],
+        list(odb.rootAssembly.instances.keys()),
+    )
+    nodeset_name = find_case_insensitive_key(
+        variables["set_name"],
+        list(odb.rootAssembly.instances[instance_name].nodeSets.keys()),
+    )
+
+    node_sets = get_node_sets(instance_name, odb)
 
     for i, var in enumerate(variables_array):
-        node_sets = get_node_sets(instance_name, odb)
         for set_name, location in node_sets:
-            if set_name == str(variables["set_name"]):
+            if set_name == str(nodeset_name):
                 file_name = file_name_func(set_name, var, variables["input_file"])
                 write_output_file(i, variables_array, var, step, location, file_name)
 
