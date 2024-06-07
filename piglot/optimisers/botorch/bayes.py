@@ -231,7 +231,10 @@ class BayesianBoTorch(Optimiser):
         except botorch.exceptions.ModelFittingError:
             warnings.warn('Optimisation of the MLL failed, falling back to PyTorch optimiser')
             fit_mll_pytorch_loop(mll)
-        return batched_to_model_list(model) if self.objective.multi_objective else model
+        # MOBO requires a model list (except when there is only one output)
+        if self.objective.multi_objective and values.shape[-1] > 1:
+            return batched_to_model_list(model)
+        return model
 
     def _get_candidates(
             self,
