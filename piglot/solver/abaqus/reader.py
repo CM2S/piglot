@@ -224,7 +224,7 @@ def find_case_insensitive_key(key_name, keys_list):
     keys_list_upper = [key.upper() for key in keys_list]
     key_name_upper = key_name.upper()
     if key_name_upper not in keys_list_upper:
-        raise ValueError(f"{key_name} not found.")
+        raise ValueError("{} not found.".format(key_name))
     return keys_list[keys_list_upper.index(key_name_upper)]
 
 def main():
