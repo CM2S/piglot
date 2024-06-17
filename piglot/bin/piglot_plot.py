@@ -4,6 +4,7 @@ import os
 import time
 import argparse
 from tempfile import TemporaryDirectory
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -13,7 +14,7 @@ from PIL import Image
 import torch
 from piglot.parameter import read_parameters
 from piglot.objectives import read_objective
-from piglot.utils.surrogate import get_model
+from piglot.utils.surrogate import get_model, optmise_posterior_mean
 from piglot.utils.yaml_parser import parse_config_file
 
 
@@ -403,6 +404,36 @@ def plot_pareto(args):
     plt.show()
 
 
+def make_surrogate(args):
+    """Driver for training a surrogate model for the available data.
+
+    Parameters
+    ----------
+    args : dict
+        Passed arguments.
+    """
+    # Build piglot problem
+    config = parse_config_file(args.config)
+    parameters = read_parameters(config)
+    objective = read_objective(config["objective"], parameters, config["output"])
+    data = objective.get_history()
+    bounds = np.array([[par.lbound, par.ubound] for par in parameters]).T
+    for name, data_dict in data.items():
+        param_values = data_dict['params']
+        values = data_dict['values']
+        variances = data_dict['variances'] if 'variances' in data_dict else None
+        if len(values) < 2:
+            continue
+        output_data = np.empty((len(values) - 2, bounds.shape[1]))
+        for i in tqdm(range(2, len(values))):
+            sliced_params = param_values[:i, :]
+            sliced_values = values[:i]
+            sliced_variances = variances[:i] if variances is not None else None
+            model = get_model(sliced_params, sliced_values, sliced_variances)
+            output_data[i - 2, :] = optmise_posterior_mean(model, bounds)
+        np.savetxt(f'{config["output"]}_{name}.csv', output_data)
+
+
 def main(passed_args: List[str] = None):
     """Entry point for this script."""
     # Global argument parser settings
@@ -655,6 +686,20 @@ def main(passed_args: List[str] = None):
         help="Plot the both the Pareto front and the dominated points."
     )
     sp_pareto.set_defaults(func=plot_pareto)
+
+    # Surrogate model training
+    sp_surrogate = subparsers.add_parser(
+        'surrogate',
+        help='train a surrogate model for the available data',
+        description=("Train a surrogate model for the available data. This must be "
+                     "executed in the same path as the running piglot instance."),
+    )
+    sp_surrogate.add_argument(
+        'config',
+        type=str,
+        help="Path for the used or generated configuration file.",
+    )
+    sp_surrogate.set_defaults(func=make_surrogate)
 
     args = parser.parse_args() if passed_args is None else parser.parse_args(passed_args)
     args.func(args)

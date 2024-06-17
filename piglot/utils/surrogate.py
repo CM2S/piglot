@@ -3,6 +3,8 @@ from typing import Union
 import numpy as np
 import torch
 from gpytorch.mlls import ExactMarginalLogLikelihood
+from botorch.acquisition import PosteriorMean
+from botorch.optim import optimize_acqf
 from botorch.fit import fit_gpytorch_mll
 from botorch.models import SingleTaskGP, FixedNoiseGP
 from botorch.models.transforms.input import Normalize
@@ -49,3 +51,27 @@ def get_model(
     mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
     fit_gpytorch_mll(mll)
     return gp
+
+
+def optmise_posterior_mean(
+    model: SingleTaskGP,
+    bounds: np.ndarray,
+) -> np.ndarray:
+    """Optimise the posterior mean of the GP model.
+
+    Parameters
+    ----------
+    model : SingleTaskGP
+        GP model.
+    bounds : np.ndarray
+        Bounds for the optimisation problem.
+
+    Returns
+    -------
+    np.ndarray
+        Optimal point.
+    """
+    acquisition = PosteriorMean(model, maximize=False)
+    bounds = torch.tensor(bounds, dtype=torch.float64)
+    candidate, _ = optimize_acqf(acquisition, bounds=bounds, q=1, num_restarts=16, raw_samples=2048)
+    return candidate.detach().numpy()
