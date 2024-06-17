@@ -7,6 +7,7 @@ from piglot.optimisers.botorch.bayes import BayesianBoTorch
 from piglot.optimisers.direct import DIRECT
 from piglot.optimisers.ga import GA
 from piglot.optimisers.lipo_opt import LIPO
+from piglot.optimisers.query import QueryOptimiser
 from piglot.optimisers.pso import PSO
 from piglot.optimisers.random_search import PureRandomSearch
 from piglot.optimisers.spsa_adam import SPSA_Adam
@@ -22,6 +23,7 @@ AVAILABLE_OPTIMISERS: Dict[str, Type[Optimiser]] = {
     'ga': GA,
     'lipo': LIPO,
     'pso': PSO,
+    'query': QueryOptimiser,
     'random': PureRandomSearch,
     'spsa-adam': SPSA_Adam,
     'spsa': SPSA,
