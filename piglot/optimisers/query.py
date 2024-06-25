@@ -94,7 +94,7 @@ class QueryOptimiser(Optimiser):
             file.write('\t' + '\t'.join([f'{param.name:>15}' for param in self.parameters]) + '\n')
             # Write each point
             for i, idx in enumerate(param_indices):
-                file.write('\t'.join([f'{-x.item():>15.8f}' for x in pareto[i, :]]) + '\t')
+                file.write('\t'.join([f'{x.item():>15.8f}' for x in pareto[i, :]]) + '\t')
                 file.write('\t'.join([f'{x.item():>15.8f}' for x in parameters[idx, :]]) + '\n')
         return -np.log(hypervolume)
 
