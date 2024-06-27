@@ -52,6 +52,7 @@ As you can see, `piglot` correctly identifies the `a` parameter close to the exp
 In addition to these outputs, `piglot` creates an output directory, with the same name as the configuration file (minus the extension), where it stores the optimisation data.
 
 To visualise the optimisation results, use the `piglot-plot` utility.
+A detailed description of this tool is shown in the [post-processing example](../post_processing/description.md).
 In the same directory, run
 ```bash
 piglot-plot best config.yaml
