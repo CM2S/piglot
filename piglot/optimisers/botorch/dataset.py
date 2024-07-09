@@ -85,6 +85,26 @@ class Standardiser:
         # Note: we are using a view, so the expanded tensor is already modified
         return expanded
 
+    def to(self, device: str) -> Standardiser:
+        """Move the standardiser to a given device.
+
+        Parameters
+        ----------
+        device : str
+            Device to move the standardiser to.
+
+        Returns
+        -------
+        Standardiser
+            The standardiser in the new device.
+        """
+        new_standardiser = copy.deepcopy(self)
+        if self.mean is not None:
+            new_standardiser.mean = self.mean.to(device)
+            new_standardiser.stds = self.stds.to(device)
+            new_standardiser.mask = self.mask.to(device)
+        return new_standardiser
+
 
 class PCA:
     """Principal Component Analysis transformation."""
@@ -159,6 +179,25 @@ class PCA:
             Untransformed data.
         """
         return self.standardiser.untransform(torch.matmul(data, self.transformation.T))
+
+    def to(self, device: str) -> PCA:
+        """Move the PCA to a given device.
+
+        Parameters
+        ----------
+        device : str
+            Device to move the PCA to.
+
+        Returns
+        -------
+        PCA
+            The PCA in the new device.
+        """
+        new_pca = copy.deepcopy(self)
+        new_pca.standardiser = self.standardiser.to(device)
+        if self.transformation is not None:
+            new_pca.transformation = self.transformation.to(device)
+        return new_pca
 
 
 class BayesDataset:
@@ -331,5 +370,8 @@ class BayesDataset:
         new_dataset.params = self.params.to(device)
         new_dataset.values = self.values.to(device)
         new_dataset.variances = self.variances.to(device)
+        new_dataset.standardiser = self.standardiser.to(device)
+        if self.pca is not None:
+            new_dataset.pca = self.pca.to(device)
         new_dataset.device = device
         return new_dataset

@@ -149,7 +149,7 @@ class BayesianBoTorch(Optimiser):
     def __init__(
         self,
         objective: Objective,
-        n_initial: int = 8,
+        n_initial: int = None,
         n_test: int = 0,
         acquisition: str = None,
         beta: float = 1.0,
@@ -163,6 +163,12 @@ class BayesianBoTorch(Optimiser):
         nadir_scale: float = 0.1,
         skip_initial: bool = False,
         pca_variance: float = None,
+        num_restarts: int = None,
+        raw_samples: int = None,
+        mc_samples: int = None,
+        batch_size: int = None,
+        num_fantasies: int = None,
+        sequential: bool = False,
     ) -> None:
         if not isinstance(objective, GenericObjective):
             raise RuntimeError("Bayesian optimiser requires a GenericObjective")
@@ -186,6 +192,12 @@ class BayesianBoTorch(Optimiser):
         self.ref_point = None if reference_point is None else -torch.tensor(reference_point)
         self.nadir_scale = nadir_scale
         self.pca_variance = pca_variance
+        self.num_restarts = num_restarts
+        self.raw_samples = raw_samples
+        self.mc_samples = mc_samples
+        self.batch_size = batch_size
+        self.sequential = bool(sequential)
+        self.num_fantasies = num_fantasies
         if acquisition is None:
             self.acquisition = default_acquisition(
                 objective.composition,
@@ -238,7 +250,6 @@ class BayesianBoTorch(Optimiser):
 
     def _get_candidates(
             self,
-            n_dim,
             bounds: np.ndarray,
             dataset: BayesDataset,
             test_dataset: BayesDataset,
@@ -259,19 +270,20 @@ class BayesianBoTorch(Optimiser):
                 cv_error = (posterior.mean - std_test_values).square().mean().item()
 
         # Build the acquisition function
-        acq, num_restarts, raw_samples = self._acq_func(dataset, model, n_dim)
+        acq = self._acq_func(dataset, model)
 
         # Optimise acquisition to find next candidate(s)
         candidates, _ = optimize_acqf(
             acq,
             bounds=torch.from_numpy(bounds.T).to(self.device).to(dataset.dtype),
             q=self.q,
-            num_restarts=num_restarts,
-            raw_samples=raw_samples,
+            num_restarts=self.num_restarts,
+            raw_samples=self.raw_samples,
+            sequential=self.sequential,
             options={
                 "sample_around_best": True,
                 "seed": self.seed,
-                "init_batch_limit": 4 * num_restarts,
+                "init_batch_limit": self.batch_size,
             },
         )
 
@@ -284,7 +296,7 @@ class BayesianBoTorch(Optimiser):
         # Multi-candidate: run cases in parallel
         with Pool(self.q) as pool:
             results = pool.map(lambda x: self.objective(x, concurrent=True), candidates)
-        return results
+        return list(results)
 
     def _get_random_points(
             self,
@@ -359,12 +371,9 @@ class BayesianBoTorch(Optimiser):
         self,
         dataset: BayesDataset,
         model: Model,
-        n_dim: int,
-    ) -> Tuple[AcquisitionFunction, int, int]:
+    ) -> AcquisitionFunction:
         # Default values for multi-restart optimisation
-        num_restarts = 12
-        raw_samples = max(256, 16 * n_dim * n_dim)
-        sampler = SobolQMCNormalSampler(torch.Size([512]), seed=self.seed)
+        sampler = SobolQMCNormalSampler(torch.Size([self.mc_samples]), seed=self.seed)
 
         # Find best value for the acquisition
         best = torch.max(self._composition(dataset.values, dataset.params)).item()
@@ -418,11 +427,12 @@ class BayesianBoTorch(Optimiser):
                 objective=GenericMCObjective(mc_objective),
             )
         elif self.acquisition == 'qkg':
-            # Knowledge gradient is quite expensive: use less samples
-            num_restarts = 6
-            raw_samples = 128
-            sampler = SobolQMCNormalSampler(torch.Size([64]), seed=self.seed)
-            acq = acq_class(model, sampler=sampler, objective=GenericMCObjective(mc_objective))
+            acq = acq_class(
+                model,
+                num_fantasies=self.num_fantasies,
+                inner_sampler=sampler,
+                objective=GenericMCObjective(mc_objective),
+            )
         # Quasi-Monte Carlo multi-objective acquisitions
         elif self.acquisition in ('qehvi', 'qlogehvi'):
             acq = acq_class(
@@ -444,11 +454,13 @@ class BayesianBoTorch(Optimiser):
             acq = acq_class(
                 model,
                 self.ref_point,
+                num_fantasies=self.num_fantasies,
+                inner_sampler=sampler,
                 objective=GenericMCMultiOutputObjective(mc_objective),
             )
         else:
             raise RuntimeError(f"Unknown acquisition {self.acquisition}")
-        return acq, num_restarts, raw_samples
+        return acq
 
     def _optimise(
         self,
@@ -479,6 +491,14 @@ class BayesianBoTorch(Optimiser):
         best_solution : list
             best parameter solution
         """
+
+        # Initialise heuristic variables
+        self.n_initial = self.n_initial or max(8, 2 * n_dim)
+        self.num_restarts = self.num_restarts or 12
+        self.raw_samples = self.raw_samples or max(256, 16 * n_dim * n_dim)
+        self.mc_samples = self.mc_samples or 512
+        self.batch_size = self.batch_size or 128
+        self.num_fantasies = self.num_fantasies or 16
 
         # Evaluate initial shot and use it to infer number of dimensions
         if not self.skip_initial:
@@ -535,15 +555,26 @@ class BayesianBoTorch(Optimiser):
 
         # Optimisation loop
         for i_iter in range(n_iter):
-            # Generate candidates: catch CUDA OOM errors and fall back to CPU
-            try:
-                candidates, cv_error = self._get_candidates(n_dim, bound, dataset, test_dataset)
-            except torch.cuda.OutOfMemoryError:
-                warnings.warn('CUDA out of memory: falling back to CPU')
-                self.device = 'cpu'
-                dataset = dataset.to(self.device)
-                test_dataset = test_dataset.to(self.device)
-                candidates, cv_error = self._get_candidates(n_dim, bound, dataset, test_dataset)
+            # Generate candidates and catch CUDA OOM errors
+            candidates = None
+            while candidates is None:
+                try:
+                    candidates, cv_error = self._get_candidates(bound, dataset, test_dataset)
+                except torch.cuda.OutOfMemoryError:
+                    if self.batch_size > 1:
+                        warnings.warn(
+                            f'CUDA out of memory: halving batch size to {self.batch_size // 2}'
+                        )
+                        self.batch_size //= 2
+                    else:
+                        warnings.warn('CUDA out of memory: falling back to CPU')
+                        self.device = 'cpu'
+                        torch.set_default_device('cpu')
+                        dataset = dataset.to(self.device)
+                        test_dataset = test_dataset.to(self.device)
+                        if self.objective.multi_objective:
+                            self.ref_point = self.ref_point.to(self.device)
+                            self._update_mo_data(dataset)
 
             # Evaluate candidates (in parallel if possible)
             results = self._eval_candidates(candidates)
