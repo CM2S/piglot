@@ -11,6 +11,7 @@ authors:
   - name: R. P. Cardoso Coelho
     orcid: 0000-0001-9989-964X
     affiliation: "1, 2"
+    corresponding: true
   - name: A. Francisca Carvalho Alves
     orcid: 0000-0003-1214-5453
     affiliation: "1, 2"
@@ -19,7 +20,6 @@ authors:
     affiliation: "1"
   - name: F. M. Andrade Pires
     orcid: 0000-0002-4802-6360
-    corresponding: true
     affiliation: "1, 2"
 affiliations:
  - name: Faculty of Engineering, University of Porto, Porto, Portugal
@@ -54,7 +54,7 @@ Currently, interfaces for several solvers are included in the package, namely a 
 
 For the optimisation itself, several methods are implemented and available, such as DIRECT, LIPO, and Bayesian optimisation, among others.
 Particularly, a significant effort has been employed in Bayesian optimisation algorithms, backed with an open-source implementation [@balandatBoTorchFrameworkEfficient2020] and allowing for single- and (scalarised) multi-objective optimisation of both noise-free and stochastic objectives.
-Furthermore, a novel composite Bayesian optimisation strategy is available for curve-fitting problems, which, in our tests, severely outperforms classical optimisation approaches [@Coelho2023optm].
+Furthermore, a novel composite Bayesian optimisation strategy is available for curve-fitting problems, which, in our tests, severely outperforms classical optimisation approaches [@Coelho2024optm].
 
 The package also provides a built-in tool, `piglot-plot`, to visualise the results of the optimisation.
 There are native plotting utilities for the optimised responses, the parameter history, objective history and, for supported solvers, live plotting of the currently running case.
