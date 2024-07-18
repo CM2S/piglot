@@ -11,6 +11,7 @@ authors:
   - name: R. P. Cardoso Coelho
     orcid: 0000-0001-9989-964X
     affiliation: "1, 2"
+    corresponding: true
   - name: A. Francisca Carvalho Alves
     orcid: 0000-0003-1214-5453
     affiliation: "1, 2"
@@ -19,7 +20,6 @@ authors:
     affiliation: "1"
   - name: F. M. Andrade Pires
     orcid: 0000-0002-4802-6360
-    corresponding: true
     affiliation: "1, 2"
 affiliations:
  - name: Faculty of Engineering, University of Porto, Porto, Portugal
