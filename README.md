@@ -6,6 +6,7 @@
   </picture>
 </div>
 
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.06652/status.svg)](https://doi.org/10.21105/joss.06652)
 [![Unit and integration testing](https://github.com/CM2S/piglot/actions/workflows/test.yaml/badge.svg)](https://github.com/CM2S/piglot/actions/workflows/test.yaml)
 [![PyPI - Version](https://img.shields.io/pypi/v/piglot)](https://pypi.org/project/piglot/)
 [![GitHub License](https://img.shields.io/github/license/CM2S/piglot)](https://github.com/CM2S/piglot/blob/main/LICENSE)
