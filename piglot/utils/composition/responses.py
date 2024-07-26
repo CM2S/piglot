@@ -427,10 +427,13 @@ class ResponseComposition(Composition):
         if self.scalarise:
             # Smooth TCHebycheff scalarisation (STCH) if requested
             if self.scalarisation == 'stch':
+                # Sanitise the weights
+                weights = torch.tensor(self.weights).to(inner.device)
+                if torch.sum(weights) != 1.0:
+                    raise ValueError(f'Weights must sum to 1.0, got {torch.sum(weights)}.')
                 # Set all the objectives to be positive
                 objective = objective.abs()
-                # Set the weights, bounds and types
-                weights = torch.tensor(self.weights).to(inner.device)
+                # Set the bounds and types
                 bounds = torch.tensor(self.bounds).to(inner.device)
                 types = torch.tensor(self.types).to(inner.device)
                 # Calculate the costs and ideal point

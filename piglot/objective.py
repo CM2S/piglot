@@ -224,10 +224,13 @@ class ObjectiveResult:
                 )
 
             if self.scalarisation == "stch":
+                # Sanitise the weights
+                weights = np.array(self.weights)
+                if np.sum(weights) != 1:
+                    raise ValueError(f'Weights must sum to 1.0, got {np.sum(weights)}.')
                 # Set all the objectives to be positive
                 values = abs(np.array(self.values))
-                # Set the weights, bounds and types
-                weights = np.array(self.weights)
+                # Set the bounds and types
                 bounds = np.array(self.bounds)
                 types = np.array(self.types)
                 # Calculate the costs and ideal point
