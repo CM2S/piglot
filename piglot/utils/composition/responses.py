@@ -409,7 +409,6 @@ class ResponseComposition(Composition):
         # Sanitise the scalarisation method
         if self.scalarise and self.scalarisation not in ['mean', 'stch']:
             raise ValueError(f"Invalid scalarisation '{self.scalarisation}'. Use 'mean' or 'stch'.")
-
         # Split the inner responses
         responses = self.concat.split_torch(inner)
         # Unflatten each response
@@ -422,7 +421,6 @@ class ResponseComposition(Composition):
             reduction.reduce_torch(time, data, self._expand_params(time, params))
             for (time, data), reduction in zip(unflattened, self.reductions)
         ], dim=-1)
-
         # Mean scalarisation if requested
         if self.scalarise:
             # Smooth TCHebycheff scalarisation (STCH) if requested
@@ -450,5 +448,4 @@ class ResponseComposition(Composition):
             # Apply the weights
             objective = objective * torch.tensor(self.weights).to(inner.device)
             return torch.mean(objective, dim=-1)
-
         return objective * torch.tensor(self.weights).to(inner.device)

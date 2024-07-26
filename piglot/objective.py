@@ -222,7 +222,6 @@ class ObjectiveResult:
                 raise ValueError(
                     f"Invalid scalarisation '{self.scalarisation}'. Use 'mean' or 'stch'."
                 )
-
             if self.scalarisation == "stch":
                 # Sanitise the weights
                 weights = np.array(self.weights)
@@ -243,9 +242,7 @@ class ObjectiveResult:
                 # Calculate the Tchebycheff function value
                 tch_values = (np.abs((norm_funcs - ideal_point) * costs) / u) * weights
                 return np.log(np.sum(np.exp(tch_values))) * u
-
             return np.mean(self.values)
-
         return composition.composition(self.values, self.params).item()
 
     def scalarise_mo(self, composition: Composition = None) -> List[float]:

@@ -191,7 +191,6 @@ class DesignObjective(GenericObjective):
         # Sanitise scalarisation method
         if scalarisation not in ['mean', 'stch']:
             raise ValueError(f"Invalid scalarisation '{scalarisation}'. Use 'mean' or 'stch'.")
-
         return ResponseComposition(
             scalarise=scalarise,
             stochastic=stochastic,
@@ -275,7 +274,6 @@ class DesignObjective(GenericObjective):
             # Build statistical model for the target
             results.append(target.weight * np.mean(targets))
             variances.append(target.weight * np.var(targets) / len(targets))
-
         return ObjectiveResult(
             values,
             results,
