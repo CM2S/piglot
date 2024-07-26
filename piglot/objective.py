@@ -150,7 +150,11 @@ class ObjectiveResult:
     """Container for objective results."""
     params: np.ndarray
     values: List[np.ndarray]
+    scalarisation: str
     variances: Optional[List[np.ndarray]] = None
+    weights: Optional[np.ndarray] = None
+    bounds: Optional[np.ndarray] = None
+    types: Optional[List[bool]] = None
 
     def __mc_variance(
         self,
@@ -180,6 +184,25 @@ class ObjectiveResult:
         ]
         return np.var(mc_objectives, axis=0)
 
+    @staticmethod
+    def normalise_objective(objective: np.ndarray, bounds: np.ndarray) -> np.ndarray:
+        """Normalise the objective.
+
+        Parameters
+        ----------
+        objective : np.ndarray
+            Objective to normalise.
+        bounds : np.ndarray
+            Bounds for the objectives.
+
+        Returns
+        -------
+        np.ndarray
+            Normalised objective.
+        """
+        # Normalise the objective
+        return (objective - bounds[:, 0]) / (bounds[:, 1] - bounds[:, 0])
+
     def scalarise(self, composition: Composition = None) -> float:
         """Scalarise the result under noise-free single-objective optimisation.
 
@@ -194,7 +217,32 @@ class ObjectiveResult:
             Scalarised result.
         """
         if composition is None:
+            # Sanitise scalarisation method
+            if self.scalarisation not in ['mean', 'stch']:
+                raise ValueError(
+                    f"Invalid scalarisation '{self.scalarisation}'. Use 'mean' or 'stch'."
+                )
+
+            if self.scalarisation == "stch":
+                # Set all the objectives to be positive
+                values = abs(np.array(self.values))
+                # Set the weights, bounds and types
+                weights = np.array(self.weights)
+                bounds = np.array(self.bounds)
+                types = np.array(self.types)
+                # Calculate the costs and ideal point
+                costs = np.where(types, -1, 1)
+                ideal_point = np.where(types, 1, 0)
+                # Smoothing parameter for STCH
+                u = 0.01
+                # Calculate the normalised objective values
+                norm_funcs = self.normalise_objective(values, bounds)
+                # Calculate the Tchebycheff function value
+                tch_values = (np.abs((norm_funcs - ideal_point) * costs) / u) * weights
+                return np.log(np.sum(np.exp(tch_values))) * u
+
             return np.mean(self.values)
+
         return composition.composition(self.values, self.params).item()
 
     def scalarise_mo(self, composition: Composition = None) -> List[float]:

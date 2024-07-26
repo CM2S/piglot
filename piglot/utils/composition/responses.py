@@ -295,6 +295,9 @@ class ResponseComposition(Composition):
         weights: List[float],
         reductions: List[Reduction],
         flatten_list: List[FlattenUtility],
+        scalarisation: str,
+        bounds: np.ndarray = None,
+        types: List[bool] = None,
     ) -> None:
         if len(flatten_list) != len(reductions):
             raise ValueError("Mismatched number of reductions and responses.")
@@ -305,6 +308,9 @@ class ResponseComposition(Composition):
         self.flatten_list = flatten_list
         self.lenghts = [flatten.length() for flatten in self.flatten_list]
         self.concat = ConcatUtility(self.lenghts)
+        self.bounds = bounds
+        self.scalarisation = scalarisation
+        self.types = types
 
     def transform(self, params: np.ndarray, responses: List[List[OutputResult]]) -> ObjectiveResult:
         """Transform a set of responses into a fixed-size ObjectiveResult for the optimiser.
@@ -364,6 +370,27 @@ class ResponseComposition(Composition):
         # Expand the parameters along the first dimensions
         return params.expand(*([a for a in time.shape[:-1]] + [params.shape[-1]]))
 
+    @staticmethod
+    def normalise_objective(objective: torch.Tensor, bounds: torch.Tensor) -> torch.Tensor:
+        """Normalise the objective.
+
+        Parameters
+        ----------
+        objective : torch.Tensor
+            Objective to normalise.
+        bounds : torch.Tensor
+            Bounds for the objectives.
+        types : torch.Tensor
+            Types for the objectives.
+
+        Returns
+        -------
+        torch.Tensor
+            Normalised objective.
+        """
+        # Normalise the objective
+        return (objective - bounds[:, 0]) / (bounds[:, 1] - bounds[:, 0])
+
     def composition_torch(self, inner: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
         """Compute the outer function of the composition with gradients.
 
@@ -379,6 +406,10 @@ class ResponseComposition(Composition):
         torch.Tensor
             Composition result.
         """
+        # Sanitise the scalarisation method
+        if self.scalarise and self.scalarisation not in ['mean', 'stch']:
+            raise ValueError(f"Invalid scalarisation '{self.scalarisation}'. Use 'mean' or 'stch'.")
+
         # Split the inner responses
         responses = self.concat.split_torch(inner)
         # Unflatten each response
@@ -391,7 +422,30 @@ class ResponseComposition(Composition):
             reduction.reduce_torch(time, data, self._expand_params(time, params))
             for (time, data), reduction in zip(unflattened, self.reductions)
         ], dim=-1)
-        # Apply the weights
-        objective = objective * torch.tensor(self.weights).to(inner.device)
-        # If needed, scalarise the objectives
-        return torch.mean(objective, dim=-1) if self.scalarise else objective
+
+        # Mean scalarisation if requested
+        if self.scalarise:
+            # Smooth TCHebycheff scalarisation (STCH) if requested
+            if self.scalarisation == 'stch':
+                # Set all the objectives to be positive
+                objective = objective.abs()
+                # Set the weights, bounds and types
+                weights = torch.tensor(self.weights).to(inner.device)
+                bounds = torch.tensor(self.bounds).to(inner.device)
+                types = torch.tensor(self.types).to(inner.device)
+                # Calculate the costs and ideal point
+                costs = torch.where(types, torch.tensor(-1.0), torch.tensor(1.0))
+                ideal_point = torch.where(types, torch.tensor(1.0), torch.tensor(0.0))
+                # Smoothing parameter for STCH
+                u = 0.01
+                # Calculate the normalised objective values
+                norm_objective = self.normalise_objective(objective, bounds)
+                # Calculate the Tchebycheff function value
+                tch_values = (torch.abs((norm_objective - ideal_point) * costs) / u) * weights
+                return torch.log(torch.sum(torch.exp(tch_values), dim=-1)) * u
+            # Mean scalarisation otherwise
+            # Apply the weights
+            objective = objective * torch.tensor(self.weights).to(inner.device)
+            return torch.mean(objective, dim=-1)
+
+        return objective * torch.tensor(self.weights).to(inner.device)

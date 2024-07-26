@@ -25,6 +25,7 @@ class DesignTarget:
             negate: bool = False,
             weight: float = 1.0,
             n_points: int = None,
+            bounds: List[float] = None,
             ) -> None:
         # Sanitise prediction field
         if isinstance(prediction, str):
@@ -37,6 +38,8 @@ class DesignTarget:
         self.weight = weight
         self.n_points = n_points
         self.flatten_utility = EndpointFlattenUtility(n_points) if n_points is not None else None
+        self.bounds = bounds
+        self.negate = negate
 
     @staticmethod
     def read(name: str, config: Dict[str, Any], output_dir: str) -> DesignTarget:
@@ -69,6 +72,7 @@ class DesignTarget:
             negate=bool(config.get('negate', False)),
             weight=float(config.get('weight', 1.0)),
             n_points=int(config['n_points']) if 'n_points' in config else None,
+            bounds=config.get('bounds', None),
         )
 
 
@@ -129,12 +133,18 @@ class DesignObjective(GenericObjective):
         composite: bool = False,
         multi_objective: bool = False,
         transformers: Dict[str, ResponseTransformer] = None,
+        scalarisation: str = 'mean',
     ) -> None:
         super().__init__(
             parameters,
             stochastic,
             composition=(
-                self.__composition(not multi_objective, stochastic, targets) if composite else None
+                self.__composition(
+                    not multi_objective,
+                    stochastic,
+                    targets,
+                    scalarisation
+                ) if composite else None
             ),
             num_objectives=len(targets) if multi_objective else 1,
             output_dir=output_dir,
@@ -142,6 +152,7 @@ class DesignObjective(GenericObjective):
         self.solver = solver
         self.targets = targets
         self.transformers = transformers if transformers is not None else {}
+        self.scalarisation = scalarisation
 
     def prepare(self) -> None:
         """Prepare the objective for optimisation."""
@@ -153,6 +164,7 @@ class DesignObjective(GenericObjective):
         scalarise: bool,
         stochastic: bool,
         targets: List[DesignTarget],
+        scalarisation: str,
     ) -> Composition:
         """Build the composition utility for the design objective.
 
@@ -176,12 +188,19 @@ class DesignObjective(GenericObjective):
                 raise ValueError(
                     "All targets must have a number of points specified for the composition."
                 )
+        # Sanitise scalarisation method
+        if scalarisation not in ['mean', 'stch']:
+            raise ValueError(f"Invalid scalarisation '{scalarisation}'. Use 'mean' or 'stch'.")
+
         return ResponseComposition(
             scalarise=scalarise,
             stochastic=stochastic,
             weights=[t.weight for t in targets],
             reductions=[t.quantity for t in targets],
             flatten_list=[t.flatten_utility for t in targets],
+            scalarisation=scalarisation,
+            bounds=[t.bounds for t in targets] if scalarisation == 'stch' else None,
+            types=[t.negate for t in targets] if scalarisation == 'stch' else None,
         )
 
     @staticmethod
@@ -223,6 +242,10 @@ class DesignObjective(GenericObjective):
         ObjectiveResult
             Objective result.
         """
+        # Sanitise scalarisation method
+        if self.scalarisation not in ['mean', 'stch']:
+            raise ValueError(f"Invalid scalarisation '{self.scalarisation}'. Use 'mean' or 'stch'.")
+
         raw_responses = self.solver.solve(values, concurrent)
         # Transform responses
         for name, transformer in self.transformers.items():
@@ -252,7 +275,16 @@ class DesignObjective(GenericObjective):
             # Build statistical model for the target
             results.append(target.weight * np.mean(targets))
             variances.append(target.weight * np.var(targets) / len(targets))
-        return ObjectiveResult(values, results, variances if self.stochastic else None)
+
+        return ObjectiveResult(
+            values,
+            results,
+            self.scalarisation,
+            variances if self.stochastic else None,
+            [t.weight for t in self.targets] if self.scalarisation == 'stch' else None,
+            [t.bounds for t in self.targets] if self.scalarisation == 'stch' else None,
+            [t.negate for t in self.targets] if self.scalarisation == 'stch' else None,
+        )
 
     def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
         """Plot a given function call given the parameter hash
@@ -390,4 +422,5 @@ class DesignObjective(GenericObjective):
             composite=bool(config.get('composite', False)),
             multi_objective=bool(config.get('multi_objective', False)),
             transformers=transformers,
+            scalarisation=str(config.get('scalarisation', 'mean')),
         )

@@ -352,12 +352,16 @@ def plot_pareto(args):
             nondominated.append((point, variances[i, :] if has_variance else None))
         else:
             dominated.append((point, variances[i, :] if has_variance else None))
-    # Build the Pareto hull
-    hull = ConvexHull(pareto)
-    for simplex in hull.simplices:
-        # Hacky: filter the line between the two endpoints (assuming the list is sorted by x)
-        if abs(simplex[0] - simplex[1]) < pareto.shape[0] - 1:
-            ax.plot(pareto[simplex, 0], pareto[simplex, 1], 'r', ls='--')
+
+    # # Build the Pareto hull
+    # hull = ConvexHull(pareto)
+    # for simplex in hull.simplices:
+    #     # Hacky: filter the line between the two endpoints (assuming the list is sorted by x)
+    #     if abs(simplex[0] - simplex[1]) < pareto.shape[0] - 1:
+    #         ax.plot(pareto[simplex, 0], pareto[simplex, 1], 'b', ls='--', zorder=1000)
+
+    # Sort the points by x
+    nondominated = sorted(nondominated, key=lambda x: x[0][0])
     # Plot the points
     if has_variance:
         ax.errorbar(
@@ -368,6 +372,11 @@ def plot_pareto(args):
             c='r',
             fmt='o',
             label='Pareto front',
+        )
+        ax.plot(
+            [point[0][0] for point in nondominated],
+            [point[0][1] for point in nondominated],
+            '--r',
         )
         if args.all:
             ax.errorbar(
@@ -385,6 +394,13 @@ def plot_pareto(args):
             [point[0][1] for point in nondominated],
             c='r',
             label='Pareto front',
+            zorder=1000,
+        )
+        ax.plot(
+            [point[0][0] for point in nondominated],
+            [point[0][1] for point in nondominated],
+            '--r',
+            zorder=1000,
         )
         if args.all:
             ax.scatter(
@@ -392,6 +408,7 @@ def plot_pareto(args):
                 [point[0][1] for point in dominated],
                 c='k',
                 label='Dominated points',
+                zorder=500,
             )
     if args.log:
         ax.set_xscale('log')
