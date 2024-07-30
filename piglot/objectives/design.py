@@ -200,8 +200,8 @@ class DesignObjective(GenericObjective):
             reductions=[t.quantity for t in targets],
             flatten_list=[t.flatten_utility for t in targets],
             scalarisation=scalarisation,
-            bounds=[t.bounds for t in targets] if scalarisation == 'stch' else None,
-            types=[t.negate for t in targets] if scalarisation == 'stch' else None,
+            bounds=[t.bounds for t in targets] if scalarisation in ('stch', 'linear') else None,
+            types=[t.negate for t in targets] if scalarisation in ('stch', 'linear') else None,
         )
 
     @staticmethod
@@ -283,9 +283,9 @@ class DesignObjective(GenericObjective):
             results,
             self.scalarisation,
             variances if self.stochastic else None,
-            [t.weight for t in self.targets] if self.scalarisation == 'stch' else None,
-            [t.bounds for t in self.targets] if self.scalarisation == 'stch' else None,
-            [t.negate for t in self.targets] if self.scalarisation == 'stch' else None,
+            [t.weight for t in self.targets] if self.scalarisation in ('stch', 'linear') else None,
+            [t.bounds for t in self.targets] if self.scalarisation in ('stch', 'linear') else None,
+            [t.negate for t in self.targets] if self.scalarisation in ('stch', 'linear') else None,
         )
 
     def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
