@@ -244,7 +244,7 @@ class ObjectiveResult:
                     # Calculate the Tchebycheff function value
                     tch_values = (np.abs((norm_funcs - ideal_point) * costs) / u) * weights
                     return np.log(np.sum(np.exp(tch_values))) * u
-                return np.sum(norm_funcs * weights)
+                return np.sum((norm_funcs*costs)*weights)
             return np.mean(self.values)
         return composition.composition(self.values, self.params).item()
 

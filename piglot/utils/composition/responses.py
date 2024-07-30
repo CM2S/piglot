@@ -449,7 +449,7 @@ class ResponseComposition(Composition):
                     # Calculate the Tchebycheff function value
                     tch_values = (torch.abs((norm_objective - ideal_point) * costs) / u) * weights
                     return torch.log(torch.sum(torch.exp(tch_values), dim=-1)) * u
-                return torch.sum(norm_objective * weights, dim=-1)
+                return torch.sum((norm_objective*costs) * weights, dim=-1)
             # Mean scalarisation otherwise
             # Apply the weights
             objective = objective * weights
