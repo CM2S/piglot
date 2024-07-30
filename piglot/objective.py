@@ -233,12 +233,12 @@ class ObjectiveResult:
                 bounds = np.array(self.bounds)
                 types = np.array(self.types)
                 # Calculate the costs
-                costs = np.where(types, -1, 1)
+                costs = np.where(types, -1.0, 1.0)
                 # Calculate the normalised objective values
                 norm_funcs = self.normalise_objective(values, bounds)
                 if self.scalarisation == 'stch':
                     # Calculate the ideal point
-                    ideal_point = np.where(types, 1, 0)
+                    ideal_point = np.where(types, 1.0, 0.0)
                     # Smoothing parameter for STCH
                     u = 0.01
                     # Calculate the Tchebycheff function value
