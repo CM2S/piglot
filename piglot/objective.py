@@ -218,11 +218,11 @@ class ObjectiveResult:
         """
         if composition is None:
             # Sanitise scalarisation method
-            if self.scalarisation not in ['mean', 'stch']:
+            if self.scalarisation not in ('mean', 'stch', 'linear'):
                 raise ValueError(
-                    f"Invalid scalarisation '{self.scalarisation}'. Use 'mean' or 'stch'."
+                    f"Invalid scalarisation '{self.scalarisation}'. Use 'mean', 'stch' or 'linear'."
                 )
-            if self.scalarisation == "stch":
+            if self.scalarisation in ('stch', 'linear'):
                 # Sanitise the weights
                 weights = np.array(self.weights)
                 if np.sum(weights) != 1:
@@ -232,16 +232,19 @@ class ObjectiveResult:
                 # Set the bounds and types
                 bounds = np.array(self.bounds)
                 types = np.array(self.types)
-                # Calculate the costs and ideal point
+                # Calculate the costs
                 costs = np.where(types, -1, 1)
-                ideal_point = np.where(types, 1, 0)
-                # Smoothing parameter for STCH
-                u = 0.01
                 # Calculate the normalised objective values
                 norm_funcs = self.normalise_objective(values, bounds)
-                # Calculate the Tchebycheff function value
-                tch_values = (np.abs((norm_funcs - ideal_point) * costs) / u) * weights
-                return np.log(np.sum(np.exp(tch_values))) * u
+                if self.scalarisation == 'stch':
+                    # Calculate the ideal point
+                    ideal_point = np.where(types, 1, 0)
+                    # Smoothing parameter for STCH
+                    u = 0.01
+                    # Calculate the Tchebycheff function value
+                    tch_values = (np.abs((norm_funcs - ideal_point) * costs) / u) * weights
+                    return np.log(np.sum(np.exp(tch_values))) * u
+                return np.sum(norm_funcs * weights)
             return np.mean(self.values)
         return composition.composition(self.values, self.params).item()
 

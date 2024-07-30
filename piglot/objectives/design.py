@@ -189,8 +189,10 @@ class DesignObjective(GenericObjective):
                     "All targets must have a number of points specified for the composition."
                 )
         # Sanitise scalarisation method
-        if scalarisation not in ['mean', 'stch']:
-            raise ValueError(f"Invalid scalarisation '{scalarisation}'. Use 'mean' or 'stch'.")
+        if scalarisation not in ('mean', 'stch', 'linear'):
+            raise ValueError(
+                f"Invalid scalarisation '{scalarisation}'. Use 'mean', 'stch' or 'linear'."
+            )
         return ResponseComposition(
             scalarise=scalarise,
             stochastic=stochastic,
@@ -242,8 +244,10 @@ class DesignObjective(GenericObjective):
             Objective result.
         """
         # Sanitise scalarisation method
-        if self.scalarisation not in ['mean', 'stch']:
-            raise ValueError(f"Invalid scalarisation '{self.scalarisation}'. Use 'mean' or 'stch'.")
+        if self.scalarisation not in ('mean', 'stch', 'linear'):
+            raise ValueError(
+                f"Invalid scalarisation '{self.scalarisation}'. Use 'mean', 'stch' or 'linear'."
+            )
 
         raw_responses = self.solver.solve(values, concurrent)
         # Transform responses

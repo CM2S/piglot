@@ -407,8 +407,10 @@ class ResponseComposition(Composition):
             Composition result.
         """
         # Sanitise the scalarisation method
-        if self.scalarise and self.scalarisation not in ['mean', 'stch']:
-            raise ValueError(f"Invalid scalarisation '{self.scalarisation}'. Use 'mean' or 'stch'.")
+        if self.scalarise and self.scalarisation not in ('mean', 'stch', 'linear'):
+            raise ValueError(
+                f"Invalid scalarisation '{self.scalarisation}'. Use 'mean', 'stch' or 'linear'."
+            )
         # Split the inner responses
         responses = self.concat.split_torch(inner)
         # Unflatten each response
@@ -423,10 +425,11 @@ class ResponseComposition(Composition):
         ], dim=-1)
         # Mean scalarisation if requested
         if self.scalarise:
-            # Smooth TCHebycheff scalarisation (STCH) if requested
-            if self.scalarisation == 'stch':
+            # Sanitise the weights
+            weights = torch.tensor(self.weights).to(inner.device)
+            # Smooth TCHebycheff scalarisation (STCH) or linear if requested
+            if self.scalarisation in ('stch', 'linear'):
                 # Sanitise the weights
-                weights = torch.tensor(self.weights).to(inner.device)
                 if torch.sum(weights) != 1.0:
                     raise ValueError(f'Weights must sum to 1.0, got {torch.sum(weights)}.')
                 # Set all the objectives to be positive
@@ -434,18 +437,21 @@ class ResponseComposition(Composition):
                 # Set the bounds and types
                 bounds = torch.tensor(self.bounds).to(inner.device)
                 types = torch.tensor(self.types).to(inner.device)
-                # Calculate the costs and ideal point
+                # Calculate the costs
                 costs = torch.where(types, torch.tensor(-1.0), torch.tensor(1.0))
-                ideal_point = torch.where(types, torch.tensor(1.0), torch.tensor(0.0))
-                # Smoothing parameter for STCH
-                u = 0.01
                 # Calculate the normalised objective values
                 norm_objective = self.normalise_objective(objective, bounds)
-                # Calculate the Tchebycheff function value
-                tch_values = (torch.abs((norm_objective - ideal_point) * costs) / u) * weights
-                return torch.log(torch.sum(torch.exp(tch_values), dim=-1)) * u
+                if self.scalarisation == 'stch':
+                    # Calculate the ideal point
+                    ideal_point = torch.where(types, torch.tensor(1.0), torch.tensor(0.0))
+                    # Smoothing parameter for STCH
+                    u = 0.01
+                    # Calculate the Tchebycheff function value
+                    tch_values = (torch.abs((norm_objective - ideal_point) * costs) / u) * weights
+                    return torch.log(torch.sum(torch.exp(tch_values), dim=-1)) * u
+                return torch.sum(norm_objective * weights, dim=-1)
             # Mean scalarisation otherwise
             # Apply the weights
-            objective = objective * torch.tensor(self.weights).to(inner.device)
+            objective = objective * weights
             return torch.mean(objective, dim=-1)
         return objective * torch.tensor(self.weights).to(inner.device)
