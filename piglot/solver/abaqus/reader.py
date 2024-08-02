@@ -81,8 +81,10 @@ def field_location(i, variables_array, output_variable, location):
     """
     variable = variables_array[i]
     if variable in ['S', 'E', 'LE']:
-        location_output_variable = output_variable.getSubset(region=location,
-                                                             position=ELEMENT_NODAL)
+        location_output_variable = output_variable.getSubset(
+            region=location,
+            position=ELEMENT_NODAL,
+        )
     else:
         location_output_variable = output_variable.getSubset(region=location)
     return location_output_variable
@@ -184,16 +186,20 @@ def write_output_file(i, variables_array, variable, step, location, file_name):
         component_labels = output_variable.componentLabels
         # Write the column headers dynamically based on the number of nodes and output
         # variable components
-        header = "Frame " + " ".join("%s_%d" % (label, v.nodeLabel)
-                                        for v in location_output_variable.values
-                                        for label in component_labels) + "\n"
+        header = "Frame " + " ".join(
+                                    "%s_%d" % (label, v.nodeLabel)
+                                    for v in location_output_variable.values
+                                    for label in component_labels
+                                ) + "\n"
         output_file.write(header)
         for frame in step.frames:
             output_variable = frame.fieldOutputs[variable]
-            location_output_variable = field_location(i,
-                                                        variables_array,
-                                                        output_variable,
-                                                        location)
+            location_output_variable = field_location(
+                i,
+                variables_array,
+                output_variable,
+                location,
+            )
             output_file.write("%d " % frame.frameId)
             for v in location_output_variable.values:
                 output_file.write(" ".join("%.9f" % value for value in v.data))
@@ -214,18 +220,30 @@ def find_case_insensitive_key(key_name, keys_list):
     Returns
     -------
     str
-        The original key name from the list that matches the provided key_name, ignoring case.
-    
-    Raises
-    ------
-    ValueError
-        If the key_name is not found in the keys_list, ignoring case.
+        The original key name from the list, if found. Otherwise, None.
     """
     keys_list_upper = [key.upper() for key in keys_list]
     key_name_upper = key_name.upper()
     if key_name_upper not in keys_list_upper:
-        raise ValueError("{} not found.".format(key_name))
+        return None
     return keys_list[keys_list_upper.index(key_name_upper)]
+
+def sanity_check(key_name):
+    """
+    Check if the key name is None, and raise a ValueError if it is.
+
+    Parameters
+    ----------
+    key_name : str
+        The name of the key to check.
+
+    Raises
+    ------
+    ValueError
+        Raises an error if the key name is None.
+    """
+    if key_name is None:
+        raise ValueError("{} not found in the output database.".format(key_name))
 
 def main():
     """Main function to extract the nodal data from the output database (.odb) file.
@@ -243,14 +261,34 @@ def main():
 
     # Create a variable that refers to the respective step
     step = odb.steps[find_case_insensitive_key(variables["step_name"], list(odb.steps.keys()))]
+    # Sanity check for step
+    sanity_check(step)
+
+    # Create a variable that refers to the instance
     instance_name = find_case_insensitive_key(
         variables["instance_name"],
         list(odb.rootAssembly.instances.keys()),
     )
+    # Sanity check for instance_name
+    sanity_check(instance_name)
+
+    # Create a variable that refers to the node set
     nodeset_name = find_case_insensitive_key(
         variables["set_name"],
         list(odb.rootAssembly.instances[instance_name].nodeSets.keys()),
     )
+    # if nodeset_name is empty, it gets the node sets of the assembly
+    if nodeset_name is None:
+        instance_name = None
+        nodeset_name = find_case_insensitive_key(
+            variables["set_name"],
+            list(odb.rootAssembly.nodeSets.keys()),
+        )
+        # Sanity check for nodeset_name
+        sanity_check(nodeset_name)
+    else:
+        # Sanity check for nodeset_name
+        sanity_check(nodeset_name)
 
     node_sets = get_node_sets(instance_name, odb)
 

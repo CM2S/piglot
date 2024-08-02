@@ -97,8 +97,9 @@ class AbaqusInputData(InputData):
                 raise ValueError(f"The {keyword} name '{field_name}' not found in the file.")
         if field_name is None:
             if len(field_list) > 1:
-                raise ValueError(f"Multiple {keyword}s found in the file. \
-                                 Please specify the {keyword} name.")
+                raise ValueError(
+                    f"Multiple {keyword}s found in the file. Please specify the {keyword} name."
+                )
             return field_list[0]
         return field_name
 
@@ -195,12 +196,10 @@ class FieldsOutput(OutputField):
         input_file, ext = os.path.splitext(os.path.basename(input_data.input_file))
         with open(input_file + ext, 'r', encoding='utf-8') as file:
             data = file.read()
-
             if has_space:
                 nsets_list = re.findall(r'\*Nset, nset="?([^",]+)"?', data)
             else:
                 nsets_list = re.findall(r'\*Nset, nset="?([^",\s]+)"?', data)
-
             if len(nsets_list) == 0:
                 raise ValueError("No sets found in the file.")
             if self.set_name not in nsets_list:
@@ -230,8 +229,10 @@ class FieldsOutput(OutputField):
         }
 
         # X field
-        field_filename = os.path.join(output_dir,
-                                      f'{input_file}_{self.set_name}_{self.x_field}.txt')
+        field_filename = os.path.join(
+            output_dir,
+            f'{input_file}_{self.set_name}_{self.x_field}.txt',
+        )
         # Ensure the file exists
         if not os.path.exists(field_filename):
             return OutputResult(np.empty(0), np.empty(0))
