@@ -128,26 +128,39 @@ class AbaqusSolver(Solver):
         python_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reader.py')
 
         run_odb = subprocess.run(
-            [self.abaqus_bin, 'viewer', f"noGUI={python_script}", "--",
-             f"input_file={variables['input_file']}", "--",
-             f"job_name={variables['job_name']}", "--",
-             f"step_name={variables['step_name']}", "--",
-             f"instance_name={variables['instance_name']}", "--",
-             f"set_name={variables['set_name']}", "--",
-             f"field={variables['field']}", "--",
-             f"x_field={variables['x_field']}"],
+            [
+                self.abaqus_bin,
+                'viewer',
+                f"noGUI={python_script}",
+                "--",
+                f"input_file={variables['input_file']}",
+                "--",
+                f"job_name={variables['job_name']}",
+                "--",
+                f"step_name={variables['step_name']}",
+                "--",
+                f"instance_name={variables['instance_name']}",
+                "--",
+                f"set_name={variables['set_name']}",
+                "--",
+                f"field={variables['field']}",
+                "--",
+                f"x_field={variables['x_field']}"
+            ],
             cwd=tmp_dir,
             shell=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            check=False
+            check=False,
         )
         end_time = time.time()
 
         failed_case = (run_inp.returncode != 0 or run_odb.returncode != 0)
 
-        responses = {name: field.get(input_data) if not failed_case else
-                     OutputResult(np.empty(0), np.empty(0)) for name, field in case.fields.items()}
+        responses = {
+            name: field.get(input_data) if not failed_case
+            else OutputResult(np.empty(0), np.empty(0)) for name, field in case.fields.items()
+        }
 
         return CaseResult(
             begin_time,
@@ -242,7 +255,8 @@ class AbaqusSolver(Solver):
         for case_name, case_config in config['cases'].items():
             if 'fields' not in case_config:
                 raise ValueError(
-                    f"Missing 'fields' in case '{case_name}' configuration.")
+                    f"Missing 'fields' in case '{case_name}' configuration."
+                )
             fields = {
                 field_name: abaqus_fields_reader(field_config)
                 for field_name, field_config in case_config['fields'].items()
