@@ -240,7 +240,7 @@ class ObjectiveResult:
                     # Calculate the ideal point
                     ideal_point = np.where(types, 1.0, 0.0)
                     # Smoothing parameter for STCH
-                    u = 0.01
+                    u = 0.006
                     # Precompute the numerator of Tchebycheff function value
                     tch_numerator = np.abs((norm_funcs - ideal_point) * costs) * weights
                     # Calculate the initial Tchebycheff function value

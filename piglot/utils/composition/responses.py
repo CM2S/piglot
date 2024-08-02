@@ -445,7 +445,7 @@ class ResponseComposition(Composition):
                     # Calculate the ideal point
                     ideal_point = torch.where(types, torch.tensor(1.0), torch.tensor(0.0))
                     # Smoothing parameter for STCH
-                    u = 0.01
+                    u = 0.006
                     # Precompute the numerator of Tchebycheff function value
                     tch_numerator = torch.abs((norm_objective - ideal_point) * costs) * weights
                     # Calculate the initial Tchebycheff function value
