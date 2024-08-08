@@ -3,16 +3,18 @@ from typing import Any, Dict, Type
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import Solver
 from piglot.solver.links.solver import LinksSolver
-from piglot.solver.abaqus.solver import AbaqusSolver
-from piglot.solver.curve.solver import CurveSolver
-from piglot.solver.crate.solver import CrateSolver
+# from piglot.solver.abaqus.solver import AbaqusSolver
+# from piglot.solver.curve.solver import CurveSolver
+# from piglot.solver.crate.solver import CrateSolver
+from piglot.solver.script_solver import ScriptSolver
 
 
 AVAILABLE_SOLVERS: Dict[str, Type[Solver]] = {
     'links': LinksSolver,
-    'abaqus': AbaqusSolver,
-    'curve': CurveSolver,
-    'crate': CrateSolver,
+    # 'abaqus': AbaqusSolver,
+    # 'curve': CurveSolver,
+    # 'crate': CrateSolver,
+    'script': ScriptSolver,
 }
 
 
