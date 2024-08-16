@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Dict, Any, List
 import os
 import re
-import glob
 import numpy as np
 import pandas as pd
 from piglot.parameter import ParameterSet
@@ -14,12 +13,18 @@ from piglot.utils.solver_utils import write_parameters, has_parameter, get_case_
 class AbaqusInputData(InputData):
     """Container for Abaqus input data."""
 
-    def __init__(self, input_file: str, job_name: str, step_name: str, instance_name: str) -> None:
+    def __init__(
+        self,
+        input_file: str,
+        step_name: str,
+        instance_name: str,
+        job_name: str = None,
+    ) -> None:
         super().__init__()
         self.input_file = input_file
-        self.job_name = job_name
         self.step_name = step_name
         self.instance_name = instance_name
+        self.job_name = job_name
 
     def prepare(
             self,
@@ -43,10 +48,20 @@ class AbaqusInputData(InputData):
         AbaqusInputData
             Input data prepared for the simulation.
         """
+        # Sanitize job_name
+        if self.job_name is None:
+            raise ValueError("Job name not specified. Call the 'check' method first.")
+
         # Copy file and write out the parameters
         dest_file = os.path.join(tmp_dir, os.path.basename(self.input_file))
         write_parameters(parameters.to_dict(values), self.input_file, dest_file)
-        return AbaqusInputData(dest_file, self.job_name, self.step_name, self.instance_name)
+
+        return AbaqusInputData(
+            dest_file,
+            self.step_name,
+            self.instance_name,
+            job_name=self.job_name,
+        )
 
     @staticmethod
     def __sanitize_field(field_name: str, field_list: List[str], keyword: str) -> str:
@@ -82,8 +97,9 @@ class AbaqusInputData(InputData):
                 raise ValueError(f"The {keyword} name '{field_name}' not found in the file.")
         if field_name is None:
             if len(field_list) > 1:
-                raise ValueError(f"Multiple {keyword}s found in the file. \
-                                 Please specify the {keyword} name.")
+                raise ValueError(
+                    f"Multiple {keyword}s found in the file. Please specify the {keyword} name."
+                )
             return field_list[0]
         return field_name
 
@@ -107,11 +123,12 @@ class AbaqusInputData(InputData):
             data = file.read()
 
             job_list = re.findall(r'\*\* Job name: ([^M]+)', data)
-            job_list = [job.strip() for job in job_list]  # Remove trailing whitespace
+            job_list = [job.strip() for job in job_list]
             self.job_name = self.__sanitize_field(self.job_name, job_list, "job")
 
             instance_list = re.findall(r'\*Instance, name=([^,]+)', data)
-            self.instance_name = self.__sanitize_field(self.instance_name, instance_list,
+            self.instance_name = self.__sanitize_field(self.instance_name,
+                                                       instance_list,
                                                        "instance")
 
             step_list = re.findall(r'\*Step, name=([^,]+)', data)
@@ -140,8 +157,7 @@ class AbaqusInputData(InputData):
         AbaqusInputData
             Current input data.
         """
-        return AbaqusInputData(os.path.join(target_dir, os.path.basename(self.input_file)),
-                               self.job_name, self.step_name, self.instance_name)
+        raise RuntimeError("Abaqus does not support extracting current results.")
 
 
 class FieldsOutput(OutputField):
@@ -176,11 +192,14 @@ class FieldsOutput(OutputField):
         input_data : AbaqusInputData
             Input data for this case.
         """
+        has_space = ' ' in self.set_name
         input_file, ext = os.path.splitext(os.path.basename(input_data.input_file))
         with open(input_file + ext, 'r', encoding='utf-8') as file:
             data = file.read()
-
-            nsets_list = re.findall(r'\*Nset, nset=([^,]+)', data)
+            if has_space:
+                nsets_list = re.findall(r'\*Nset, nset="?([^",]+)"?', data)
+            else:
+                nsets_list = re.findall(r'\*Nset, nset="?([^",\s]+)"?', data)
             if len(nsets_list) == 0:
                 raise ValueError("No sets found in the file.")
             if self.set_name not in nsets_list:
@@ -210,8 +229,10 @@ class FieldsOutput(OutputField):
         }
 
         # X field
-        field_filename = os.path.join(output_dir,
-                                      f'{input_file}_{self.set_name}_{self.x_field}.txt')
+        field_filename = os.path.join(
+            output_dir,
+            f'{input_file}_{self.set_name}_{self.x_field}.txt',
+        )
         # Ensure the file exists
         if not os.path.exists(field_filename):
             return OutputResult(np.empty(0), np.empty(0))
@@ -231,12 +252,6 @@ class FieldsOutput(OutputField):
         # Extract columns from data frame
         data_group = data[columns].to_numpy()
         y_field = reduction[self.field](data_group, axis=1)
-
-        # Delete the extra temporary files
-        files = glob.glob(output_dir + '/' + input_file + '*.txt')
-        for file in files:
-            if self.set_name not in file:
-                os.remove(file)
 
         return OutputResult(x_field, y_field)
 
