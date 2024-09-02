@@ -248,7 +248,7 @@ class ObjectiveResult:
                     # Calculate the initial softmax value
                     softmax = np.exp(tch_values)/(np.exp(tch_values).sum())
                     # Parameters to ensure numerical stability
-                    u_increment = u  # Increment value for u
+                    u_increment = 0.001  # Increment value for u
                     max_u = 0.2  # Maximum value for u
                     max_iterations = max_u/u  # Limit to prevent infinite loop
                     for iteration in range(int(max_iterations)):
