@@ -456,7 +456,7 @@ class ResponseComposition(Composition):
                     # Iterate to ensure numerical stability
                     while u <= max_u:
                         exp_sum = torch.sum(torch.exp(tch_values), dim=-1)
-                        if not torch.isinf(exp_sum):
+                        if not torch.any(torch.isinf(exp_sum)):
                             break  # Early stopping if condition is met
                         u += u_increment
                         tch_values = tch_numerator / u  # Recalculate tch_values with updated u
