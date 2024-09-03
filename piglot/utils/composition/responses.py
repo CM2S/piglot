@@ -450,18 +450,15 @@ class ResponseComposition(Composition):
                     tch_numerator = torch.abs((norm_objective - ideal_point) * costs) * weights
                     # Calculate the initial Tchebycheff function value
                     tch_values = tch_numerator / u
-                    # Calculate the initial softmax of tch_values
-                    softmax = torch.softmax(tch_values, dim=-1)
                     # Parameters to ensure numerical stability
                     u_increment = 0.001  # Increment value for u
                     max_u = 0.2  # Maximum value for u
                     max_iterations = max_u/u  # Limit to prevent infinite loop
                     for iteration in range(int(max_iterations)):
-                        if not torch.any(softmax > (1 - 1e-4)):
+                        if not torch.isinf(torch.sum(torch.exp(tch_values))):
                             break  # Early stopping if condition is met
                         u += u_increment
                         tch_values = tch_numerator / u  # Recalculate tch_values with updated u
-                        softmax = torch.softmax(tch_values, dim=-1)
                     # Return the final scalarisation value
                     return torch.log(torch.sum(torch.exp(tch_values), dim=-1)) * u
                 return torch.sum((norm_objective*costs) * weights, dim=-1)

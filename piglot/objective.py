@@ -245,18 +245,15 @@ class ObjectiveResult:
                     tch_numerator = np.abs((norm_funcs - ideal_point) * costs) * weights
                     # Calculate the initial Tchebycheff function value
                     tch_values = tch_numerator / u
-                    # Calculate the initial softmax value
-                    softmax = np.exp(tch_values)/(np.exp(tch_values).sum())
                     # Parameters to ensure numerical stability
                     u_increment = 0.001  # Increment value for u
                     max_u = 0.2  # Maximum value for u
                     max_iterations = max_u/u  # Limit to prevent infinite loop
                     for iteration in range(int(max_iterations)):
-                        if not np.any(softmax > (1 - 1e-4)):
-                            break
+                        if not np.isinf(np.sum(np.exp(tch_values))):
+                            break  # Early stopping if condition is met
                         u += u_increment
                         tch_values = tch_numerator / u
-                        softmax = np.exp(tch_values)/(np.exp(tch_values).sum())
                     # Return the final scalarisation value
                     return np.log(np.sum(np.exp(tch_values))) * u
                 return np.sum((norm_funcs*costs)*weights)
