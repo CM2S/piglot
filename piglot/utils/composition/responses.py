@@ -453,14 +453,15 @@ class ResponseComposition(Composition):
                     # Parameters to ensure numerical stability
                     u_increment = 0.001  # Increment value for u
                     max_u = 0.2  # Maximum value for u
-                    max_iterations = max_u/u  # Limit to prevent infinite loop
-                    for iteration in range(int(max_iterations)):
-                        if not torch.isinf(torch.sum(torch.exp(tch_values))):
+                    # Iterate to ensure numerical stability
+                    while u <= max_u:
+                        exp_sum = torch.sum(torch.exp(tch_values), dim=-1)
+                        if not torch.isinf(exp_sum):
                             break  # Early stopping if condition is met
                         u += u_increment
                         tch_values = tch_numerator / u  # Recalculate tch_values with updated u
                     # Return the final scalarisation value
-                    return torch.log(torch.sum(torch.exp(tch_values), dim=-1)) * u
+                    return torch.log(exp_sum) * u
                 return torch.sum((norm_objective*costs) * weights, dim=-1)
             # Mean scalarisation otherwise
             # Apply the weights

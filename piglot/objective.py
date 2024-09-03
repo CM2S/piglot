@@ -248,14 +248,15 @@ class ObjectiveResult:
                     # Parameters to ensure numerical stability
                     u_increment = 0.001  # Increment value for u
                     max_u = 0.2  # Maximum value for u
-                    max_iterations = max_u/u  # Limit to prevent infinite loop
-                    for iteration in range(int(max_iterations)):
-                        if not np.isinf(np.sum(np.exp(tch_values))):
+                    # Iterate to ensure numerical stability
+                    while u <= max_u:
+                        exp_sum = np.sum(np.exp(tch_values))
+                        if not np.isinf(exp_sum):
                             break  # Early stopping if condition is met
                         u += u_increment
-                        tch_values = tch_numerator / u
+                        tch_values = tch_numerator / u  # Recalculate tch_values with updated u
                     # Return the final scalarisation value
-                    return np.log(np.sum(np.exp(tch_values))) * u
+                    return np.log(exp_sum) * u
                 return np.sum((norm_funcs*costs)*weights)
             return np.mean(self.values)
         return composition.composition(self.values, self.params).item()
