@@ -1,5 +1,5 @@
 """Main optimiser classes for using BoTorch with piglot"""
-from typing import Tuple, List, Union, Type, Dict, Callable
+from typing import Tuple, List, Union, Type, Dict
 from multiprocessing.pool import ThreadPool as Pool
 import os
 import warnings
@@ -16,19 +16,15 @@ from botorch.models.converter import batched_to_model_list
 from botorch.models.transforms import Normalize
 from botorch.acquisition import (
     AcquisitionFunction,
-    UpperConfidenceBound,
     qUpperConfidenceBound,
-    ExpectedImprovement,
     qExpectedImprovement,
-    ProbabilityOfImprovement,
     qProbabilityOfImprovement,
-    LogExpectedImprovement,
     qLogExpectedImprovement,
     qNoisyExpectedImprovement,
     qLogNoisyExpectedImprovement,
     qKnowledgeGradient,
 )
-from botorch.acquisition.objective import GenericMCObjective, UnstandardizePosteriorTransform
+from botorch.acquisition.objective import GenericMCObjective
 from botorch.acquisition.multi_objective import (
     qExpectedHypervolumeImprovement,
     qNoisyExpectedHypervolumeImprovement,
@@ -53,11 +49,6 @@ from piglot.optimisers.botorch.dataset import BayesDataset
 
 
 AVAILABLE_ACQUISITIONS: Dict[str, Type[AcquisitionFunction]] = {
-    # Analytical acquisitions
-    'ucb': UpperConfidenceBound,
-    'ei': ExpectedImprovement,
-    'logei': LogExpectedImprovement,
-    'pi': ProbabilityOfImprovement,
     # Quasi-Monte Carlo acquisitions
     'qucb': qUpperConfidenceBound,
     'qei': qExpectedImprovement,
@@ -117,7 +108,7 @@ def default_acquisition(
         return 'qlognei'
     if composite or q > 1:
         return 'qlogei'
-    return 'logei'
+    return 'qlogei'
 
 
 def fit_mll_pytorch_loop(mll: ExactMarginalLogLikelihood, n_iters: int = 100) -> None:
@@ -378,10 +369,6 @@ class BayesianBoTorch(Optimiser):
         # Find best value for the acquisition
         best = torch.max(self._composition(dataset.values, dataset.params)).item()
 
-        # For analytical acquisitions, manually compute the destandardisation constants
-        y_avg = torch.mean(dataset.values, dim=0)
-        y_std = torch.std(dataset.values, dim=0)
-
         # Build composite MC objective
         def mc_objective(vals: torch.Tensor, X: torch.Tensor) -> torch.Tensor:
             return self._composition(dataset.untransform_outcomes(vals), X)
@@ -389,23 +376,8 @@ class BayesianBoTorch(Optimiser):
         # Delegate to the correct acquisition function
         # The arguments for each acquisition are different, so we group them into families
         acq_class = AVAILABLE_ACQUISITIONS[self.acquisition]
-        # Analytical acquisitions
-        if self.acquisition == 'ucb':
-            acq = acq_class(
-                model,
-                self.beta,
-                maximize=False,
-                posterior_transform=UnstandardizePosteriorTransform(y_avg, y_std),
-            )
-        elif self.acquisition in ('ei', 'logei', 'pi'):
-            acq = acq_class(
-                model,
-                best,
-                maximize=False,
-                posterior_transform=UnstandardizePosteriorTransform(y_avg, y_std),
-            )
         # Quasi-Monte Carlo acquisitions
-        elif self.acquisition == 'qucb':
+        if self.acquisition == 'qucb':
             acq = acq_class(
                 model,
                 self.beta,
