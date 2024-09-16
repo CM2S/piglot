@@ -1,0 +1,17 @@
+iters: 64
+
+optimiser: botorch
+
+parameters:
+  a: [1, 0, 4]
+  b: [1, 0, 4]
+  c: [1, 0, 4]
+  d: [1, 0, 4]
+
+objective:
+  name: fitting
+  solver:
+    name: sample
+  references:
+    'sample.txt':
+      prediction: ['sample_field']
