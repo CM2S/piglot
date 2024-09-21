@@ -49,6 +49,7 @@ class ScriptSolver(SingleCaseSolver):
         parameters: ParameterSet,
         output_dir: str,
         tmp_dir: str,
+        verbosity: str,
     ) -> None:
         """Constructor for the solver class.
 
@@ -63,7 +64,7 @@ class ScriptSolver(SingleCaseSolver):
         tmp_dir : str
             Path to the temporary directory.
         """
-        super().__init__(script.get_output_fields(), parameters, output_dir, tmp_dir)
+        super().__init__(script.get_output_fields(), parameters, output_dir, tmp_dir, verbosity)
         self.script = script
 
     def _solve(self, values: np.ndarray, concurrent: bool) -> Dict[str, OutputResult]:
@@ -119,4 +120,5 @@ class ScriptSolver(SingleCaseSolver):
         # Read and instantiate the script and the temporary directory
         script = read_custom_module(config, ScriptSolverCallable)()
         tmp_dir = os.path.join(output_dir, config.pop('tmp_dir', 'tmp'))
-        return cls(script, parameters, output_dir, tmp_dir)
+        verbosity = config.pop('verbosity', 'none')
+        return cls(script, parameters, output_dir, tmp_dir, verbosity)

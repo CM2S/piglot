@@ -10,6 +10,7 @@ import numpy as np
 from yaml import safe_dump_all, safe_load_all
 from piglot.parameter import ParameterSet
 from piglot.utils.assorted import pretty_time
+from piglot.utils.solver_utils import VerbosityManager
 
 
 T = TypeVar('T', bound='Solver')
@@ -116,10 +117,17 @@ class CaseResult:
 class Solver(ABC):
     """Base class for solvers."""
 
-    def __init__(self, parameters: ParameterSet, output_dir: str, tmp_dir: str) -> None:
+    def __init__(
+        self,
+        parameters: ParameterSet,
+        output_dir: str,
+        tmp_dir: str,
+        verbosity: str,
+    ) -> None:
         self.parameters = parameters
         self.output_dir = output_dir
         self.tmp_dir = tmp_dir
+        self.verbosity_manager = VerbosityManager(verbosity, os.path.join(output_dir, 'solver'))
         self.begin_time = time.time()
 
     @abstractmethod
@@ -217,6 +225,7 @@ class SingleCaseSolver(Solver, ABC):
         parameters: ParameterSet,
         output_dir: str,
         tmp_dir: str,
+        verbosity: str,
     ) -> None:
         """Constructor for the solver class.
 
@@ -231,13 +240,14 @@ class SingleCaseSolver(Solver, ABC):
         tmp_dir : str
             Path to the temporary directory.
         """
-        super().__init__(parameters, output_dir, tmp_dir)
+        super().__init__(parameters, output_dir, tmp_dir, verbosity)
         self.output_fields = output_fields
         self.cases_dir = os.path.join(output_dir, "cases")
         self.cases_hist = os.path.join(output_dir, "cases_hist")
 
     def prepare(self) -> None:
         """Prepare data for the optimisation."""
+        self.verbosity_manager.prepare()
         # Create output directories
         os.makedirs(self.cases_dir, exist_ok=True)
         if os.path.isdir(self.cases_hist):
@@ -318,7 +328,8 @@ class SingleCaseSolver(Solver, ABC):
         """
         # Run the solver
         begin_time = time.time()
-        results = self._solve(values, concurrent)
+        with self.verbosity_manager:
+            results = self._solve(values, concurrent)
         run_time = time.time() - begin_time
         # Post-process results: write history entries
         param_hash = self.parameters.hash(values)

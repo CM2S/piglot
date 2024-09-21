@@ -92,6 +92,7 @@ class MultiCaseSolver(Solver, ABC):
         parameters: ParameterSet,
         output_dir: str,
         tmp_dir: str,
+        verbosity: str,
         parallel: int = 1,
     ) -> None:
         """Constructor for the solver class.
@@ -109,7 +110,7 @@ class MultiCaseSolver(Solver, ABC):
         parallel : int, optional
             Number of parallel processes to run, by default 1.
         """
-        super().__init__(parameters, output_dir, tmp_dir)
+        super().__init__(parameters, output_dir, tmp_dir, verbosity)
         self.cases = cases
         self.parallel = parallel
         self.cases_dir = os.path.join(output_dir, "cases")
@@ -117,6 +118,7 @@ class MultiCaseSolver(Solver, ABC):
 
     def prepare(self) -> None:
         """Prepare data for the optimisation."""
+        self.verbosity_manager.prepare()
         # Create output directories
         os.makedirs(self.cases_dir, exist_ok=True)
         if os.path.isdir(self.cases_hist):
@@ -224,7 +226,8 @@ class MultiCaseSolver(Solver, ABC):
 
         # Evaluate all cases (in parallel if specified)
         def run_case(case: Case) -> CaseResult:
-            return case.run(self.parameters, values, tmp_dir)
+            with self.verbosity_manager:
+                return case.run(self.parameters, values, tmp_dir)
         if self.parallel > 1:
             with Pool(self.parallel) as pool:
                 results = pool.map(run_case, self.cases)
@@ -239,7 +242,7 @@ class MultiCaseSolver(Solver, ABC):
         outputs: Dict[str, OutputResult] = {}
         for case, result in zip(self.cases, results):
             self._write_history_entry(case, result)
-            for name in case.fields:
+            for name in case.get_fields():
                 outputs[name] = result.responses[name]
         return outputs
 
@@ -313,7 +316,8 @@ class GenericMultiCaseSolver(MultiCaseSolver):
         # Extract other information from the configuration
         tmp_dir = os.path.join(output_dir, config.pop('tmp_dir', 'tmp'))
         parallel = int(config.pop('parallel', 1))
+        verbosity = config.pop('verbosity', None)
         # Initialise each case (and append any extra configuration)
         case_class = cls.get_case_class()
         cases = [case_class.read(name, case | config) for name, case in config_cases.items()]
-        return cls(cases, parameters, output_dir, tmp_dir, parallel=parallel)
+        return cls(cases, parameters, output_dir, tmp_dir, verbosity, parallel=parallel)

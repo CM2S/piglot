@@ -1,6 +1,7 @@
 """Module for Links solver."""
 from typing import Dict, Type
 import os
+import sys
 import subprocess
 from piglot.solver.input_file_solver import (
     InputDataGenerator,
@@ -43,8 +44,8 @@ class LinksCase(InputFileCase):
         """
         process_result = subprocess.run(
             [self.links_bin, input_data.input_file],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
             check=False
         )
         if process_result.returncode != 0:
