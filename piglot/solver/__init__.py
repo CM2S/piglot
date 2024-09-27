@@ -5,7 +5,7 @@ from piglot.solver.solver import Solver
 from piglot.solver.links.solver import LinksSolver
 # from piglot.solver.abaqus.solver import AbaqusSolver
 from piglot.solver.curve.solver import CurveSolver
-# from piglot.solver.crate.solver import CrateSolver
+from piglot.solver.crate.solver import CrateSolver
 from piglot.solver.script_solver import ScriptSolver
 
 
@@ -13,7 +13,7 @@ AVAILABLE_SOLVERS: Dict[str, Type[Solver]] = {
     'links': LinksSolver,
     # 'abaqus': AbaqusSolver,
     'curve': CurveSolver,
-    # 'crate': CrateSolver,
+    'crate': CrateSolver,
     'script': ScriptSolver,
 }
 
