@@ -9,7 +9,13 @@ from matplotlib.lines import Line2D
 from matplotlib.figure import Figure
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import Solver, OutputResult
-from piglot.objective import Composition, GenericObjective, ObjectiveResult, DynamicPlotter
+from piglot.objective import (
+    Composition,
+    GenericObjective,
+    ObjectiveResult,
+    DynamicPlotter,
+    IndividualObjective,
+)
 from piglot.utils.reductions import Reduction, NegateReduction
 from piglot.utils.response_transformer import ResponseTransformer
 from piglot.utils.composition.responses import FlattenUtility, ConcatUtility
@@ -58,7 +64,7 @@ class DynamicResponsePlotter(DynamicPlotter):
             fig.canvas.flush_events()
 
 
-class ResponseSingleObjective(ABC):
+class ResponseSingleObjective(IndividualObjective, ABC):
     """Base class for generic response-based objectives."""
 
     def __init__(
@@ -66,15 +72,16 @@ class ResponseSingleObjective(ABC):
         name: str,
         prediction: List[str],
         quantity: Reduction,
-        negate: bool = False,
+        maximise: bool = False,
         weight: float = 1.0,
+        bounds: Optional[Tuple[float, float]] = None,
         flatten_utility: Optional[FlattenUtility] = None,
         prediction_transform: Optional[ResponseTransformer] = None,
     ) -> None:
+        super().__init__(maximise=maximise, weight=weight, bounds=bounds)
         self.name = name
         self.prediction = prediction
-        self.quantity = NegateReduction(quantity) if negate else quantity
-        self.weight = weight
+        self.quantity = NegateReduction(quantity) if maximise else quantity
         self.flatten_utility = flatten_utility
         self.prediction_transform = prediction_transform
 
@@ -138,7 +145,7 @@ class ResponseSingleObjective(ABC):
             Mean and variance of the objective.
         """
         values = [
-            self.weight * self.quantity.reduce(result.time, result.data, params)
+            self.quantity.reduce(result.time, result.data, params)
             for result in self._extract_responses(raw_results)
         ]
         # TODO: add different stochastic models
@@ -400,7 +407,7 @@ class ResponseObjective(GenericObjective):
     ) -> None:
         # Sanitise the scalarisation: if we have a single objective, we must use a sum scalarisation
         if scalarisation is None and len(objectives) == 1:
-            scalarisation = SumScalarisation()
+            scalarisation = SumScalarisation(objectives)
         # Get the type of composition to use
         composite_type = FullComposition if full_composite else ScalarisationComposition
         super().__init__(

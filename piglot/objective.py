@@ -4,7 +4,7 @@ import os
 import os.path
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type, TypeVar
+from typing import Any, Dict, List, Optional, Type, TypeVar, Tuple
 from threading import Lock
 from dataclasses import dataclass
 import numpy as np
@@ -12,7 +12,6 @@ import torch
 import pandas as pd
 from matplotlib.figure import Figure
 from piglot.parameter import ParameterSet
-from piglot.utils.scalarisations import Scalarisation
 
 
 T = TypeVar('T', bound='Objective')
@@ -75,6 +74,88 @@ class ObjectiveResult:
     obj_variances: Optional[np.ndarray] = None
     scalar_value: Optional[float] = None
     scalar_variance: Optional[float] = None
+
+
+class IndividualObjective(ABC):
+    """Base class for individual objectives for generic optimisation problems."""
+
+    def __init__(
+        self,
+        maximise: bool = False,
+        weight: float = 1.0,
+        bounds: Tuple[float, float] = None,
+    ) -> None:
+        self.maximise = maximise
+        self.weight = float(weight)
+        self.bounds = None
+        if bounds is not None:
+            self.bounds = tuple(float(b) for b in bounds)
+            if self.bounds[0] > self.bounds[1]:
+                raise ValueError(f"Invalid bounds {self.bounds}.")
+            if self.maximise:
+                self.bounds = (-self.bounds[1], -self.bounds[0])
+
+
+class Scalarisation(ABC):
+    """Base class for scalarisations."""
+
+    def __init__(self, objectives: List[IndividualObjective]) -> None:
+        self.objectives = objectives
+        self.weights = torch.tensor([obj.weight for obj in objectives], dtype=torch.float64)
+        self.bounds = (
+            torch.tensor([obj.bounds for obj in objectives], dtype=torch.float64)
+            if all(obj.bounds is not None for obj in objectives)
+            else None
+        )
+        print(self.bounds)
+
+    def scalarise(
+        self,
+        values: np.ndarray,
+        variances: Optional[np.ndarray] = None,
+    ) -> Tuple[float, Optional[float]]:
+        """Scalarise a set of objectives.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Mean objective values.
+        variances : Optional[np.ndarray]
+            Optional variances of the objectives.
+
+        Returns
+        -------
+        Tuple[float, Optional[float]]
+            Mean and variance of the scalarised objective.
+        """
+        torch_mean, torch_var = self.scalarise_torch(
+            torch.from_numpy(values),
+            torch.from_numpy(variances) if variances is not None else None,
+        )
+        if torch_var is None:
+            return torch_mean.numpy(force=True), None
+        return torch_mean.numpy(force=True), torch_var.numpy(force=True)
+
+    @abstractmethod
+    def scalarise_torch(
+        self,
+        values: torch.Tensor,
+        variances: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        """Scalarise a set of objectives with gradients.
+
+        Parameters
+        ----------
+        values : torch.Tensor
+            Mean objective values.
+        variances : Optional[torch.Tensor]
+            Optional variances of the objectives.
+
+        Returns
+        -------
+        Tuple[torch.Tensor, Optional[torch.Tensor]]
+            Mean and variance of the scalarised objective.
+        """
 
 
 class Objective(ABC):
