@@ -74,8 +74,9 @@ class DesignSingleObjective(ResponseSingleObjective):
             name,
             prediction,
             read_reduction(config['quantity']),
-            negate=bool(config.get('negate', False)),
+            maximise=bool(config.get('maximise', False)),
             weight=float(config.get('weight', 1.0)),
+            bounds=config.get('bounds', None),
             flatten_utility=(
                 EndpointFlattenUtility(int(config['n_points'])) if 'n_points' in config else None
             ),
@@ -146,7 +147,8 @@ class ResponseDesignObjective(ResponseObjective):
             objectives,
             output_dir,
             scalarisation=(
-                read_scalarisation(config['scalarisation']) if 'scalarisation' in config else None
+                read_scalarisation(config['scalarisation'], objectives)
+                if 'scalarisation' in config else None
             ),
             stochastic=bool(config.get('stochastic', False)),
             composite=composite,

@@ -1,6 +1,6 @@
 """Module for curve fitting objectives"""
 from __future__ import annotations
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Tuple
 import os
 import sys
 import numpy as np
@@ -196,13 +196,14 @@ class FittingSingleObjective(ResponseSingleObjective):
         prediction: List[str],
         reduction: Reduction,
         weight: float = 1.0,
+        bounds: Optional[Tuple[float, float]] = None,
     ) -> None:
         super().__init__(
             name,
             prediction,
             reduction,
-            negate=False,
             weight=weight,
+            bounds=bounds,
             flatten_utility=FixedFlatteningUtility(reference.get_time()),
             prediction_transform=PointwiseErrors(reference.get_time(), reference.get_data()),
         )
@@ -268,9 +269,17 @@ class FittingSingleObjective(ResponseSingleObjective):
         # Read optional settings
         reduction = read_reduction(config.pop('reduction', 'mse'))
         weight = float(config.pop('weight', 1.0))
+        bounds = config.pop('bounds', None)
         # Read the reference and return the objective
         reference = Reference.read(name, config, output_dir)
-        return FittingSingleObjective(name, reference, prediction, reduction, weight=weight)
+        return FittingSingleObjective(
+            name,
+            reference,
+            prediction,
+            reduction,
+            weight=weight,
+            bounds=bounds,
+        )
 
 
 class ResponseFittingObjective(ResponseObjective):
@@ -321,7 +330,8 @@ class ResponseFittingObjective(ResponseObjective):
             objectives,
             output_dir,
             scalarisation=(
-                read_scalarisation(config['scalarisation']) if 'scalarisation' in config else None
+                read_scalarisation(config['scalarisation'], objectives)
+                if 'scalarisation' in config else None
             ),
             stochastic=bool(config.get('stochastic', False)),
             composite=bool(config.get('composite', False)),
