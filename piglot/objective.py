@@ -4,15 +4,18 @@ import os
 import os.path
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Type, TypeVar
 from threading import Lock
 from dataclasses import dataclass
 import numpy as np
 import torch
 import pandas as pd
-from scipy.stats import norm
 from matplotlib.figure import Figure
 from piglot.parameter import ParameterSet
+from piglot.utils.scalarisations import Scalarisation
+
+
+T = TypeVar('T', bound='Objective')
 
 
 class Composition(ABC):
@@ -62,23 +65,37 @@ class DynamicPlotter(ABC):
         """Update the plot with the most recent data"""
 
 
+@dataclass
+class ObjectiveResult:
+    """Container for objective results."""
+    params: np.ndarray
+    values: np.ndarray
+    obj_values: np.ndarray
+    variances: Optional[np.ndarray] = None
+    obj_variances: Optional[np.ndarray] = None
+    scalar_value: Optional[float] = None
+    scalar_variance: Optional[float] = None
+
+
 class Objective(ABC):
     """Abstract class for optimisation objectives"""
 
     @abstractmethod
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
+    def __call__(self, *args: Any, **kwds: Any) -> ObjectiveResult:
         """Objective computation for the outside world"""
 
     @abstractmethod
     def prepare(self) -> None:
         """Generic method to prepare output files before optimising the problem"""
 
-    @staticmethod
+    @classmethod
+    @abstractmethod
     def read(
-            config: Dict[str, Any],
-            parameters: ParameterSet,
-            output_dir: str,
-            ) -> Objective:
+        cls: Type[T],
+        config: Dict[str, Any],
+        parameters: ParameterSet,
+        output_dir: str,
+    ) -> T:
         """Read the objective from a configuration dictionary.
 
         Parameters
@@ -95,7 +112,6 @@ class Objective(ABC):
         Objective
             Objective function to optimise.
         """
-        raise NotImplementedError("Reading not implemented for this objective")
 
     def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
         """Plot a given function call given the parameter hash
@@ -145,139 +161,27 @@ class Objective(ABC):
         raise NotImplementedError("Objective history not implemented for this objective")
 
 
-@dataclass
-class ObjectiveResult:
-    """Container for objective results."""
-    params: np.ndarray
-    values: List[np.ndarray]
-    variances: Optional[List[np.ndarray]] = None
-
-    def __mc_variance(
-        self,
-        composition: Composition,
-        num_samples: int = 1024,
-    ) -> float:
-        """Compute the objective variance using Monte Carlo (using fixed base samples).
-
-        Parameters
-        ----------
-        composition : Composition
-            Composition functional to use.
-        num_samples : int, optional
-            Number of Monte Carlo samples, by default 1000.
-
-        Returns
-        -------
-        float
-            Estimated variance of the objective.
-        """
-        biased = [norm.rvs(loc=0, scale=1) for _ in range(num_samples)]
-        mc_objectives = [
-            composition.composition(
-                self.values + bias * np.sqrt(self.variances),
-                self.params,
-            ) for bias in biased
-        ]
-        return np.var(mc_objectives, axis=0)
-
-    def scalarise(self, composition: Composition = None) -> float:
-        """Scalarise the result under noise-free single-objective optimisation.
-
-        Parameters
-        ----------
-        composition : Composition, optional
-            Composition functional to use, by default None.
-
-        Returns
-        -------
-        float
-            Scalarised result.
-        """
-        if composition is None:
-            return np.mean(self.values)
-        return composition.composition(self.values, self.params).item()
-
-    def scalarise_mo(self, composition: Composition = None) -> List[float]:
-        """Pseudo-scalarise the result under noise-free multi-objective optimisation.
-
-        Parameters
-        ----------
-        composition : Composition, optional
-            Composition functional to use, by default None.
-
-        Returns
-        -------
-        List[float]
-            Pseudo-scalarised result.
-        """
-        if composition is None:
-            return [np.mean(vals) for vals in self.values]
-        return [val.item() for val in composition.composition(self.values, self.params)]
-
-    def scalarise_stochastic(
-        self,
-        composition: Composition = None,
-    ) -> Tuple[float, float]:
-        """Scalarise the result.
-
-        Parameters
-        ----------
-        composition : Composition, optional
-            Composition functional to use, by default None.
-
-        Returns
-        -------
-        Tuple[float, float]
-            Scalarised mean and variance.
-        """
-        if composition is None:
-            return np.mean(self.values), np.sum(self.variances)
-        return (
-            composition.composition(self.values, self.params).item(),
-            self.__mc_variance(composition).item()
-        )
-
-    def scalarise_mo_stochastic(
-            self,
-            composition: Composition = None,
-    ) -> Tuple[List[float], List[float]]:
-        """Pseudo-scalarise the result under stochastic multi-objective optimisation.
-
-        Parameters
-        ----------
-        composition : Composition, optional
-            Composition functional to use, by default None.
-
-        Returns
-        -------
-        List[Tuple[float, float]]
-            Pseudo-scalarised means and variances.
-        """
-        if composition is None:
-            return [
-                (np.mean(vals), np.sum(vars)) for vals, vars in zip(self.values, self.variances)
-            ]
-        return composition.composition(self.values, self.params), self.__mc_variance(composition)
-
-
 class GenericObjective(Objective):
     """Class for generic objectives."""
 
     def __init__(
-            self,
-            parameters: ParameterSet,
-            stochastic: bool = False,
-            composition: Composition = None,
-            num_objectives: int = 1,
-            output_dir: str = None,
-            ) -> None:
+        self,
+        parameters: ParameterSet,
+        stochastic: bool = False,
+        composition: Composition = None,
+        scalarisation: Scalarisation = None,
+        num_objectives: int = 1,
+        multi_objective: bool = False,
+        output_dir: str = None,
+    ) -> None:
         super().__init__()
         self.parameters = parameters
         self.output_dir = output_dir
         self.stochastic = stochastic
+        self.scalarisation = scalarisation
         self.composition = composition
         self.num_objectives = num_objectives
-        self.multi_objective = num_objectives > 1
+        self.multi_objective = multi_objective
         self.func_calls = 0
         self.begin_time = time.perf_counter()
         self.__mutex = Lock()
@@ -290,12 +194,14 @@ class GenericObjective(Objective):
             # Build header for function calls file
             with open(os.path.join(self.func_calls_file), 'w', encoding='utf8') as file:
                 file.write(f'{"Start Time /s":>15}\t{"Run Time /s":>15}')
-                if self.multi_objective:
+                # When we have multiple objectives, write each one
+                if self.num_objectives > 1:
                     for i in range(self.num_objectives):
                         file.write(f'\t{"Objective_" + str(i + 1):>15}')
                         if self.stochastic:
                             file.write(f'\t{"Variance_" + str(i + 1):>15}')
-                else:
+                # But we also write the scalarised objective if possible
+                if not self.multi_objective:
                     file.write(f'\t{"Objective":>15}')
                     if self.stochastic:
                         file.write(f'\t{"Variance":>15}')
@@ -304,12 +210,12 @@ class GenericObjective(Objective):
                 file.write(f'\t{"Hash":>64}\n')
 
     @abstractmethod
-    def _objective(self, values: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
+    def _objective(self, params: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
         """Abstract method for objective computation.
 
         Parameters
         ----------
-        values : np.ndarray
+        params : np.ndarray
             Set of parameters to evaluate the objective for.
         concurrent : bool, optional
             Whether this call may be concurrent to others, by default False.
@@ -320,12 +226,12 @@ class GenericObjective(Objective):
             Objective result.
         """
 
-    def __call__(self, values: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
+    def __call__(self, params: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
         """Objective computation for the outside world. Also handles output file writing.
 
         Parameters
         ----------
-        values : np.ndarray
+        params : np.ndarray
             Set of parameters to evaluate the objective for.
         concurrent : bool, optional
             Whether this call may be concurrent to others, by default False.
@@ -338,7 +244,7 @@ class GenericObjective(Objective):
         # Evaluate objective
         self.func_calls += 1
         begin_time = time.perf_counter()
-        objective_result = self._objective(values, concurrent=concurrent)
+        result = self._objective(params, concurrent=concurrent)
         end_time = time.perf_counter()
         # Update function call history file
         if self.output_dir:
@@ -346,24 +252,23 @@ class GenericObjective(Objective):
                 with open(os.path.join(self.func_calls_file), 'a', encoding='utf8') as file:
                     file.write(f'{begin_time - self.begin_time:>15.8e}\t')
                     file.write(f'{end_time - begin_time:>15.8e}\t')
-                    if self.multi_objective:
+                    # Write out each objective value
+                    if self.num_objectives > 1:
                         if self.stochastic:
-                            vals, vars = objective_result.scalarise_mo_stochastic(self.composition)
-                            for value, var in zip(vals, vars):
-                                file.write(f'{value:>15.8e}\t{var:>15.8e}\t')
+                            for val, var in zip(result.obj_values, result.obj_variances):
+                                file.write(f'{val:>15.8e}\t{var:>15.8e}\t')
                         else:
-                            for val in objective_result.scalarise_mo(self.composition):
+                            for val in result.obj_values:
                                 file.write(f'{val:>15.8e}\t')
-                    else:
+                    # Write out the scalarised objective value
+                    if not self.multi_objective:
+                        file.write(f'{result.scalar_value:>15.8e}\t')
                         if self.stochastic:
-                            value, var = objective_result.scalarise_stochastic(self.composition)
-                            file.write(f'{value:>15.8e}\t{var:>15.8e}\t')
-                        else:
-                            file.write(f'{objective_result.scalarise(self.composition):>15.8e}\t')
-                    for val in values:
+                            file.write(f'{result.scalar_variance:>15.8e}\t')
+                    for val in params:
                         file.write(f"{val:>15.6f}\t")
-                    file.write(f'{self.parameters.hash(values)}\n')
-        return objective_result
+                    file.write(f'{self.parameters.hash(params)}\n')
+        return result
 
     def plot_best(self) -> List[Figure]:
         """Plot the current best case.

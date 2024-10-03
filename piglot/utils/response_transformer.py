@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from piglot.utils.assorted import read_custom_module
 from piglot.solver.solver import OutputResult
+from piglot.utils.responses import interpolate_response
 
 
 class ResponseTransformer(ABC):
@@ -157,6 +158,37 @@ class AffineTransformResponse(ResponseTransformer):
             self.scale_x * response.time + self.offset_x,
             self.scale_y * response.data + self.offset_y,
         )
+
+
+class PointwiseErrors(ResponseTransformer):
+    """Compute the pointwise errors between the response and a reference."""
+
+    def __init__(self, reference_time: np.ndarray, reference_data: np.ndarray) -> None:
+        self.reference_time = reference_time
+        self.reference_data = reference_data
+
+    def transform(self, response: OutputResult) -> OutputResult:
+        """Transform the input data.
+
+        Parameters
+        ----------
+        response : OutputResult
+            Time and data points of the response.
+
+        Returns
+        -------
+        OutputResult
+            Transformed time and data points of the response.
+        """
+        # Interpolate response to the reference grid
+        resp_interp = interpolate_response(
+            response.get_time(),
+            response.get_data(),
+            self.reference_time,
+        )
+        # Compute normalised error
+        factor = np.mean(np.abs(self.reference_data))
+        return OutputResult(self.reference_time, (resp_interp - self.reference_data) / factor)
 
 
 AVAILABLE_RESPONSE_TRANSFORMERS: Dict[str, Type[ResponseTransformer]] = {
