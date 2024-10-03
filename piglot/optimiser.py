@@ -542,7 +542,7 @@ class ScalarOptimiser(Optimiser):
             lambda x, concurrent=False: self.objective(
                 self._denorm_params(x),
                 concurrent=concurrent
-            ).scalarise(),
+            ).values.item(),
             n_dim,
             n_iter,
             np.array([[-1.0, 1.0]]).repeat(n_dim, axis=0),
