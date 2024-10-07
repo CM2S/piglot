@@ -70,7 +70,7 @@ class ObjectiveResult:
     params: np.ndarray
     values: np.ndarray
     obj_values: np.ndarray
-    variances: Optional[np.ndarray] = None
+    covariances: Optional[np.ndarray] = None
     obj_variances: Optional[np.ndarray] = None
     scalar_value: Optional[float] = None
     scalar_variance: Optional[float] = None
@@ -107,12 +107,11 @@ class Scalarisation(ABC):
             if all(obj.bounds is not None for obj in objectives)
             else None
         )
-        print(self.bounds)
 
     def scalarise(
         self,
         values: np.ndarray,
-        variances: Optional[np.ndarray] = None,
+        covariances: Optional[np.ndarray] = None,
     ) -> Tuple[float, Optional[float]]:
         """Scalarise a set of objectives.
 
@@ -120,8 +119,8 @@ class Scalarisation(ABC):
         ----------
         values : np.ndarray
             Mean objective values.
-        variances : Optional[np.ndarray]
-            Optional variances of the objectives.
+        covariances : Optional[np.ndarray]
+            Optional covariance matrices of the objectives.
 
         Returns
         -------
@@ -130,17 +129,17 @@ class Scalarisation(ABC):
         """
         torch_mean, torch_var = self.scalarise_torch(
             torch.from_numpy(values),
-            torch.from_numpy(variances) if variances is not None else None,
+            torch.from_numpy(covariances) if covariances is not None else None,
         )
         if torch_var is None:
             return torch_mean.numpy(force=True), None
-        return torch_mean.numpy(force=True), torch_var.numpy(force=True)
+        return torch_mean.item(), torch_var.item()
 
     @abstractmethod
     def scalarise_torch(
         self,
         values: torch.Tensor,
-        variances: Optional[torch.Tensor] = None,
+        covariances: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """Scalarise a set of objectives with gradients.
 
@@ -148,8 +147,8 @@ class Scalarisation(ABC):
         ----------
         values : torch.Tensor
             Mean objective values.
-        variances : Optional[torch.Tensor]
-            Optional variances of the objectives.
+        covariances : Optional[torch.Tensor]
+            Optional covariance matrices of the objectives.
 
         Returns
         -------

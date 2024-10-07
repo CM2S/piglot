@@ -1,5 +1,5 @@
 """Main optimiser classes for using BoTorch with piglot"""
-from typing import Tuple, List, Union, Type, Dict
+from typing import Tuple, List, Type, Dict
 from multiprocessing.pool import ThreadPool as Pool
 import os
 import warnings
@@ -300,23 +300,12 @@ class BayesianBoTorch(Optimiser):
         return [point * (bound[:, 1] - bound[:, 0]) + bound[:, 0] for point in points]
 
     def _result_to_dataset(self, result: ObjectiveResult) -> Tuple[np.ndarray, np.ndarray]:
-        return (
-            result.values,
-            result.variances if self.objective.stochastic else np.zeros_like(result.values)
+        covariances = (
+            result.covariances
+            if self.objective.stochastic
+            else np.diag(np.zeros_like(result.values))
         )
-
-    def _value_to_scalar(
-        self,
-        value: Union[np.ndarray, torch.Tensor],
-        params: Union[np.ndarray, torch.Tensor],
-    ) -> float:
-        if self.objective.multi_objective:
-            raise RuntimeError("Cannot convert multi-objective value to scalar")
-        if self.objective.composition:
-            if isinstance(value, np.ndarray):
-                return self.objective.composition.composition(value, params)
-            return self.objective.composition.composition_torch(value, params).cpu().item()
-        return value.item()
+        return result.values, covariances
 
     def _composition(self, vals: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
         # Just negate the untransformed outcomes if no composition is available
@@ -427,6 +416,43 @@ class BayesianBoTorch(Optimiser):
             raise RuntimeError(f"Unknown acquisition {self.acquisition}")
         return acq
 
+    def _init_dataset(self, n_dim: int, bound: np.ndarray, init_shot: np.ndarray) -> BayesDataset:
+        # Can we load straight from the input file?
+        if self.load_file:
+            return BayesDataset.load(self.load_file)
+
+        # Evaluate initial shot and use it to infer number of dimensions
+        if not self.skip_initial:
+            init_result = self.objective(init_shot)
+            init_values, init_covariances = self._result_to_dataset(init_result)
+            n_outputs = len(init_values)
+
+        # If requested, sample some random points before starting (in parallel if possible)
+        random_points = self._get_random_points(self.n_initial, n_dim, self.seed, bound)
+        results = self._eval_candidates(random_points)
+
+        # Infer number of points to store when skipping initial shot
+        if self.skip_initial:
+            values, covariances = self._result_to_dataset(results[0])
+            n_outputs = len(values)
+
+        # Build initial dataset with the initial shot (if available)
+        dataset = BayesDataset(
+            n_dim,
+            n_outputs,
+            export=self.export,
+            device=self.device,
+            pca_variance=self.pca_variance,
+        )
+        if not self.skip_initial:
+            dataset.push(init_shot, init_values, init_covariances, init_result.scalar_value)
+
+        # Add random points to the dataset
+        for i, result in enumerate(results):
+            values, covariances = self._result_to_dataset(result)
+            dataset.push(random_points[i], values, covariances, result.scalar_value)
+        return dataset
+
     def _optimise(
         self,
         n_dim: int,
@@ -465,57 +491,24 @@ class BayesianBoTorch(Optimiser):
         self.batch_size = self.batch_size or 128
         self.num_fantasies = self.num_fantasies or 16
 
-        # Evaluate initial shot and use it to infer number of dimensions
-        if not self.skip_initial:
-            init_result = self.objective(init_shot)
-            init_values, init_variances = self._result_to_dataset(init_result)
-            n_outputs = len(init_values)
-
-        # If requested, sample some random points before starting (in parallel if possible)
-        random_points = self._get_random_points(self.n_initial, n_dim, self.seed, bound)
-        results = self._eval_candidates(random_points)
-
-        # Infer number of points to store when skipping initial shot
-        if self.skip_initial:
-            values, variances = self._result_to_dataset(results[0])
-            n_outputs = len(values)
-
-        # Build initial dataset with the initial shot (if available)
-        dataset = BayesDataset(
-            n_dim,
-            n_outputs,
-            export=self.export,
-            device=self.device,
-            pca_variance=self.pca_variance,
-        )
-        if not self.skip_initial:
-            dataset.push(init_shot, init_values, init_variances)
-
-        # Add random points to the dataset
-        for i, result in enumerate(results):
-            values, variances = self._result_to_dataset(result)
-            dataset.push(random_points[i], values, variances)
-
-        # If specified, load data from the input file
-        if self.load_file:
-            dataset.load(self.load_file)
+        # Build initial dataset
+        dataset = self._init_dataset(n_dim, bound, init_shot)
 
         # Build test dataset (in parallel if possible)
-        test_dataset = BayesDataset(n_dim, n_outputs, device=self.device)
+        test_dataset = BayesDataset(n_dim, dataset.n_outputs, device=self.device)
         if self.n_test > 0:
             test_points = self._get_random_points(self.n_test, n_dim, self.seed + 1, bound)
             test_results = self._eval_candidates(test_points)
             for i, result in enumerate(test_results):
-                values, variances = self._result_to_dataset(result)
-                test_dataset.push(test_points[i], values, variances)
+                values, covariances = self._result_to_dataset(result)
+                test_dataset.push(test_points[i], values, covariances, result.scalar_value)
 
         # Find current best point to return to the driver
         if self.objective.multi_objective:
             best_value = self._update_mo_data(dataset)
             best_params = None
         else:
-            best_params, best_result = dataset.min(self._value_to_scalar)
-            best_value = self._value_to_scalar(best_result, best_params)
+            best_params, best_value = dataset.min()
         self._progress_check(0, best_value, best_params)
 
         # Optimisation loop
@@ -545,21 +538,17 @@ class BayesianBoTorch(Optimiser):
             results = self._eval_candidates(candidates)
 
             # Update dataset
-            results_batch = []
+            values_batch = []
             for i, result in enumerate(results):
-                values, variances = self._result_to_dataset(result)
-                results_batch.append(values)
-                dataset.push(candidates[i, :], values, variances)
+                values, covariances = self._result_to_dataset(result)
+                values_batch.append(result.scalar_value)
+                dataset.push(candidates[i, :], values, covariances, result.scalar_value)
 
             # Find best observation for this batch
             if self.objective.multi_objective:
                 best_value = self._update_mo_data(dataset)
                 best_params = None
             else:
-                values_batch = [
-                    self._value_to_scalar(values, candidates[i, :])
-                    for i, values in enumerate(results_batch)
-                ]
                 best_idx = np.argmin(values_batch)
                 best_value = values_batch[best_idx]
                 best_params = candidates[best_idx, :]
@@ -586,6 +575,5 @@ class BayesianBoTorch(Optimiser):
             best_result = self._update_mo_data(dataset)
             best_params = None
         else:
-            best_params, best_result = dataset.min(self._value_to_scalar)
-            best_result = self._value_to_scalar(best_result, best_params)
+            best_params, best_result = dataset.min()
         return best_params, best_result

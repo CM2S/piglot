@@ -239,6 +239,21 @@ class ConcatUtility:
         """
         return torch.cat(responses, dim=-1)
 
+    def concat_covar_torch(self, covars: List[torch.Tensor]) -> torch.Tensor:
+        """Concatenate a list of covariance matrices (with gradients).
+
+        Parameters
+        ----------
+        covars : List[torch.Tensor]
+            List of covariance matrices.
+
+        Returns
+        -------
+        torch.Tensor
+            Flattened covariance matrices.
+        """
+        return torch.block_diag(*covars)
+
     def split_torch(self, data: torch.Tensor) -> List[torch.Tensor]:
         """Split a vector containing a set of responses with gradients.
 
@@ -268,6 +283,21 @@ class ConcatUtility:
             Flattened responses.
         """
         return self.concat_torch([torch.from_numpy(res) for res in responses]).numpy(force=True)
+
+    def concat_covar(self, covars: List[np.ndarray]) -> np.ndarray:
+        """Concatenate a list of covariance matrices.
+
+        Parameters
+        ----------
+        covars : List[np.ndarray]
+            List of covariance matrices.
+
+        Returns
+        -------
+        np.ndarray
+            Flattened covariance matrices.
+        """
+        return self.concat_covar_torch([torch.from_numpy(cov) for cov in covars]).numpy(force=True)
 
     def split(self, data: np.ndarray) -> List[np.ndarray]:
         """Split a vector containing a set of responses.
