@@ -1,9 +1,13 @@
 """Dataset classes for optimising with BoTorch."""
 from __future__ import annotations
-from typing import Tuple, Callable
+from typing import Tuple, Type, TypeVar, Union
 import copy
 import numpy as np
 import torch
+
+
+T = TypeVar('T', bound='BayesDataset')
+
 
 class Standardiser:
     """Standardisation transformation."""
@@ -23,7 +27,7 @@ class Standardiser:
             Data to fit the standardisation transformation to.
         """
         self.mean = torch.mean(data, dim=-2)
-        self.stds = torch.std(data, dim=-2)
+        self.stds = torch.std(data, dim=-2) if data.shape[-2] > 1 else torch.zeros_like(self.mean)
         y_abs_avg = torch.mean(torch.abs(data), dim=-2)
         self.mask = torch.abs(self.stds / y_abs_avg) > self.std_tol
 
@@ -204,15 +208,15 @@ class BayesDataset:
     """Dataset class for multi-outcome data."""
 
     def __init__(
-            self,
-            n_dim: int,
-            n_outputs: int,
-            export: str = None,
-            dtype: torch.dtype = torch.float64,
-            std_tol: float = 1e-6,
-            pca_variance: float = None,
-            device: str = "cpu",
-            ) -> None:
+        self,
+        n_dim: int,
+        n_outputs: int,
+        export: str = None,
+        dtype: torch.dtype = torch.float64,
+        std_tol: float = 1e-6,
+        pca_variance: float = None,
+        device: str = "cpu",
+    ) -> None:
         self.dtype = dtype
         self.n_points = 0
         self.n_dim = n_dim
@@ -220,6 +224,8 @@ class BayesDataset:
         self.params = torch.empty((0, n_dim), dtype=dtype, device=device)
         self.values = torch.empty((0, n_outputs), dtype=dtype, device=device)
         self.variances = torch.empty((0, n_outputs), dtype=dtype, device=device)
+        self.covariances = torch.empty((0, n_outputs, n_outputs), dtype=dtype, device=device)
+        self.objectives = torch.empty((0,), dtype=dtype, device=device)
         self.export = export
         self.std_tol = std_tol
         self.pca_variance = pca_variance
@@ -227,7 +233,7 @@ class BayesDataset:
         self.pca = PCA(pca_variance) if pca_variance is not None else None
         self.device = device
 
-    def __update_stats(self) -> None:
+    def update_stats(self) -> None:
         """Update the statistics of the dataset."""
         values = torch.clone(self.values)
         # Update PCA transformation
@@ -237,21 +243,27 @@ class BayesDataset:
         # Update standardisation transformation
         self.standardiser.fit(values)
 
-    def load(self, filename: str) -> None:
+    @classmethod
+    def load(cls: Type[T], filename: str) -> T:
         """Load data from a given input file.
 
         Parameters
         ----------
         filename : str
             Path to the file to read from.
+
+        Returns
+        -------
+        BayesDataset
+            Dataset loaded from the file.
         """
-        joint = torch.load(filename, map_location=self.device)
-        idx1 = self.n_dim
-        idx2 = self.n_dim + self.n_outputs
-        for point in joint:
-            point_np = point.numpy()
-            self.push(point_np[:idx1], point_np[idx1:idx2], point_np[idx2:])
-        self.__update_stats()
+        data: T = torch.load(filename)
+        # Rebuild standardiser and PCA
+        data.standardiser = Standardiser(data.std_tol)
+        data.pca = PCA(data.pca_variance) if data.pca_variance is not None else None
+        data.update_stats()
+        # Send to the correct device before returning
+        return data.to(data.device)
 
     def save(self, filename: str) -> None:
         """Save all dataset data to a file.
@@ -261,15 +273,14 @@ class BayesDataset:
         filename : str
             Output file path.
         """
-        # Build a joint tensor with all data
-        joint = torch.cat([self.params, self.values, self.variances], dim=1)
-        torch.save(joint, filename)
+        torch.save(self, filename)
 
     def push(
         self,
         params: np.ndarray,
         results: np.ndarray,
-        variance: np.ndarray,
+        covariance: np.ndarray,
+        objective: Union[float, None],
     ) -> None:
         """Add a point to the dataset.
 
@@ -282,12 +293,17 @@ class BayesDataset:
         """
         torch_params = torch.tensor(params, dtype=self.dtype, device=self.device)
         torch_value = torch.tensor(results, dtype=self.dtype, device=self.device)
-        torch_variance = torch.tensor(variance, dtype=self.dtype, device=self.device)
+        torch_covariance = torch.tensor(covariance, dtype=self.dtype, device=self.device)
+        torch_variance = torch.diagonal(torch_covariance)
         self.params = torch.cat([self.params, torch_params.unsqueeze(0)], dim=0)
         self.values = torch.cat([self.values, torch_value.unsqueeze(0)], dim=0)
         self.variances = torch.cat([self.variances, torch_variance.unsqueeze(0)], dim=0)
+        self.covariances = torch.cat([self.covariances, torch_covariance.unsqueeze(0)], dim=0)
+        if objective is not None:
+            torch_objective = torch.tensor([objective], dtype=self.dtype, device=self.device)
+            self.objectives = torch.cat([self.objectives, torch_objective], dim=0)
         self.n_points += 1
-        self.__update_stats()
+        self.update_stats()
         # Update the dataset file after every push
         if self.export is not None:
             self.save(self.export)
@@ -333,25 +349,16 @@ class BayesDataset:
             values = self.pca.untransform(values)
         return values
 
-    def min(
-        self,
-        transformer: Callable[[torch.Tensor, torch.Tensor], float],
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Return the minimum value of the dataset, according to a given transformation.
-
-        Parameters
-        ----------
-        transformer : Callable[[torch.Tensor], float]
-            Transformation to apply to the dataset.
+    def min(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Return the minimum objective value of the dataset.
 
         Returns
         -------
         Tuple[np.ndarray, np.ndarray]
-            Parameters and values for the minimum point.
+            Parameters and objective value for the minimum point.
         """
-        values = [transformer(value, params) for params, value in zip(self.params, self.values)]
-        idx = np.argmin(values)
-        return self.params[idx, :].cpu().numpy(), self.values[idx, :].cpu().numpy()
+        idx = torch.argmin(self.objectives)
+        return self.params[idx, :].cpu().numpy(), self.objectives[idx].cpu().numpy()
 
     def to(self, device: str) -> BayesDataset:
         """Move the dataset to a given device.
@@ -370,6 +377,8 @@ class BayesDataset:
         new_dataset.params = self.params.to(device)
         new_dataset.values = self.values.to(device)
         new_dataset.variances = self.variances.to(device)
+        new_dataset.covariances = self.covariances.to(device)
+        new_dataset.objectives = self.objectives.to(device)
         new_dataset.standardiser = self.standardiser.to(device)
         if self.pca is not None:
             new_dataset.pca = self.pca.to(device)

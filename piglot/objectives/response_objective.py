@@ -148,8 +148,12 @@ class ResponseSingleObjective(IndividualObjective, ABC):
             self.quantity.reduce(result.time, result.data, params)
             for result in self._extract_responses(raw_results)
         ]
+        # Only compute the variance if we have more than one response
         # TODO: add different stochastic models
-        return np.mean(values), np.var(values) / len(values)
+        return (
+            np.mean(values),
+            np.var(values) / len(values) if len(values) > 1 else 0.0,
+        )
 
     def latent_space(self, raw_results: Dict[str, OutputResult]) -> Tuple[np.ndarray, np.ndarray]:
         """Compute latent space representation of the given results (for composite objectives).
@@ -168,8 +172,14 @@ class ResponseSingleObjective(IndividualObjective, ABC):
             self.flatten_utility.flatten(result.time, result.data)
             for result in self._extract_responses(raw_results)
         ])
+        # Only compute the covariance if we have more than one response
         # TODO: add different stochastic models
-        return np.mean(latent_space, axis=0), np.var(latent_space, axis=0) / latent_space.shape[0]
+        covariance = (
+            np.cov(latent_space.T) / latent_space.shape[0]
+            if latent_space.shape[0] > 1
+            else np.zeros((latent_space.shape[1], latent_space.shape[1]))
+        )
+        return np.mean(latent_space, axis=0), covariance
 
     def evaluate_from_latent_space(
         self,
@@ -279,7 +289,7 @@ class ResponseComposition(Composition, ABC):
         Returns
         -------
         Tuple[np.ndarray, np.ndarray]
-            Latent space representation of the results: mean and variance.
+            Latent space representation of the results: mean and covariance.
         """
 
 
@@ -329,7 +339,7 @@ class FullComposition(ResponseComposition):
         Returns
         -------
         Tuple[np.ndarray, np.ndarray]
-            Latent space representation of the results: mean and variance.
+            Latent space representation of the results: mean and covariance.
         """
         latent_space = [
             objective.latent_space(raw_responses)
@@ -337,7 +347,7 @@ class FullComposition(ResponseComposition):
         ]
         return (
             self.concat.concat([mean for mean, _ in latent_space]),
-            self.concat.concat([var for _, var in latent_space]),
+            self.concat.concat_covar([var for _, var in latent_space]),
         )
 
 
@@ -378,15 +388,15 @@ class ScalarisationComposition(ResponseComposition):
         Returns
         -------
         Tuple[np.ndarray, np.ndarray]
-            Latent space representation of the results: mean and variance.
+            Latent space representation of the results: mean and covariance.
         """
         objectives = [
             objective.evaluate(params, raw_responses)
             for objective in self.objectives
         ]
         return (
-            np.array([mean for mean, _ in objectives]),
-            np.array([var for _, var in objectives]),
+            self.concat.concat([np.array([mean]) for mean, _ in objectives]),
+            self.concat.concat_covar([np.array([var]) for _, var in objectives]),
         )
 
 
@@ -405,9 +415,13 @@ class ResponseObjective(GenericObjective):
         full_composite: bool = True,
         transformers: Dict[str, ResponseTransformer] = None,
     ) -> None:
-        # Sanitise the scalarisation: if we have a single objective, we must use a sum scalarisation
-        if scalarisation is None and len(objectives) == 1:
-            scalarisation = SumScalarisation(objectives)
+        # Sanitise the scalarisation
+        if scalarisation is None:
+            # Everything fine if we just have a single objective: use a sum scalarisation
+            if len(objectives) == 1:
+                scalarisation = SumScalarisation(objectives)
+            elif composite and not full_composite:
+                raise ValueError('Multi-objective composite problems require full composition')
         # Get the type of composition to use
         composite_type = FullComposition if full_composite else ScalarisationComposition
         super().__init__(
@@ -463,18 +477,18 @@ class ResponseObjective(GenericObjective):
         # (ii) non-composite multi-objective, return the objective values
         # (iii) non-composite single-objective, return the scalarised objective
         if self.composition is not None:
-            optim_values, optim_variances = self.composition.get_latent_space(params, raw_responses)
+            optim_values, optim_covar = self.composition.get_latent_space(params, raw_responses)
         elif self.multi_objective:
-            optim_values, optim_variances = obj_values, obj_variances
+            optim_values, optim_covar = obj_values, np.diag(obj_variances)
         else:
-            optim_values, optim_variances = np.array([scalar_value]), np.array([scalar_variance])
+            optim_values, optim_covar = np.array([scalar_value]), np.array([[scalar_variance]])
         # Return the objective result: only return the variances if we are stochastic
         return ObjectiveResult(
             params,
             optim_values,
             obj_values,
             scalar_value=scalar_value,
-            variances=optim_variances if self.stochastic else None,
+            covariances=optim_covar if self.stochastic else None,
             obj_variances=obj_variances if self.stochastic else None,
             scalar_variance=scalar_variance if self.stochastic else None,
         )
