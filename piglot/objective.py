@@ -111,7 +111,7 @@ class Scalarisation(ABC):
     def scalarise(
         self,
         values: np.ndarray,
-        covariances: Optional[np.ndarray] = None,
+        variances: Optional[np.ndarray] = None,
     ) -> Tuple[float, Optional[float]]:
         """Scalarise a set of objectives.
 
@@ -119,8 +119,8 @@ class Scalarisation(ABC):
         ----------
         values : np.ndarray
             Mean objective values.
-        covariances : Optional[np.ndarray]
-            Optional covariance matrices of the objectives.
+        variances : Optional[np.ndarray]
+            Optional variances of the objectives.
 
         Returns
         -------
@@ -129,7 +129,7 @@ class Scalarisation(ABC):
         """
         torch_mean, torch_var = self.scalarise_torch(
             torch.from_numpy(values),
-            torch.from_numpy(covariances) if covariances is not None else None,
+            torch.from_numpy(variances) if variances is not None else None,
         )
         if torch_var is None:
             return torch_mean.numpy(force=True), None
@@ -139,7 +139,7 @@ class Scalarisation(ABC):
     def scalarise_torch(
         self,
         values: torch.Tensor,
-        covariances: Optional[torch.Tensor] = None,
+        variances: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """Scalarise a set of objectives with gradients.
 
@@ -147,8 +147,8 @@ class Scalarisation(ABC):
         ----------
         values : torch.Tensor
             Mean objective values.
-        covariances : Optional[torch.Tensor]
-            Optional covariance matrices of the objectives.
+        variances : Optional[torch.Tensor]
+            Optional variances of the objectives.
 
         Returns
         -------
@@ -247,6 +247,7 @@ class GenericObjective(Objective):
     def __init__(
         self,
         parameters: ParameterSet,
+        noisy: bool = False,
         stochastic: bool = False,
         composition: Composition = None,
         scalarisation: Scalarisation = None,
@@ -257,6 +258,7 @@ class GenericObjective(Objective):
         super().__init__()
         self.parameters = parameters
         self.output_dir = output_dir
+        self.noisy = noisy
         self.stochastic = stochastic
         self.scalarisation = scalarisation
         self.composition = composition

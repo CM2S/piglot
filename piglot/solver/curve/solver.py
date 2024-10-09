@@ -69,7 +69,10 @@ class CurveSolver(Solver):
         expression = sympy.lambdify(symbs, expression_str)
         # Evaluate the expression on the grid
         grid = np.linspace(input_data.bounds[0], input_data.bounds[1], input_data.points)
-        curve = [expression(**{input_data.parametric: x}) for x in grid]
+        curve = [
+            expression(**{input_data.parametric: x}) + case.input_data.noise * np.random.random()
+            for x in grid
+        ]
         # Write out the curve
         output_file = os.path.splitext(input_data.input_file)[0] + '.out'
         with open(output_file, 'w', encoding='utf8') as file:
@@ -178,7 +181,8 @@ class CurveSolver(Solver):
             parametric = case_config['parametric']
             bounds = case_config['bounds']
             points = int(case_config['points']) if 'points' in case_config else 100
-            input_data = CurveInputData(case_name, expression, parametric, bounds, points)
+            noise = float(case_config['noise']) if 'noise' in case_config else 0.0
+            input_data = CurveInputData(case_name, expression, parametric, bounds, points, noise)
             cases.append(Case(input_data, {case_name: Curve()}))
         # Return the solver
         return CurveSolver(cases, parameters, output_dir, parallel=parallel, tmp_dir=tmp_dir)

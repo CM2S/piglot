@@ -9,13 +9,17 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.integrate import trapezoid
-from scipy.spatial import ConvexHull
 from PIL import Image
 import torch
+from botorch.utils.sampling import draw_sobol_normal_samples
 from piglot.parameter import read_parameters
 from piglot.objectives import read_objective
 from piglot.utils.surrogate import get_model, optmise_posterior_mean
 from piglot.utils.yaml_parser import parse_config_file
+from piglot.optimisers.botorch.dataset import BayesDataset
+from piglot.optimisers.botorch.model import build_gp_model
+from piglot.optimisers.botorch.composition import BoTorchComposition
+from piglot.optimisers.botorch.acquisitions import build_and_optimise_acquisition
 
 
 def cumulative_regret(values: np.ndarray, x_grid: np.ndarray) -> np.ndarray:
@@ -305,15 +309,127 @@ def plot_gp(args):
         with torch.no_grad():
             posterior = model.posterior(x.unsqueeze(1))
             mean = posterior.mean.squeeze()
-            variance = posterior.variance.squeeze()
+            f_lb, f_ub = posterior.mvn.confidence_region()
+            noise_posterior = model.posterior(x.unsqueeze(1), observation_noise=True)
+            y_lb, y_ub = noise_posterior.mvn.confidence_region()
         axis.plot(x, mean, label=f'{name}: Mean')
-        axis.fill_between(x, mean - variance.sqrt(), mean + variance.sqrt(), alpha=0.5,
-                          label=f'{name}: Std. dev.')
+        axis.fill_between(x, f_lb, f_ub, alpha=0.5, label=f'{name}: f CI 95%')
+        axis.fill_between(x, y_lb, y_ub, alpha=0.5, label=f'{name}: y CI 95%')
         if 'variances' in data_dict:
-            axis.errorbar(param_values, values, yerr=np.sqrt(variances), color='black', fmt='o')
+            axis.errorbar(param_values, values, yerr=2 * np.sqrt(variances), color='black', fmt='o')
         else:
             axis.scatter(param_values, values, color='black')
         axis.set_xlim(x_min, x_max)
+    axis.legend()
+    axis.grid()
+    fig.tight_layout()
+    if args.save_fig:
+        fig.savefig(args.save_fig)
+    else:
+        plt.show()
+    plt.close()
+
+
+def plot_mcgp(args):
+    """Driver for plotting a Gaussian process regression with Monte Carlo samplers.
+
+    Parameters
+    ----------
+    args : dict
+        Passed arguments.
+    """
+    # Build piglot problem
+    config = parse_config_file(args.config)
+    parameters = read_parameters(config)
+    if len(parameters) != 1:
+        raise ValueError("Can only plot a Gaussian process regression for a single parameter.")
+    objective = read_objective(config["objective"], parameters, config["output"])
+    data = objective.get_history()
+    fig, axis = plt.subplots()
+    axis: plt.Axes = axis
+    x_min = min(par.lbound for par in parameters)
+    x_max = max(par.ubound for par in parameters)
+
+    # Load objective data
+    data_dict = data[list(data.keys())[0]]
+    values = data_dict['values']
+    param_values = data_dict['params']
+    variances = data_dict['variances'] if 'variances' in data_dict else None
+
+    # Load dataset
+    dataset = BayesDataset.load(os.path.join(config["output"], 'dataset.pt'))
+    infer_noise = objective.noisy and not objective.stochastic
+    noise_model = config['optimiser'].get('noise_model', 'homoscedastic')
+    model = build_gp_model(dataset, infer_noise, noise_model)
+    composition = BoTorchComposition(model, dataset, objective)
+
+    # Build the acquisition function for the best value
+    options = config['optimiser']
+    options.pop('name')
+    _, best = build_and_optimise_acquisition(
+        'qsr',
+        model,
+        dataset,
+        parameters,
+        composition,
+        objective.noisy,
+        **options,
+    )
+
+    # Evaluate the model
+    x = torch.linspace(x_min, x_max, 256, dtype=dataset.dtype, device=dataset.device)
+    with torch.no_grad():
+        x_joint = x.view(-1, 1, 1)
+        # Posterior for f
+        f_samples = -composition.from_inputs(x_joint, args.num_samples, seed=0).squeeze()
+        f_mean = f_samples.mean(dim=0)
+        f_lb, f_ub = f_samples.quantile(0.025, dim=0), f_samples.quantile(0.975, dim=0)
+
+        # Posterior for y
+        y_samples = -composition.from_inputs(
+            x_joint,
+            args.num_samples,
+            seed=0,
+            observation_noise=True,
+        ).squeeze()
+        y_lb, y_ub = y_samples.quantile(0.025, dim=0), y_samples.quantile(0.975, dim=0)
+
+        # Observations
+        std_values, std_vars = dataset.transform_outcomes()
+        z_samples = draw_sobol_normal_samples(std_values.shape[-1], args.num_samples, seed=0)
+        phat_samples = std_values + z_samples.unsqueeze(1) * std_vars.sqrt()
+        obs_samples = -composition.from_model_samples(phat_samples, dataset.params)
+        obs_mean = obs_samples.mean(dim=0)
+        obs_lb, obs_ub = obs_samples.quantile(0.025, dim=0), obs_samples.quantile(0.975, dim=0)
+        obs_bounds = torch.stack([obs_mean - obs_lb, obs_ub - obs_mean], dim=0).clamp_min(0)
+
+    p, = axis.plot(x, f_mean, label='Mean')
+    axis.fill_between(x, f_lb, f_ub, alpha=0.6, color=p.get_color(), label='f CI 95%')
+    axis.fill_between(x, y_lb, y_ub, alpha=0.3, color=p.get_color(), label='y CI 95%')
+    axis.axhline(-best.item(), color='black', linestyle='--', label='Best')
+    if variances is not None:
+        axis.errorbar(
+            dataset.params[:, 0],
+            obs_mean,
+            yerr=obs_bounds,
+            fmt='o',
+            capsize=6.0,
+            elinewidth=2.0,
+            label='MC Posterior',
+        )
+        axis.errorbar(
+            param_values,
+            values,
+            yerr=2 * np.sqrt(variances),
+            fmt='+',
+            capsize=6.0,
+            elinewidth=1.0,
+            label='Observations',
+        )
+    else:
+        axis.scatter(dataset.params[:, 0], obs_mean, marker='o', label='MC Posterior')
+        axis.scatter(param_values, values, marker='+', label='Observations')
+    axis.set_xlim(x_min, x_max)
     axis.legend()
     axis.grid()
     fig.tight_layout()
@@ -352,12 +468,8 @@ def plot_pareto(args):
             nondominated.append((point, variances[i, :] if has_variance else None))
         else:
             dominated.append((point, variances[i, :] if has_variance else None))
-    # Build the Pareto hull
-    hull = ConvexHull(pareto)
-    for simplex in hull.simplices:
-        # Hacky: filter the line between the two endpoints (assuming the list is sorted by x)
-        if abs(simplex[0] - simplex[1]) < pareto.shape[0] - 1:
-            ax.plot(pareto[simplex, 0], pareto[simplex, 1], 'r', ls='--')
+    # Plot the Pareto hull
+    ax.plot(pareto[:, 0], pareto[:, 1], 'r', ls='--')
     # Plot the points
     if has_variance:
         ax.errorbar(
@@ -656,6 +768,38 @@ def main(passed_args: List[str] = None):
         help=("Max number of calls to plot."),
     )
     sp_gp.set_defaults(func=plot_gp)
+
+    # Gaussian process with Monte Carlo plotting
+    sp_mcgp = subparsers.add_parser(
+        'mcgp',
+        help='plot a Gaussian process regression with Monte Carlo sampling',
+        description=("Plot a Gaussian process regression with Monte Carlo sampling. This must be "
+                     "executed in the same path as the running piglot instance."),
+    )
+    sp_mcgp.add_argument(
+        'config',
+        type=str,
+        help="Path for the used or generated configuration file.",
+    )
+    sp_mcgp.add_argument(
+        '--save_fig',
+        default=None,
+        type=str,
+        help=("Path to save the generated figure. If used, graphical output is skipped."),
+    )
+    sp_mcgp.add_argument(
+        '--max_calls',
+        default=None,
+        type=int,
+        help=("Max number of calls to plot."),
+    )
+    sp_mcgp.add_argument(
+        '--num_samples',
+        default=512,
+        type=int,
+        help=("Number of samples for the Monte Carlo integration."),
+    )
+    sp_mcgp.set_defaults(func=plot_mcgp)
 
     # Pareto front plotting
     sp_pareto = subparsers.add_parser(

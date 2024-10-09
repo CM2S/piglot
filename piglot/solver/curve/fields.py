@@ -13,19 +13,21 @@ class CurveInputData(InputData):
     """Container for dummy input data."""
 
     def __init__(
-            self,
-            case_name: str,
-            expression: str,
-            parametric: str,
-            bounds: Tuple[float, float],
-            points: int,
-            ) -> None:
+        self,
+        case_name: str,
+        expression: str,
+        parametric: str,
+        bounds: Tuple[float, float],
+        points: int,
+        noise: float = 0.0,
+    ) -> None:
         super().__init__()
         self.case_name = case_name
         self.expression = expression
         self.parametric = parametric
         self.bounds = bounds
         self.points = points
+        self.noise = noise
         self.input_file: str = None
 
     def prepare(
