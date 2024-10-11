@@ -434,9 +434,9 @@ class Optimiser(ABC):
             extra_info = ', '.join(f'{key}: {value}' for key, value in extra_info.items())
         # Update progress bar
         if self.pbar is not None:
-            info = f'Loss: {self.best_value:6.4e}'
+            info = f'Loss: {self.best_value:6.3e}'
             if self.objective.noisy and self.conf_interval and all(self.conf_interval):
-                info += f' ± {(self.conf_interval[1] - self.conf_interval[0]) / 2:6.4e}'
+                info += f' ± {(self.conf_interval[1] - self.conf_interval[0]) / 2:6.3e}'
                 # info += f' [{self.conf_interval[0]:5.2e}, {self.conf_interval[1]:5.2e}] (95%)'
             self.pbar.set_postfix_str(info + (f' ({extra_info})' if extra_info else ''))
             if i_iter > 0:

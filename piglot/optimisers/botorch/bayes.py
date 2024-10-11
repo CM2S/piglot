@@ -12,6 +12,7 @@ from botorch.models.converter import batched_to_model_list
 from botorch.utils.multi_objective.box_decompositions.non_dominated import (
     FastNondominatedPartitioning,
 )
+from botorch.sampling.qmc import MultivariateNormalQMCEngine
 from piglot.parameter import ParameterSet
 from piglot.objective import (
     Objective,
@@ -50,6 +51,36 @@ def get_default_torch_device() -> str:
         Name of the default PyTorch device.
     """
     return str(torch.tensor([0.0]).device)
+
+
+def draw_multivariate_samples(
+    means: torch.Tensor,
+    covariances: torch.Tensor,
+    num_samples: int,
+    seed: int = None,
+) -> torch.Tensor:
+    """Draw samples from a multivariate normal distribution.
+
+    Parameters
+    ----------
+    means : torch.Tensor
+        Means of the distribution (num_batch x num_dim).
+    covariances : torch.Tensor
+        Covariance matrices of the distribution (num_batch x num_dim x num_dim).
+    num_samples : int
+        Number of samples to draw.
+    seed : int, optional
+        Random seed, by default None
+
+    Returns
+    -------
+    torch.Tensor
+        Samples from the distribution (num_samples x num_batch x num_dim).
+    """
+    return torch.stack([
+        MultivariateNormalQMCEngine(mean, cov, seed=seed).draw(num_samples)
+        for mean, cov in zip(means, covariances)
+    ], dim=1)
 
 
 @dataclass
@@ -357,6 +388,12 @@ class BoTorchStateData:
                     -torch.quantile(samples, 0.975).item(),
                     -torch.quantile(samples, 0.025).item(),
                 )
+            # Extract signal-to-noise ratio
+            samples = draw_multivariate_samples(self.dataset.values, self.dataset.covariances, 1024)
+            obj_samples = self.composition.from_original_samples(samples, self.dataset.params)
+            obj_var = obj_samples.var(dim=0).mean().item()
+            mean_var = obj_samples.mean(dim=0).var().item()
+            self.extra_info["SNR"] = f'{10 * np.log10(mean_var / obj_var):.1f} dB'
 
         # Under exact single-objective optimisation, return the best value found
         else:
