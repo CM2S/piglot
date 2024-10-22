@@ -161,12 +161,68 @@ class MinScalarisation(MonteCarloScalarisation):
         """
         return torch.amin(values * self.weights, dim=-1)
 
+class StchScalarisation(MonteCarloScalarisation):
+    """Scalarise using the smooth approximation of the Tchebycheff scalarisation function."""
+
+    def __init__(
+        self,
+        objectives: List[IndividualObjective],
+        num_samples: int = 512,
+        seed: Optional[int] = None,
+        u: float = 1e-2,
+    ):
+        super().__init__(objectives, num_samples, seed)
+        self.u = float(u)
+
+        # Sanitise the weights
+        if torch.sum(self.weights) != 1.0:
+            raise ValueError(f'Weights must sum to 1.0, got {torch.sum(self.weights, dim=-1)}.')
+
+    @staticmethod
+    def normalise_objective(values: torch.Tensor, bounds: torch.Tensor) -> torch.Tensor:
+        """Normalise the objectives.
+
+        Parameters
+        ----------
+        values : torch.Tensor
+            values to normalise.
+        bounds : torch.Tensor
+            Bounds for the values.
+
+        Returns
+        -------
+        torch.Tensor
+            Normalised values.
+        """
+        # Normalise the objectives
+        return (values - bounds[:, 0]) / (bounds[:, 1] - bounds[:, 0])
+
+    def _scalarise_sample(self, values: torch.Tensor) -> torch.Tensor:
+        """Scalarise a batch of objectives samples for Monte Carlo estimation of variance.
+
+        Parameters
+        ----------
+        values : torch.Tensor
+            A "num_samples x (batch_shape) x num_objectives" tensor with the objective values.
+
+        Returns
+        -------
+        torch.Tensor
+            A "num_samples x (batch_shape)" tensor with the scalarised objective values.
+        """
+        # Calculate the normalised objective values
+        norm_objective = self.normalise_objective(values, self.bounds)
+        # Calculate the initial Tchebycheff function value
+        tch_values = (norm_objective * self.weights) / self.u
+        return torch.logsumexp(tch_values, dim=-1) * self.u
+
 
 AVALIABLE_SCALARISATIONS: Dict[str, Type[Scalarisation]] = {
     'mean': MeanScalarisation,
     'sum': SumScalarisation,
     'max': MaxScalarisation,
     'min': MinScalarisation,
+    'stch': StchScalarisation,
 }
 
 
