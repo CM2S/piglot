@@ -35,7 +35,7 @@ class qFantasyAcqusition(MCAcquisitionFunction):
         inner_sampler: Optional[MCSampler] = None,
         X_pending: Optional[Tensor] = None,
         observation_noise: bool = False,
-        noiseless_fantasies: bool = False,
+        noiseless_fantasies: bool = True,
         final_reduction: Optional[Callable[[Tensor, int], Tensor]] = None,
         q_reduction: Optional[Callable[[Tensor, int], Tensor]] = None,
         input_transform: Optional[Callable[[Tensor], Tensor]] = None,
