@@ -373,6 +373,7 @@ class BoTorchStateData:
                 acquisition,
                 parameters,
                 self.dataset,
+                max_q=1,
                 **self.settings.get_dict(),
             )
             self.best_params = candidates[0, :].cpu().numpy()

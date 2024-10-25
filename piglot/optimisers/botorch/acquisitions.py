@@ -1,5 +1,5 @@
 """Module for acquisition functions with BoTorch."""
-from typing import Dict, Type, Union, Tuple, Any, List
+from typing import Dict, Type, Union, Tuple, Any, List, Optional
 from functools import partial
 import torch
 from botorch.acquisition import (
@@ -247,6 +247,7 @@ def optimise_acquisition(
     acq: AcquisitionFunction,
     parameters: ParameterSet,
     dataset: BayesDataset,
+    max_q: Optional[int] = None,
     **options: Any,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Optimise the given acquisition function.
@@ -259,6 +260,8 @@ def optimise_acquisition(
         Parameters to optimise.
     dataset : BayesDataset
         Dataset to use for the optimisation.
+    max_q : int
+        Maximum number of candidates to generate, optional.
     options : Any
         Additional options for the optimisation.
 
@@ -288,7 +291,7 @@ def optimise_acquisition(
     candidates, acq_val = optimize_acqf(
         acq,
         bounds=bounds,
-        q=q,
+        q=q if max_q is None else min(q, max_q),
         num_restarts=num_restarts,
         raw_samples=raw_samples,
         sequential=sequential,
