@@ -86,11 +86,12 @@ class MeanScalarisation(Scalarisation):
         Tuple[torch.Tensor, Optional[torch.Tensor]]
             Mean and variance of the scalarised objective.
         """
+        weights = self.weights.to(values.device)
         if variances is None:
-            return torch.mean(values * self.weights, dim=-1), None
+            return torch.mean(values * weights, dim=-1), None
         return (
-            torch.mean(values * self.weights, dim=-1),
-            torch.sum(variances * self.weights.square(), dim=-1) / (values.shape[-1] ** 2),
+            torch.mean(values * weights, dim=-1),
+            torch.sum(variances * weights.square(), dim=-1) / (values.shape[-1] ** 2),
         )
 
 
@@ -116,11 +117,12 @@ class SumScalarisation(Scalarisation):
         Tuple[torch.Tensor, Optional[torch.Tensor]]
             Mean and variance of the scalarised objective.
         """
+        weights = self.weights.to(values.device)
         if variances is None:
-            return torch.sum(values * self.weights, dim=-1), None
+            return torch.sum(values * weights, dim=-1), None
         return (
-            torch.sum(values * self.weights, dim=-1),
-            torch.sum(variances * self.weights.square(), dim=-1),
+            torch.sum(values * weights, dim=-1),
+            torch.sum(variances * weights.square(), dim=-1),
         )
 
 
@@ -140,7 +142,7 @@ class MaxScalarisation(MonteCarloScalarisation):
         torch.Tensor
             A "num_samples x (batch_shape)" tensor with the scalarised objective values.
         """
-        return torch.amax(values * self.weights, dim=-1)
+        return torch.amax(values * self.weights.to(values.device), dim=-1)
 
 
 class MinScalarisation(MonteCarloScalarisation):
@@ -159,7 +161,7 @@ class MinScalarisation(MonteCarloScalarisation):
         torch.Tensor
             A "num_samples x (batch_shape)" tensor with the scalarised objective values.
         """
-        return torch.amin(values * self.weights, dim=-1)
+        return torch.amin(values * self.weights.to(values.device), dim=-1)
 
 
 AVALIABLE_SCALARISATIONS: Dict[str, Type[Scalarisation]] = {
