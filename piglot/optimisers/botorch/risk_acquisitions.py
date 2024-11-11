@@ -194,8 +194,6 @@ def make_risk_acquisition(cls: Type[T], risk_measure: RiskMeasure, *args, **kwar
     T
         Risk acquisition function.
     """
-    if not issubclass(cls, qFantasyAcqusition):
-        raise UnsupportedError("Only fantasy-based acquisition functions are supported.")
     return cls(*args, reduction=risk_measure, observation_noise=True, **kwargs)
 
 

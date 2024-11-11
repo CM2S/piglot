@@ -35,7 +35,7 @@ class qFantasyAcqusition(MCAcquisitionFunction):
         inner_sampler: Optional[MCSampler] = None,
         X_pending: Optional[Tensor] = None,
         observation_noise: bool = False,
-        noiseless_fantasies: bool = True,
+        noiseless_fantasies: bool = False,
         final_reduction: Optional[Callable[[Tensor, int], Tensor]] = None,
         q_reduction: Optional[Callable[[Tensor, int], Tensor]] = None,
         input_transform: Optional[Callable[[Tensor], Tensor]] = None,
@@ -47,7 +47,10 @@ class qFantasyAcqusition(MCAcquisitionFunction):
                     "Must specify `num_fantasies` if no `sampler` is provided."
                 )
             # base samples should be fixed for joint optimization over X, X_fantasies
-            sampler = SobolQMCNormalSampler(sample_shape=torch.Size([num_fantasies]))
+            sampler = SobolQMCNormalSampler(
+                sample_shape=torch.Size([num_fantasies]),
+                seed=inner_sampler.seed if inner_sampler is not None else None,
+            )
         elif num_fantasies is not None:
             if sampler.sample_shape != torch.Size([num_fantasies]):
                 raise ValueError(
@@ -59,7 +62,7 @@ class qFantasyAcqusition(MCAcquisitionFunction):
         MCSamplerMixin.__init__(self, sampler=sampler)
         # if not explicitly specified, we use the posterior mean for linear objs
         if isinstance(objective, MCAcquisitionObjective) and inner_sampler is None:
-            inner_sampler = SobolQMCNormalSampler(sample_shape=torch.Size([128]))
+            inner_sampler = SobolQMCNormalSampler(sample_shape=torch.Size([128]), seed=sampler.seed)
         elif objective is not None and not isinstance(
             objective, MCAcquisitionObjective
         ):
@@ -196,7 +199,7 @@ class qFantasyNoisyExpectedImprovement(qFantasyAcqusition):
         self,
         *args,
         X_baseline: Tensor,
-        max_frac: float = 0.5,
+        max_frac: float = 1.0,
         prune_baseline: bool = True,
         **kwargs,
     ) -> None:
