@@ -409,7 +409,7 @@ class ResponseObjective(GenericObjective):
         solver: Solver,
         objectives: List[ResponseSingleObjective],
         output_dir: str,
-        noisy: bool = False,
+        infer_noise: bool = False,
         scalarisation: Scalarisation = None,
         stochastic: bool = False,
         composite: bool = False,
@@ -427,7 +427,7 @@ class ResponseObjective(GenericObjective):
         composite_type = FullComposition if full_composite else ScalarisationComposition
         super().__init__(
             parameters,
-            noisy=noisy,
+            infer_noise=infer_noise,
             stochastic=stochastic,
             composition=composite_type(objectives, scalarisation) if composite else None,
             scalarisation=None if composite else scalarisation,

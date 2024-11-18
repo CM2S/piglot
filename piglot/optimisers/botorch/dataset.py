@@ -334,6 +334,7 @@ class BayesDataset:
         self,
         values: torch.Tensor = None,
         covariances: torch.Tensor = None,
+        diagonalise: bool = True,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Transform outcomes to the latent standardised space.
 
@@ -343,6 +344,8 @@ class BayesDataset:
             Values to transform.
         covariances : torch.Tensor
             Variances to transform.
+        diagonalise : bool
+            Whether to diagonalise the covariance matrix (default: True).
 
         Returns
         -------
@@ -360,7 +363,7 @@ class BayesDataset:
             values, covariances = self.pca.transform(values, covariances)
         values, covariances = self.standardiser.transform(values, covariances)
         # Diagonalise the covariance matrix
-        return values, torch.diagonal(covariances, dim1=-2, dim2=-1)
+        return values, torch.diagonal(covariances, dim1=-2, dim2=-1) if diagonalise else covariances
 
     def untransform_outcomes(self, values: torch.Tensor) -> torch.Tensor:
         """Transform outcomes back to the original space.

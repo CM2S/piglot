@@ -71,7 +71,7 @@ def main(config_path: str = None):
         stop_criteria=stop,
     )
     # Re-run the best case
-    if 'skip_last_run' not in config and best_params is not None and not objective.noisy:
+    if 'skip_last_run' not in config and best_params is not None and not objective.stochastic:
         objective(best_params)
 
 

@@ -358,9 +358,8 @@ def plot_mcgp(args):
 
     # Load dataset
     dataset = BayesDataset.load(os.path.join(config["output"], 'dataset.pt'))
-    infer_noise = objective.noisy and not objective.stochastic
     noise_model = config['optimiser'].get('noise_model', 'homoscedastic')
-    model = build_gp_model(dataset, infer_noise, noise_model)
+    model = build_gp_model(dataset, objective.infer_noise, noise_model)
     composition = BoTorchComposition(model, dataset, objective)
 
     # Build the acquisition function for the best value
@@ -395,9 +394,11 @@ def plot_mcgp(args):
         y_lb, y_ub = y_samples.quantile(0.025, dim=0), y_samples.quantile(0.975, dim=0)
 
         # Observations
-        std_values, std_vars = dataset.transform_outcomes()
-        z_samples = draw_sobol_normal_samples(std_values.shape[-1], args.num_samples, seed=0)
-        phat_samples = std_values + z_samples.unsqueeze(1) * std_vars.sqrt()
+        phat_mean, phat_covs = dataset.transform_outcomes(diagonalise=False)
+        phat_samples = torch.stack([
+            MultivariateNormalQMCEngine(mean, covs, seed=0).draw(args.num_samples)
+            for mean, covs in zip(phat_mean, phat_covs)
+        ], dim=1)
         obs_samples = -composition.from_model_samples(phat_samples, dataset.params)
         obs_mean = obs_samples.mean(dim=0)
         obs_lb, obs_ub = obs_samples.quantile(0.025, dim=0), obs_samples.quantile(0.975, dim=0)

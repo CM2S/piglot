@@ -150,7 +150,7 @@ class ResponseDesignObjective(ResponseObjective):
                 read_scalarisation(config['scalarisation'], objectives)
                 if 'scalarisation' in config else None
             ),
-            noisy=bool(config.get('noisy', False)),
+            infer_noise=bool(config.get('infer_noise', False)),
             stochastic=bool(config.get('stochastic', False)),
             composite=composite,
             full_composite=bool(config.get('full_composite', True)),

@@ -265,7 +265,7 @@ class Optimiser(ABC):
         with open(os.path.join(self.output_dir, "history"), 'w', encoding='utf8') as file:
             file.write(f'{"Iteration":>10}\t')
             file.write(f'{"Time /s":>15}\t')
-            if self.objective.noisy:
+            if self.objective.stochastic:
                 file.write(f'{"Current Loss":>15}\t')
                 file.write(f'{"Lower CI":>15}\t')
                 file.write(f'{"Upper CI":>15}\t')
@@ -353,7 +353,7 @@ class Optimiser(ABC):
             file.write(f'Iteration: {i_iter}\n')
             file.write(f'Function calls: {self.objective.func_calls}\n')
             file.write(f'Best loss: {self.best_value}\n')
-            if self.objective.noisy and self.conf_interval and all(self.conf_interval):
+            if self.objective.stochastic and self.conf_interval and all(self.conf_interval):
                 file.write(
                     'Confidence interval (95%): '
                     f'[{self.conf_interval[0]}, {self.conf_interval[1]}]\n'
@@ -369,7 +369,7 @@ class Optimiser(ABC):
         with open(os.path.join(self.output_dir, "history"), 'a', encoding='utf8') as file:
             file.write(f'{i_iter:>10}\t')
             file.write(f'{elapsed:>15.8e}\t')
-            if self.objective.noisy:
+            if self.objective.stochastic:
                 file.write(f'{curr_value:>15.8e}\t')
                 if self.conf_interval and all(self.conf_interval):
                     file.write(f'{self.conf_interval[0]:>15.8e}\t')
@@ -416,7 +416,7 @@ class Optimiser(ABC):
         """
         self.i_iter = i_iter
         # Update new value to best value (when using exact objectives)
-        if self.objective.noisy:
+        if self.objective.stochastic:
             self.iters_no_improv = 0
             self.best_value = curr_value
             self.conf_interval = conf_interval
@@ -435,7 +435,7 @@ class Optimiser(ABC):
         # Update progress bar
         if self.pbar is not None:
             info = f'Loss: {self.best_value:6.3e}'
-            if self.objective.noisy and self.conf_interval and all(self.conf_interval):
+            if self.objective.stochastic and self.conf_interval and all(self.conf_interval):
                 info += f' ± {(self.conf_interval[1] - self.conf_interval[0]) / 2:6.3e}'
                 # info += f' [{self.conf_interval[0]:5.2e}, {self.conf_interval[1]:5.2e}] (95%)'
             self.pbar.set_postfix_str(info + (f' ({extra_info})' if extra_info else ''))

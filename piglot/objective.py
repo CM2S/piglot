@@ -247,8 +247,8 @@ class GenericObjective(Objective):
     def __init__(
         self,
         parameters: ParameterSet,
-        noisy: bool = False,
         stochastic: bool = False,
+        infer_noise: bool = False,
         composition: Composition = None,
         scalarisation: Scalarisation = None,
         num_objectives: int = 1,
@@ -258,8 +258,8 @@ class GenericObjective(Objective):
         super().__init__()
         self.parameters = parameters
         self.output_dir = output_dir
-        self.noisy = noisy
-        self.stochastic = stochastic
+        self.infer_noise = infer_noise
+        self.stochastic = stochastic or infer_noise
         self.scalarisation = scalarisation
         self.composition = composition
         self.num_objectives = num_objectives

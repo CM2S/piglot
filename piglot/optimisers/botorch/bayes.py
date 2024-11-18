@@ -108,7 +108,6 @@ class BoTorchSettingsData:
     num_fantasies: int = None
     sequential: bool = False
     noise_model: str = 'homoscedastic'
-    infer_noise: bool = None
     risk_measure: str = None
     alpha: float = None
     composite_risk_measure: str = None
@@ -132,16 +131,12 @@ class BoTorchSettingsData:
         if self.noise_model not in ('homoscedastic', 'heteroscedastic'):
             raise RuntimeError(f"Unknown noise model {self.noise_model}")
 
-        # Check if we need to infer the noise level
-        if self.infer_noise is None:
-            self.infer_noise = self.objective.noisy and not self.objective.stochastic
-
         # Select acquisition
         if self.acquisition is None:
             self.acquisition = default_acquisition(
                 self.objective.composition,
                 self.objective.multi_objective,
-                self.objective.noisy,
+                self.objective.stochastic,
                 self.q,
             )
         elif self.acquisition not in AVAILABLE_ACQUISITIONS:
@@ -292,7 +287,7 @@ class BoTorchStateData:
         """Train the GP model."""
         model = build_gp_model(
             self.dataset,
-            self.settings.infer_noise,
+            self.settings.objective.infer_noise,
             self.settings.noise_model,
         )
         # MOBO requires a model list (except when there is only one output)
@@ -360,7 +355,7 @@ class BoTorchStateData:
             self.extra_info["Num Pareto"] = str(self.mo_data.pareto_y.shape[0])
 
         # Under noisy single-objective optimisation, find the best posterior mean
-        elif self.settings.objective.noisy:
+        elif self.settings.objective.stochastic:
             acquisition = get_acquisition(
                 'qsr',
                 self.model,
@@ -392,9 +387,10 @@ class BoTorchStateData:
             # Extract signal-to-noise ratio
             samples = draw_multivariate_samples(self.dataset.values, self.dataset.covariances, 1024)
             obj_samples = self.composition.from_original_samples(samples, self.dataset.params)
-            obj_var = obj_samples.var(dim=0).mean().item()
+            obj_var = obj_samples.var(dim=0).mean().item() + 1e-300
             mean_var = obj_samples.mean(dim=0).var().item()
-            self.extra_info["SNR"] = f'{10 * np.log10(mean_var / obj_var):.1f} dB'
+            snr = np.inf if np.allclose(obj_var, 0) else 10 * (np.log10(mean_var / obj_var))
+            self.extra_info["SNR"] = f'{snr:.1f} dB'
 
         # Under exact single-objective optimisation, return the best value found
         else:
@@ -636,7 +632,7 @@ class BayesianBoTorch(Optimiser):
             state.update(self.parameters, self.output_dir)
 
             # Return state best instead of batch best for noisy or multi-objective problems
-            if self.settings.objective.multi_objective or self.settings.objective.noisy:
+            if self.settings.objective.multi_objective or self.settings.objective.stochastic:
                 best_params, best_value = state.best_params, state.best_value
 
             # Update progress and check for early stopping

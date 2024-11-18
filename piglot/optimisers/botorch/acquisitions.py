@@ -109,7 +109,7 @@ MULTI_OBJECTIVE_WITH_PARTITIONING: List[str] = [
 def default_acquisition(
     composite: bool,
     multi_objective: bool,
-    noisy: bool,
+    stochastic: bool,
     q: int,
 ) -> str:
     """Return the default acquisition function for the given optimisation problem.
@@ -120,8 +120,8 @@ def default_acquisition(
         Whether the optimisation problem is a composition.
     multi_objective : bool, optional
         Whether the optimisation problem is multi-objective.
-    noisy : bool, optional
-        Whether the optimisation problem is noisy.
+    stochastic : bool, optional
+        Whether the optimisation problem is stochastic.
     q : int, optional
         Number of candidates to generate.
 
@@ -131,8 +131,8 @@ def default_acquisition(
         Name of the default acquisition function.
     """
     if multi_objective:
-        return 'qlognehvi' if noisy else 'qlogehvi'
-    if noisy:
+        return 'qlognehvi' if (stochastic or q > 1) else 'qlogehvi'
+    if stochastic:
         return 'qlognei'
     if composite or q > 1:
         return 'qlogei'
@@ -310,7 +310,6 @@ def build_and_optimise_acquisition(
     dataset: BayesDataset,
     parameters: ParameterSet,
     composition: BoTorchComposition,
-    noisy: bool,
     **options: Any,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Utility function to build and optimise an acquisition function.
@@ -327,8 +326,6 @@ def build_and_optimise_acquisition(
         Parameters to optimise.
     composition : BoTorchComposition
         Composition object to use for the acquisition.
-    noisy : bool
-        Whether the optimisation problem is noisy.
     options : Any
         Additional options for the acquisition.
 
@@ -337,5 +334,5 @@ def build_and_optimise_acquisition(
     Tuple[torch.Tensor, torch.Tensor]
         Tuple with the optimised candidates and their acquisition values.
     """
-    acquisition = get_acquisition(name, model, dataset, composition, noisy, **options)
+    acquisition = get_acquisition(name, model, dataset, composition, **options)
     return optimise_acquisition(acquisition, parameters, dataset, **options)

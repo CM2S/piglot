@@ -112,7 +112,7 @@ class AnalyticalObjective(GenericObjective):
         parameters: ParameterSet,
         expression: str,
         variance: Optional[str] = None,
-        noisy: bool = False,
+        infer_noise: bool = False,
         stochastic: bool = False,
         random_evals: int = 0,
         output_dir: str = None,
@@ -122,7 +122,7 @@ class AnalyticalObjective(GenericObjective):
             raise ValueError("Random evaluations require variance.")
         super().__init__(
             parameters,
-            noisy=noisy,
+            infer_noise=infer_noise,
             stochastic=stochastic,
             composition=None,
             output_dir=output_dir,
@@ -290,7 +290,7 @@ class AnalyticalObjective(GenericObjective):
         return AnalyticalObjective(
             parameters,
             config['expression'],
-            noisy=config.get('noisy', False),
+            infer_noise=config.get('infer_noise', False),
             variance=config.get('variance', None),
             stochastic=config.get('stochastic', False),
             random_evals=config.get('random_evals', 0),
@@ -330,7 +330,7 @@ class AnalyticalMultiObjective(GenericObjective):
         self,
         parameters: ParameterSet,
         objectives: List[AnalyticalSingleObjective],
-        noisy: bool = False,
+        infer_noise: bool = False,
         stochastic: bool = False,
         scalarisation: Optional[Scalarisation] = None,
         composite: bool = False,
@@ -344,7 +344,7 @@ class AnalyticalMultiObjective(GenericObjective):
                 scalarisation = SumScalarisation(objectives)
         super().__init__(
             parameters,
-            noisy=noisy,
+            infer_noise=infer_noise,
             stochastic=stochastic,
             composition=ScalarisationComposition(scalarisation) if composite else None,
             scalarisation=None if composite else scalarisation,
@@ -553,7 +553,7 @@ class AnalyticalMultiObjective(GenericObjective):
                 read_scalarisation(config['scalarisation'], objectives)
                 if 'scalarisation' in config else None
             ),
-            noisy=bool(config.get('noisy', False)),
+            infer_noise=bool(config.get('infer_noise', False)),
             stochastic=bool(config.get('stochastic', False)),
             composite=bool(config.get('composite', False)),
             output_dir=output_dir,
