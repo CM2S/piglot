@@ -195,6 +195,7 @@ class FittingSingleObjective(ResponseSingleObjective):
         reference: Reference,
         prediction: List[str],
         reduction: Reduction,
+        mean_dist: bool = False,
         weight: float = 1.0,
         bounds: Optional[Tuple[float, float]] = None,
     ) -> None:
@@ -204,6 +205,7 @@ class FittingSingleObjective(ResponseSingleObjective):
             reduction,
             weight=weight,
             bounds=bounds,
+            mean_dist=mean_dist,
             flatten_utility=FixedFlatteningUtility(reference.get_time()),
             prediction_transform=PointwiseErrors(reference.get_time(), reference.get_data()),
         )
@@ -270,6 +272,7 @@ class FittingSingleObjective(ResponseSingleObjective):
         reduction = read_reduction(config.pop('reduction', 'mse'))
         weight = float(config.pop('weight', 1.0))
         bounds = config.pop('bounds', None)
+        mean_dist = bool(config.pop('mean_dist', False))
         # Read the reference and return the objective
         reference = Reference.read(name, config, output_dir)
         return FittingSingleObjective(
@@ -277,6 +280,7 @@ class FittingSingleObjective(ResponseSingleObjective):
             reference,
             prediction,
             reduction,
+            mean_dist=mean_dist,
             weight=weight,
             bounds=bounds,
         )

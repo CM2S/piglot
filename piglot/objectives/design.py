@@ -74,6 +74,7 @@ class DesignSingleObjective(ResponseSingleObjective):
             name,
             prediction,
             read_reduction(config['quantity']),
+            mean_dist=bool(config.get('mean_dist', False)),
             maximise=bool(config.get('maximise', False)),
             weight=float(config.get('weight', 1.0)),
             bounds=config.get('bounds', None),

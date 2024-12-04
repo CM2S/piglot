@@ -74,12 +74,14 @@ class ResponseSingleObjective(IndividualObjective, ABC):
         quantity: Reduction,
         maximise: bool = False,
         weight: float = 1.0,
+        mean_dist: bool = False,
         bounds: Optional[Tuple[float, float]] = None,
         flatten_utility: Optional[FlattenUtility] = None,
         prediction_transform: Optional[ResponseTransformer] = None,
     ) -> None:
         super().__init__(maximise=maximise, weight=weight, bounds=bounds)
         self.name = name
+        self.mean_dist = mean_dist
         self.prediction = prediction
         self.quantity = NegateReduction(quantity) if maximise else quantity
         self.flatten_utility = flatten_utility
@@ -149,10 +151,10 @@ class ResponseSingleObjective(IndividualObjective, ABC):
             for result in self._extract_responses(raw_results)
         ]
         # Only compute the variance if we have more than one response
-        # TODO: add different stochastic models
+        numel = len(values) if self.mean_dist else 1
         return (
             np.mean(values),
-            np.var(values) / len(values) if len(values) > 1 else 0.0,
+            np.var(values, ddof=1) / numel if len(values) > 1 else 0.0,
         )
 
     def latent_space(self, raw_results: Dict[str, OutputResult]) -> Tuple[np.ndarray, np.ndarray]:
@@ -173,9 +175,9 @@ class ResponseSingleObjective(IndividualObjective, ABC):
             for result in self._extract_responses(raw_results)
         ])
         # Only compute the covariance if we have more than one response
-        # TODO: add different stochastic models
+        numel = latent_space.shape[0] if self.mean_dist else 1
         covariance = (
-            np.cov(latent_space.T) / latent_space.shape[0]
+            np.cov(latent_space.T, ddof=1) / numel
             if latent_space.shape[0] > 1
             else np.zeros((latent_space.shape[1], latent_space.shape[1]))
         )
