@@ -1,6 +1,7 @@
 """Module with composition sampler helpers for BoTorch models."""
 from typing import Union
 import torch
+from torch.autograd.functional import hessian
 from botorch.sampling import SobolQMCNormalSampler
 from botorch.utils.sampling import draw_sobol_normal_samples
 from piglot.objective import GenericObjective
@@ -93,6 +94,37 @@ class BoTorchComposition:
             posterior = self.model.posterior(X, observation_noise=observation_noise)
             samples = sampler(posterior)
         return self.from_model_samples(samples, X)
+
+    def taylor_from_inputs(self, X: torch.Tensor, observation_noise: bool = False) -> torch.Tensor:
+        """Compute Taylor expansion samples from input parameters.
+
+        Parameters
+        ----------
+        X : torch.Tensor
+            Input parameters.
+        observation_noise : bool, optional
+            Whether to include observation noise, by default False.
+
+        Returns
+        -------
+        torch.Tensor
+            Taylor expansion samples.
+        """
+        # Compute the mean and covariance of the model
+        with torch.no_grad():
+            posterior = self.model.posterior(X, observation_noise=observation_noise)
+            mean = posterior.mean
+            full_cov = posterior.mvn.covariance_matrix
+        # Evaluate the function for the mean
+        f_mean = self.from_model_samples(mean, X)
+        # Evaluate the Hessian for each point and the Taylor expansion
+        n_outputs = mean.shape[-1]
+        result = torch.empty(X.shape[0], dtype=X.dtype, device=X.device)
+        for i in range(X.shape[0]):
+            hess = hessian(lambda x: self.from_model_samples(x, X[i, :]), mean[i, :])
+            cov = full_cov[i * n_outputs: (i + 1) * n_outputs, i * n_outputs: (i + 1) * n_outputs]
+            result[i] = f_mean[i] + 0.5 * torch.trace(hess @ cov)
+        return result
 
 
 class InjectObservationNoiseComposition(BoTorchComposition):
