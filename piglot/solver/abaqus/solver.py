@@ -1,119 +1,165 @@
-"""Module for Abaqus solver."""
-from typing import Dict, Any, List
+"""Module for Links solver."""
+from typing import Dict, Type, Tuple, List, Any
 import os
-import time
-import shutil
+import re
 import subprocess
-from multiprocessing.pool import ThreadPool as Pool
 import numpy as np
+from piglot.solver.input_file_solver import (
+    InputDataGenerator,
+    InputFileCase,
+    InputData,
+    InputFileSolver,
+    OutputField,
+)
 from piglot.parameter import ParameterSet
-from piglot.solver.solver import Solver, Case, CaseResult, OutputField, OutputResult
-from piglot.solver.abaqus.fields import abaqus_fields_reader, AbaqusInputData, FieldsOutput
+from piglot.solver.abaqus.fields import Reaction
+from piglot.utils.solver_utils import has_parameter
 
 
-class AbaqusSolver(Solver):
-    """Abaqus solver."""
+class AbaqusCase(InputFileCase):
+    """Class for Abaqus cases."""
 
     def __init__(
         self,
-        cases: Dict[Case, Dict[str, OutputField]],
-        parameters: ParameterSet,
-        output_dir: str,
-        abaqus_bin: str,
-        parallel: int,
-        tmp_dir: str,
+        name: str,
+        fields: Dict[str, OutputField],
+        generator: InputDataGenerator,
+        abaqus: str,
+        step_name: str = None,
+        instance_name: str = None,
+        job_name: str = None,
         extra_args: str = None,
     ) -> None:
-        """Constructor for the Abaqus solver class.
+        super().__init__(name, fields, generator)
+        self.abaqus_bin = abaqus
+        self.step_name = step_name
+        self.instance_name = instance_name
+        self.job_name = job_name
+        self.extra_args = extra_args
+
+    @staticmethod
+    def __sanitize_field(field_name: str, field_list: List[str], keyword: str) -> str:
+        """Sanitize the field name (jobs, instances and steps) in Abaqus input file.
 
         Parameters
         ----------
-        cases : Dict[Case, Dict[str, OutputField]]
-            Cases to be run and respective output fields.
+        field_name : str
+            Field name to sanitize.
+        field_list : List[str]
+            A list of fields present in the file.
+        keyword : str
+            Keyrword to use in the error message. (job, instance, step)
+
+        Returns
+        -------
+        str
+            The field name and field list.
+
+        Raises
+        ------
+        ValueError
+            If the field list is empty.
+        ValueError
+            If the field name is not in the field list.
+        ValueError
+            If the field name is not specified and there are multiple fields in the list.
+        """
+        if len(field_list) == 0:
+            raise ValueError(f"No {keyword}s found in the file.")
+        if field_name is not None:
+            if field_name not in field_list:
+                raise ValueError(f"The {keyword} name '{field_name}' not found in the file.")
+        if field_name is None:
+            if len(field_list) > 1:
+                raise ValueError(
+                    f"Multiple {keyword}s found in the file. Please specify the {keyword} name."
+                )
+            return field_list[0]
+        return field_name
+
+    def check(self, input_data: InputData) -> None:
+        """Check if the input data is valid according to the given parameters.
+
+        Parameters
+        ----------
         parameters : ParameterSet
             Parameter set for this problem.
-        output_dir : str
-            Path to the output directory.
-        abaqus_bin : str
-            Path to the abaqus binary.
-        parallel : int
-            Number of parallel processes to use.
-        tmp_dir : str
-            Path to the temporary directory.
         """
-        super().__init__(cases, parameters, output_dir)
-        self.abaqus_bin = abaqus_bin
-        self.parallel = parallel
-        self.tmp_dir = tmp_dir
-        self.extra_args = extra_args
+        cwd = os.getcwd()
+        case_name, ext = os.path.splitext(os.path.basename(input_data.input_file))
+        input_file = os.path.join(cwd, case_name + ext)
 
-    def _post_proc_variables(
-        self,
-        input_data: AbaqusInputData,
-        field_data: FieldsOutput
-    ) -> Dict[str, Any]:
+        with open(input_file, 'r', encoding='utf-8') as file:
+            data = file.read()
+
+            job_list = re.findall(r'\*\* Job name: ([^M]+)', data)
+            job_list = [job.strip() for job in job_list]
+            self.job_name = self.__sanitize_field(self.job_name, job_list, "job")
+            print(self.job_name)
+
+            instance_list = re.findall(r'\*Instance, name=([^,]+)', data)
+            self.instance_name = self.__sanitize_field(self.instance_name,
+                                                       instance_list,
+                                                       "instance")
+
+            step_list = re.findall(r'\*Step, name=([^,]+)', data)
+            self.step_name = self.__sanitize_field(self.step_name, step_list, "step")
+
+    def _post_proc_variables(self, input_data: InputData) -> Dict[str, Any]:
         """Generate the post-processing variables.
 
         Parameters
         ----------
         input_data : AbaqusInputData
             Input data for the simulation.
-        field_data : FieldsOutput
-            Field data for the simulation.
 
         Returns
         -------
         Dict[str, Any]
             Dictionary with the post processing variables.
         """
-        input_file, ext = os.path.splitext(os.path.basename(input_data.input_file))
-        variables = {}
-        variables['input_file'] = input_file + ext
-        variables['job_name'] = input_data.job_name
-        variables['step_name'] = input_data.step_name
-        variables['instance_name'] = input_data.instance_name
-        variables['set_name'] = field_data.set_name
-        variables['field'] = field_data.field
-        variables['x_field'] = field_data.x_field
+        input_file = os.path.basename(input_data.input_file)
+        variables = {
+            'input_file': input_file,
+            'job_name': self.job_name,
+            'step_name': self.step_name,
+            'instance_name': self.instance_name,
+        }
+
+        # Accessing set_name, field, and x_field from the fields dictionary
+        field = next(iter(self.fields.values()), None)
+        if field:
+            variables['set_name'] = getattr(field, 'set_name', None)
+            variables['field'] = getattr(field, 'field', None)
+            variables['x_field'] = getattr(field, 'x_field', None)
 
         return variables
 
-    def _run_case(self, values: np.ndarray, case: Case, tmp_dir: str) -> CaseResult:
-        """Run single/parallel cases with Abaqus.
+    def _run_case(self, input_data: InputData, tmp_dir: str) -> bool:
+        """Run the case for the given set of parameters.
 
         Parameters
         ----------
-        values: np.ndarray
-            Current parameter values
-        case : Case
-            Case to run.
-        tmp_dir: str
-            Temporary directory to run the simulation
+        input_data : InputData
+            Input data for this problem.
+        tmp_dir : str
+            Temporary directory to run the problem.
 
         Returns
         -------
-        CaseResult
-            Results for this case
+        bool
+            Whether the case ran successfully or not.
         """
+        # Call the check method before running the case
+        self.check(input_data)
 
-        # Create a temporary directory (the name of the directory is the case name) inside tmp_dir
-        # (because of parallel runs) and copy the input file
-        case_name, _ = os.path.splitext(os.path.basename(case.input_data.input_file))
-        tmp_dir = os.path.join(tmp_dir, case_name)
-        os.mkdir(tmp_dir)
-
-        # Copy input file replacing parameters by passed value
-        input_data = case.input_data.prepare(values, self.parameters, tmp_dir=tmp_dir)
-        input_file = input_data.input_file
-
-        # Run ABAQUS (we don't use high precision timers here to keep track of the start time)
-        begin_time = time.time()
         extra_args: List[str] = self.extra_args.split() if self.extra_args else []
+
         run_inp = subprocess.run(
             [
                 self.abaqus_bin,
-                f"job={input_data.job_name}",
-                f"input={os.path.basename(input_file)}",
+                f"job={self.job_name}",
+                f"input={os.path.basename(input_data.input_file)}",
                 'interactive',
                 'ask_delete=OFF',
             ] + extra_args,
@@ -123,8 +169,7 @@ class AbaqusSolver(Solver):
             stderr=subprocess.DEVNULL,
             check=False
         )
-
-        variables = self._post_proc_variables(input_data, list(case.fields.values())[0])
+        variables = self._post_proc_variables(input_data)
         python_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reader.py')
 
         run_odb = subprocess.run(
@@ -153,126 +198,73 @@ class AbaqusSolver(Solver):
             stderr=subprocess.DEVNULL,
             check=False,
         )
-        end_time = time.time()
+        if run_inp.returncode != 0 or run_odb.returncode != 0:
+            return False
+        return True
 
-        failed_case = (run_inp.returncode != 0 or run_odb.returncode != 0)
-
-        responses = {
-            name: field.get(input_data) if not failed_case
-            else OutputResult(np.empty(0), np.empty(0)) for name, field in case.fields.items()
-        }
-
-        return CaseResult(
-            begin_time,
-            end_time - begin_time,
-            values,
-            not failed_case,
-            self.parameters.hash(values),
-            responses,
-        )
-
-    def _solve(self, values: np.ndarray, concurrent: bool,) -> Dict[Case, CaseResult]:
-        """Internal solver for the prescribed problems.
-
-        Parameters
-        ----------
-        values : array
-            Current parameters to evaluate.
-        concurrent : bool
-            Whether this run may be concurrent to another one (so use unique file names).
+    @classmethod
+    def get_supported_fields(cls) -> Dict[str, Type[OutputField]]:
+        """Get the supported fields for this input file type.
 
         Returns
         -------
-        Dict[Case, CaseResult]
-            Results for each case.
+        Dict[str, Type[OutputField]]
+            Names and supported fields for this input file type.
         """
-        # Ensure tmp directory is clean
-        tmp_dir = f'{self.tmp_dir}_{self.parameters.hash(values)}' if concurrent else self.tmp_dir
-        if os.path.isdir(tmp_dir):
-            shutil.rmtree(tmp_dir)
-        os.mkdir(tmp_dir)
-        # Run cases (in parallel if specified)
-
-        def run_case(case: Case) -> CaseResult:
-            return self._run_case(values, case, tmp_dir)
-        if self.parallel > 1:
-            with Pool(self.parallel) as pool:
-                results = pool.map(run_case, self.cases)
-        else:
-            results = map(run_case, self.cases)
-        # Ensure we actually resolve the map
-        results = list(results)
-        # Cleanup temporary directories
-        if concurrent:
-            shutil.rmtree(tmp_dir)
-        # Build output dict
-        return dict(zip(self.cases, results))
-
-    def get_current_response(self) -> Dict[str, OutputResult]:
-        """Get the responses from a given output field for all cases.
-
-        Returns
-        -------
-        Dict[str, OutputResult]
-            Output responses.
-        """
-        fields = self.get_output_fields()
         return {
-            name: field.get(case.input_data.get_current(self.tmp_dir))
-            for name, (case, field) in fields.items()
+            'Reaction': Reaction,
         }
 
-    @staticmethod
-    def read(config: Dict[str, Any], parameters: ParameterSet, output_dir: str) -> Solver:
-        """Read the solver from the configuration dictionary.
+    @classmethod
+    def _get_file_dependencies(cls, input_file: str) -> List[str]:
+        """Get the dependencies for a single given input file.
 
         Parameters
         ----------
-        config : Dict[str, Any]
-            Configuration dictionary.
-        parameters : ParameterSet
-            Parameter set for this problem.
-        output_dir : str
-            Path to the output directory.
+        input_file : str
+            Input file to check for dependencies.
 
         Returns
         -------
-        Solver
-            Solver to use for this problem.
+        List[str]
+            Substitution dependencies for this input file.
         """
-        # Get the Abaqus binary path
-        if 'abaqus_path' not in config:
-            raise ValueError("Missing 'abaqus_path' in solver configuration.")
-        abaqus_bin = config['abaqus_path']
-        # Read the parallelism and temporary directory (if present)
-        parallel = int(config.get('parallel', 1))
-        tmp_dir = os.path.join(output_dir, config.get('tmp_dir', 'tmp'))
-        extra_args = config.get('extra_args', None)
-        # Read the cases
-        if 'cases' not in config:
-            raise ValueError("Missing 'cases' in solver configuration.")
-        cases = []
-        for case_name, case_config in config['cases'].items():
-            if 'fields' not in case_config:
-                raise ValueError(
-                    f"Missing 'fields' in case '{case_name}' configuration."
-                )
-            fields = {
-                field_name: abaqus_fields_reader(field_config)
-                for field_name, field_config in case_config['fields'].items()
-            }
-            # If job_name, step_name and instance_name are not indicated, the default value is None
-            step_name = case_config.get('step_name', None)
-            instance_name = case_config.get('instance_name', None)
-            cases.append(Case(AbaqusInputData(case_name, step_name, instance_name), fields))
+        if not os.path.exists(input_file):
+            raise ValueError(f'Input file "{input_file}" does not exist.')
+        deps = []
+        return deps
 
-        # Return the solver
-        return AbaqusSolver(
-            cases,
-            parameters,
-            output_dir,
-            abaqus_bin,
-            parallel,
-            tmp_dir,
-            extra_args=extra_args,
-        )
+    @classmethod
+    def get_dependencies(cls, input_file: str) -> Tuple[List[str], List[str]]:
+        """Get the dependencies for a given input file.
+
+        Parameters
+        ----------
+        input_file : str
+            Input file to check for dependencies.
+
+        Returns
+        -------
+        Tuple[List[str], List[str]]
+            Substitution and copy dependencies for this input file.
+        """
+        if not os.path.exists(input_file):
+            raise ValueError(f'Input file "{input_file}" does not exist.')
+        # Start with the raw dependencies of the input file
+        deps = cls._get_file_dependencies(input_file)
+        return deps, []
+
+
+class AbaqusSolver(InputFileSolver):
+    """ABAQUS solver class."""
+
+    @classmethod
+    def get_case_class(cls) -> Type[InputFileCase]:
+        """Get the case class to use for this solver.
+
+        Returns
+        -------
+        Type[InputFileCase]
+            InputFileCase class to use for this solver.
+        """
+        return AbaqusCase
