@@ -3,7 +3,6 @@ from typing import Dict, Type, Tuple, List, Any
 import os
 import re
 import subprocess
-import numpy as np
 from piglot.solver.input_file_solver import (
     InputDataGenerator,
     InputFileCase,
@@ -11,9 +10,7 @@ from piglot.solver.input_file_solver import (
     InputFileSolver,
     OutputField,
 )
-from piglot.parameter import ParameterSet
 from piglot.solver.abaqus.fields import Reaction
-from piglot.utils.solver_utils import has_parameter
 
 
 class AbaqusCase(InputFileCase):
