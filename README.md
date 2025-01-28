@@ -125,6 +125,7 @@ Objective:  8.85050592e-08
 ```
 The script will also plot the best observed response, and its comparison with the reference response:
 ![Best case plot](https://raw.githubusercontent.com/CM2S/piglot/main/docs/source/examples/sample_curve_fitting/best.svg)
+
 If you wish to directly save the figure without showing the GUI, you can also run
 ```bash
 piglot-plot best config.yaml --save_fig fitting.png
