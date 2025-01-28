@@ -7,7 +7,7 @@ import numpy as np
 import sympy
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import CaseResult, OutputResult
-from piglot.solver.multi_case_solver import GenericMultiCaseSolver, Case
+from piglot.solver.multi_case_solver import MultiCaseSolver, Case
 
 
 class CurveCase(Case):
@@ -139,7 +139,7 @@ class CurveCase(Case):
         return cls(name, config['expression'], config['parametric'], config['bounds'], points)
 
 
-class CurveSolver(GenericMultiCaseSolver):
+class CurveSolver(MultiCaseSolver):
     """Curve solver."""
 
     def __init__(

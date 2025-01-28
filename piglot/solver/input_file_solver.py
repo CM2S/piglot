@@ -9,7 +9,7 @@ import shutil
 import numpy as np
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import OutputResult, CaseResult
-from piglot.solver.multi_case_solver import Case, GenericMultiCaseSolver
+from piglot.solver.multi_case_solver import Case, MultiCaseSolver
 from piglot.utils.assorted import read_custom_module
 
 
@@ -341,7 +341,7 @@ class InputFileCase(Case, ABC):
         return cls(name, fields, generator, **config)
 
 
-class InputFileSolver(GenericMultiCaseSolver):
+class InputFileSolver(MultiCaseSolver):
     """Base class for input file-based solvers."""
 
     @classmethod

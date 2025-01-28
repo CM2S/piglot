@@ -255,6 +255,16 @@ class MultiCaseSolver(Solver, ABC):
 
     @classmethod
     @abstractmethod
+    def get_case_class(cls) -> Type[Case]:
+        """Get the case class to use for this solver.
+
+        Returns
+        -------
+        Type[Case]
+            Case class to use for this solver.
+        """
+
+    @classmethod
     def read(
         cls: Type[T],
         config: Dict[str, Any],
@@ -274,46 +284,7 @@ class MultiCaseSolver(Solver, ABC):
 
         Returns
         -------
-        Solver
-            Solver to use for this problem.
-        """
-
-
-class GenericMultiCaseSolver(MultiCaseSolver):
-    """Generic solver for multi-case problems."""
-
-    @classmethod
-    @abstractmethod
-    def get_case_class(cls) -> Type[Case]:
-        """Get the case class to use for this solver.
-
-        Returns
-        -------
-        Type[Case]
-            Case class to use for this solver.
-        """
-
-    @classmethod
-    def read(
-        cls: Type[GenericMultiCaseSolver],
-        config: Dict[str, Any],
-        parameters: ParameterSet,
-        output_dir: str,
-    ) -> GenericMultiCaseSolver:
-        """Read the solver from the configuration dictionary.
-
-        Parameters
-        ----------
-        config : Dict[str, Any]
-            Configuration dictionary.
-        parameters : ParameterSet
-            Parameter set for this problem.
-        output_dir : str
-            Path to the output directory.
-
-        Returns
-        -------
-        GenericMultiCaseSolver
+        T
             Solver to use for this problem.
         """
         # Sanitise and extract configuration for the cases
