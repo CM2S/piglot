@@ -212,6 +212,8 @@ def interpolate_response(
         Values on the new grid.
     """
     # Do we have sufficient points to interpolate?
+    if len(x_resp) == 0:
+        return np.zeros_like(x_grid)
     if len(x_resp) < 2:
         return np.ones_like(x_grid) * y_resp.item()
     # Filter out points with the same x coordinate (to prevent issues during interpolation)
