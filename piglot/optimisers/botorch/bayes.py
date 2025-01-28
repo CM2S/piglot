@@ -111,6 +111,7 @@ class BoTorchSettingsData:
     risk_measure: str = None
     alpha: float = None
     composite_risk_measure: str = None
+    distribution: str = 'mean'
 
     def __post_init__(self):
         # Set default device
@@ -175,8 +176,8 @@ class BoTorchSettingsData:
         self.n_initial = self.n_initial or max(8, 2 * n_dim)
         self.num_restarts = self.num_restarts or 12
         self.raw_samples = self.raw_samples or max(256, 16 * n_dim * n_dim)
-        self.mc_samples = self.mc_samples or (64 if 'fantasy' in self.acquisition else 512)
-        self.batch_size = self.batch_size or 128
+        self.mc_samples = self.mc_samples or (128 if 'fantasy' in self.acquisition else 512)
+        self.batch_size = self.batch_size or (32 if 'fantasy' in self.acquisition else 512)
         self.num_fantasies = self.num_fantasies or (128 if 'fantasy' in self.acquisition else 64)
 
 
@@ -385,11 +386,20 @@ class BoTorchStateData:
                     -torch.quantile(samples, 0.025).item(),
                 )
             # Extract signal-to-noise ratio
-            samples = draw_multivariate_samples(self.dataset.values, self.dataset.covariances, 1024)
-            obj_samples = self.composition.from_original_samples(samples, self.dataset.params)
-            obj_var = obj_samples.var(dim=0).mean().item() + 1e-300
+            if self.settings.objective.infer_noise:
+                obj_samples = self.composition.from_inputs(
+                    self.dataset.params,
+                    1024,
+                    observation_noise=True,
+                )
+            else:
+                obj_samples = self.composition.from_original_samples(
+                    draw_multivariate_samples(self.dataset.values, self.dataset.covariances, 1024),
+                    self.dataset.params,
+                )
+            obj_var = obj_samples.var(dim=0).mean().item()
             mean_var = obj_samples.mean(dim=0).var().item()
-            snr = np.inf if np.allclose(obj_var, 0) else 10 * (np.log10(mean_var / obj_var))
+            snr = 10 * (np.log10(mean_var + 1e-16) - np.log10(obj_var + 1e-16))
             self.extra_info["SNR"] = f'{snr:.1f} dB'
 
         # Under exact single-objective optimisation, return the best value found

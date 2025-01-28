@@ -36,6 +36,7 @@ class qFantasyAcqusition(MCAcquisitionFunction):
         X_pending: Optional[Tensor] = None,
         observation_noise: bool = False,
         noiseless_fantasies: bool = False,
+        mean_of_samples: bool = False,
         final_reduction: Optional[Callable[[Tensor, int], Tensor]] = None,
         q_reduction: Optional[Callable[[Tensor, int], Tensor]] = None,
         input_transform: Optional[Callable[[Tensor], Tensor]] = None,
@@ -96,6 +97,7 @@ class qFantasyAcqusition(MCAcquisitionFunction):
         self.num_fantasies: int = num_fantasies
         self.observation_noise = observation_noise
         self.noiseless_fantasies = noiseless_fantasies
+        self.mean_of_samples = mean_of_samples
         self.final_reduction = final_reduction
         self.q_reduction = q_reduction
         self.input_transform = input_transform
@@ -130,6 +132,8 @@ class qFantasyAcqusition(MCAcquisitionFunction):
             posterior_transform=self.posterior_transform,
         )
         fantasy_samples = self.inner_sampler(fantasy_posterior)
+        if self.mean_of_samples:
+            fantasy_samples = fantasy_samples.mean(dim=0, keepdim=True)
         fantasy_obj = self.objective(samples=fantasy_samples, X=X)
 
         # Compute reduction in objective for each fantasy model
@@ -239,7 +243,7 @@ class qFantasyLogNoisyExpectedImprovement(qFantasyAcqusition):
         self,
         *args,
         X_baseline: Tensor,
-        max_frac: float = 0.5,
+        max_frac: float = 1.0,
         prune_baseline: bool = True,
         **kwargs,
     ) -> None:
