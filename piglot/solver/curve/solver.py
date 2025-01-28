@@ -1,6 +1,7 @@
 """Module for Curve solver."""
 from __future__ import annotations
 from typing import Dict, Any, List, Tuple, Type
+import re
 import time
 import numpy as np
 import sympy
@@ -46,6 +47,27 @@ class CurveCase(Case):
         """
         return [self.case_name]
 
+    def get_expression(self, parameters: ParameterSet, values: np.ndarray) -> str:
+        """Get the expression for this case.
+
+        Parameters
+        ----------
+        parameters : ParameterSet
+            Parameter set for this problem.
+        values : np.ndarray
+            Current parameters to evaluate.
+
+        Returns
+        -------
+        str
+            Expression for this case.
+        """
+        expression = self.expression
+        param_value = parameters.to_dict(values)
+        for parameter, value in param_value.items():
+            expression = re.sub(r'\<' + parameter + r'\>', str(value), expression)
+        return expression
+
     def run(
         self,
         parameters: ParameterSet,
@@ -71,7 +93,7 @@ class CurveCase(Case):
         begin_time = time.time()
         # Prepare symbols
         symbs = sympy.symbols([self.parametric] + [p.name for p in parameters])
-        expression = sympy.lambdify(symbs, self.expression)
+        expression = sympy.lambdify(symbs, self.get_expression(parameters, values))
         param_values = parameters.to_dict(values)
         # Evaluate the expression on the grid
         grid = np.linspace(self.bounds[0], self.bounds[1], self.points)
