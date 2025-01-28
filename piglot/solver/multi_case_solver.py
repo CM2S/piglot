@@ -115,6 +115,13 @@ class MultiCaseSolver(Solver, ABC):
         self.parallel = parallel
         self.cases_dir = os.path.join(output_dir, "cases")
         self.cases_hist = os.path.join(output_dir, "cases_hist")
+        # Sanitise output fields
+        output_fields = []
+        for case in self.cases:
+            for name in case.get_fields():
+                if name in output_fields:
+                    raise ValueError(f"Duplicate output field '{name}'.")
+                output_fields.append(name)
 
     def prepare(self) -> None:
         """Prepare data for the optimisation."""
