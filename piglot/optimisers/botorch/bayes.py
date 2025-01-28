@@ -469,7 +469,10 @@ class BayesianBoTorch(Optimiser):
         # Single candidate case
         if self.settings.q == 1:
             return [self.objective(candidate) for candidate in candidates]
-        # Multi-candidate: run cases in parallel
+        # Multi-candidate: remove duplicates (via hash collision)
+        hashes = {self.parameters.hash(candidate): candidate for candidate in candidates}
+        candidates = list(hashes.values())
+        # Run the objective in parallel
         with Pool(self.settings.q) as pool:
             results = pool.map(lambda x: self.objective(x, concurrent=True), candidates)
         return list(results)
