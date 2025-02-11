@@ -100,4 +100,3 @@ class HresFile(OutputField):
         # Read the x field (if passed)
         x_field = config.get('x_field', 'LoadFactor')
         return cls(y_field, x_field)
-    

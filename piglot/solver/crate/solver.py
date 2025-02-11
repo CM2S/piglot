@@ -1,5 +1,5 @@
 """Module for CRATE solver."""
-from typing import Dict, Any, Type, Tuple, List
+from typing import Dict, Type, Tuple, List
 import os
 import sys
 import subprocess
@@ -12,6 +12,7 @@ from piglot.solver.input_file_solver import (
 )
 from piglot.solver.crate.fields import HresFile
 from piglot.utils.solver_utils import has_keyword
+
 
 class CrateCase(InputFileCase):
     """Class for Crate cases."""
@@ -47,7 +48,12 @@ class CrateCase(InputFileCase):
         """
         if not os.path.isdir(self.microstructure_dir):
             raise ValueError(f"Microstructure directory '{self.microstructure_dir}' not found.")
-        command = [self.python_interp, self.crate_bin, input_data.input_file, self.microstructure_dir]
+        command = [
+            self.python_interp,
+            self.crate_bin,
+            input_data.input_file,
+            self.microstructure_dir,
+        ]
         # Run the analysis
         process_result = subprocess.run(
             command,
