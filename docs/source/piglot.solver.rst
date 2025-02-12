@@ -13,6 +13,30 @@ Subpackages
 Submodules
 ----------
 
+piglot.solver.input\_file\_solver module
+----------------------------------------
+
+.. automodule:: piglot.solver.input_file_solver
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+piglot.solver.multi\_case\_solver module
+----------------------------------------
+
+.. automodule:: piglot.solver.multi_case_solver
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+piglot.solver.script\_solver module
+-----------------------------------
+
+.. automodule:: piglot.solver.script_solver
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 piglot.solver.solver module
 ---------------------------
 
