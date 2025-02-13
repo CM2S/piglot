@@ -5,7 +5,7 @@ import re
 import sys
 import shutil
 import importlib.util
-from typing import Dict, Union
+from typing import Union
 from piglot.parameter import ParameterSet
 
 
