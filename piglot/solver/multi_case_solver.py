@@ -177,13 +177,7 @@ class MultiCaseSolver(Solver, ABC):
         List[str]
             Output fields.
         """
-        output_fields = []
-        for case in self.cases:
-            for name in case.get_fields():
-                if name in output_fields:
-                    raise ValueError(f"Duplicate output field '{name}'.")
-                output_fields.append(name)
-        return output_fields
+        return [name for case in self.cases for name in case.get_fields()]
 
     def get_output_response(self, param_hash: str) -> Dict[str, OutputResult]:
         """Get the responses from all output fields for a given case.

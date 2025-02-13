@@ -81,10 +81,7 @@ class SampleInputFileCase(InputFileCase):
         # Simply copy the input file to an output file
         input_file = os.path.join(tmp_dir, os.path.basename(input_data.input_file))
         output_file = f'{os.path.splitext(input_file)[0]}.out'
-        try:
-            shutil.copy(input_file, output_file)
-        except shutil.Error:
-            return False
+        shutil.copy(input_file, output_file)
         return True
 
     @classmethod

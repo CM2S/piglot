@@ -9,32 +9,6 @@ from typing import Dict, Union
 from piglot.parameter import ParameterSet
 
 
-def write_parameters(param_value: Dict[str, float], source: str, dest: str) -> None:
-    """Write the set of parameters to the input file.
-
-    Parameters
-    ----------
-    param_value : Dict[str, float]
-        Collection of parameters and their values.
-    source : str
-        Source input file, to be copied to the destination.
-    dest : str
-        Destination input file.
-    """
-    with open(source, 'r', encoding='utf8') as fin:
-        with open(dest, 'w', encoding='utf8') as fout:
-            for line in fin:
-                out = line
-                for parameter, value in param_value.items():
-                    # Replace full expression
-                    regex = r'\<' + parameter + r'\(.*?\>'
-                    out = re.sub(regex, str(value), out)
-                    # Replace short expression
-                    regex = r'\<' + parameter + r'\>'
-                    out = re.sub(regex, str(value), out)
-                fout.write(out)
-
-
 def extract_parameters(input_file: str) -> ParameterSet:
     """Extract a ParameterSet from an input file.
 

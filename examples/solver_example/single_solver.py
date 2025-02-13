@@ -51,7 +51,7 @@ class SampleSingleCaseSolver(SingleCaseSolver):
         param_dict = self.parameters.to_dict(values)
         # Build the output response: [0, 1] time grid with the parameter values
         time = np.linspace(0, 1, len(param_dict))
-        response = np.array(param_dict.values())
+        response = np.array(list(param_dict.values()))
         return {self.output_fields[0]: OutputResult(time, response)}
 
     @classmethod
@@ -78,9 +78,9 @@ class SampleSingleCaseSolver(SingleCaseSolver):
             Solver to use for this problem.
         """
         # Read the field name
-        if 'name' not in config:
+        if 'output_name' not in config:
             raise ValueError("Missing output field name.")
-        name = config.pop('name')
+        name = config.pop('output_name')
         # Read optional parameters
         tmp_dir = os.path.join(output_dir, config.pop('tmp_dir', 'tmp'))
         verbosity = config.pop('verbosity', 'none')

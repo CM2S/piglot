@@ -249,12 +249,9 @@ class InputFileCase(Case, ABC):
         begin_time = time.time()
         success = self._run_case(input_data, tmp_dir)
         elapsed_time = time.time() - begin_time
-        # On failure, return an empty result
-        if not success:
-            return CaseResult(begin_time, elapsed_time, values, False, param_hash, {})
         # Read and return the fields
         responses = {name: field.get(input_data) for name, field in self.fields.items()}
-        return CaseResult(begin_time, elapsed_time, values, True, param_hash, responses)
+        return CaseResult(begin_time, elapsed_time, values, success, param_hash, responses)
 
     @classmethod
     @abstractmethod
@@ -326,7 +323,7 @@ class InputFileCase(Case, ABC):
             fields[field_name] = supported_fields[field_type].read(field_config)
         # Check if we are using a custom generator
         if 'generator' in config:
-            generator = read_custom_module(config['generator'], InputDataGenerator)()
+            generator = read_custom_module(config.pop('generator'), InputDataGenerator)()
             # Ensure we don't have dependencies with a custom generator
             if 'substitution_dependencies' in config or 'copy_dependencies' in config:
                 raise ValueError('Dependencies not supported with custom input data generators.')
@@ -334,8 +331,8 @@ class InputFileCase(Case, ABC):
             # Try to find the dependencies for this case
             substitution_deps, copy_deps = cls.get_dependencies(name)
             # Override the dependencies if they are defined in the config
-            substitution_deps = config.get('substitution_dependencies', substitution_deps)
-            copy_deps = config.get('copy_dependencies', copy_deps)
+            substitution_deps = config.pop('substitution_dependencies', substitution_deps)
+            copy_deps = config.pop('copy_dependencies', copy_deps)
             # Build the generator
             generator = DefaultInputDataGenerator(name, substitution_deps, copy_deps)
         return cls(name, fields, generator, **config)

@@ -102,7 +102,7 @@ Note that, generally, the constructor of the class should also be overridden to 
 To exemplify this, a simple implementation of a single-case solver that returns a response with the numerical values of the parameters is shown below.
 Additionally, note that this example does not connect with any solver outside ``piglot``; it is merely illustrative of the process of implementing a solver interface.
 
-.. literalinclude:: ../../../examples/solver_example/single.py
+.. literalinclude:: ../../../examples/solver_example/single_solver.py
   :language: python
 
 
@@ -183,7 +183,7 @@ As an example, the reading of the solver from the YAML file is already implement
 
 Similarly to the previous case, an example of an interface that returns a response with the numerical values of the parameters multiplied by an user-specified multiplier is shown below.
 
-.. literalinclude:: ../../../examples/solver_example/multi.py
+.. literalinclude:: ../../../examples/solver_example/multi_solver.py
   :language: python
 
 A sample YAML configuration file is shown below.
@@ -295,5 +295,5 @@ The default ``read()`` method of ``InputFileSolver`` is already implemented, and
 The following example shows a simple implementation of an input file-based solver that reads the parameters from an input file and copies them to an output file.
 Note that the parameters in the input file are substituted by the default input data generator.
 
-.. literalinclude:: ../../../examples/solver_example/input.py
+.. literalinclude:: ../../../examples/solver_example/input_solver.py
    :language: python

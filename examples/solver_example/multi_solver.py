@@ -67,7 +67,7 @@ class SampleCase(Case):
         # Evaluate the response
         param_values = parameters.to_dict(values)
         grid = np.linspace(0, 1, len(param_values))
-        curve = np.array(param_values.values()) * self.multiplier
+        curve = np.array(list(param_values.values())) * self.multiplier
         # Return the result
         run_time = time.time() - begin_time
         return CaseResult(
