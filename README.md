@@ -6,6 +6,7 @@
   </picture>
 </div>
 
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.06652/status.svg)](https://doi.org/10.21105/joss.06652)
 [![Unit and integration testing](https://github.com/CM2S/piglot/actions/workflows/test.yaml/badge.svg)](https://github.com/CM2S/piglot/actions/workflows/test.yaml)
 [![PyPI - Version](https://img.shields.io/pypi/v/piglot)](https://pypi.org/project/piglot/)
 [![GitHub License](https://img.shields.io/github/license/CM2S/piglot)](https://github.com/CM2S/piglot/blob/main/LICENSE)
@@ -93,12 +94,25 @@ Best parameters
 As you can see, piglot correctly identifies the `a` parameter close to the expected value of 2, and the error of the fitting is in the order of $10^{-8}$.
 In addition to these outputs, `piglot` creates an output directory, with the same name as the configuration file (minus the extension), where it stores the optimisation data.
 
-To visualise the optimisation results, use the `piglot-plot` utility.
+### Visualising results with `piglot-plot`
+
+When using configuration files, the optimisation results can be quickly visualised with our `piglot-plot` utility.
+With this tool, you can plot results for:
+- response for a given case;
+- response for best-observed objective;
+- currently running response (for supported solvers and objectives);
+- objective history;
+- parameter history;
+- cumulative regret;
+- animation with the evaluated responses;
+- Gaussian process regression for 1D optimisation problems.
+
+Here we provide a brief overview over some of its features, but you can check out a more detailed description in our [post-processing example](https://github.com/CM2S/piglot/blob/main/docs/source/examples/post_processing/description.md).
 In the same directory, run
 ```bash
 piglot-plot best config.yaml
 ```
-Which will display the best observed value for the optimisation problem.
+Which will display the best-observed value for the optimisation problem.
 You should see the following output in the terminal
 ```
 Best run:
@@ -109,8 +123,21 @@ Name: 18, dtype: object
 Hash: 2313718f75bc0445aa71df7d6d4e50ba82ad593d65f3762efdcbed01af338e30
 Objective:  8.85050592e-08
 ```
-The script will also plot the best observed response, and its comparison with the reference response: 
+The script will also plot the best observed response, and its comparison with the reference response:
 ![Best case plot](https://raw.githubusercontent.com/CM2S/piglot/main/docs/source/examples/sample_curve_fitting/best.svg)
+
+If you wish to directly save the figure without showing the GUI, you can also run
+```bash
+piglot-plot best config.yaml --save_fig fitting.png
+```
+which will save the image to the `fitting.png` file.
+
+If you wish to see the objective convergence history, you can also use
+```bash
+piglot-plot history config.yaml --best --log
+```
+where the optional arguments `--best` and `--log` indicate to plot the best-observed objective in a logarithmic scale, which gives the following output:
+![History plot](https://raw.githubusercontent.com/CM2S/piglot/main/docs/source/examples/sample_curve_fitting/history.svg)
 
 Now, try running (this may take some time)
 ```bash

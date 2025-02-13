@@ -12,6 +12,10 @@ piglot
    :target: https://github.com/CM2S/piglot
    :alt: GitHub
 
+.. image:: https://joss.theoj.org/papers/10.21105/joss.06652/status.svg
+   :target: https://doi.org/10.21105/joss.06652
+   :alt: JOSS
+
 .. image:: https://github.com/CM2S/piglot/actions/workflows/test.yaml/badge.svg
    :target: https://github.com/CM2S/piglot/actions/workflows/test.yaml
    :alt: Unit and integration testing
@@ -106,6 +110,15 @@ If you wish to install all optimisers at once, you can run :code:`pip install pi
    examples/fitting
    examples/design
    examples/analytical
+   examples/post_processing/description
+
+
+.. toctree::
+   :maxdepth: 3
+   :caption: Advanced Options
+   :hidden:
+
+   options/solvers
 
 
 .. toctree::
@@ -124,4 +137,5 @@ If you wish to install all optimisers at once, you can run :code:`pip install pi
    :hidden:
 
    API <_autosummary/piglot>
+   Integration with solvers <solvers/solvers>
    Papers <papers.md>

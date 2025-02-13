@@ -13,6 +13,14 @@ solver:
   # Solver name
   name: abaqus
   #
+  # Verbosity level of the solver
+  # Options:
+  # - none: No output
+  # - file: Both stdout and stderr are redirected to a file
+  # - error: Stdout is redirected to a file, stderr is printed
+  # - all: Both stdout and stderr are printed
+  verbosity: none
+  #
   # Path to the Abaqus binary
   abaqus_path: C:\SIMULIA\Commands\abaqus.bat
   #
@@ -23,8 +31,6 @@ solver:
   cases:
     # Example for an input file
     'sample.inp':
-      # If the input has only one job this field is optional
-      job_name: Job-1 # Job name to extract data
       # If the input has only one step this field is optional
       step_name: Step-1 # Step name to extract data
       # If the input has only one instance this field is optional

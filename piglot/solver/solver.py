@@ -1,7 +1,7 @@
-"""Module for solvers"""
+"""Module for solvers."""
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Any, Type, TypeVar
 from abc import ABC, abstractmethod
 import os
 import time
@@ -10,160 +10,10 @@ import numpy as np
 from yaml import safe_dump_all, safe_load_all
 from piglot.parameter import ParameterSet
 from piglot.utils.assorted import pretty_time
+from piglot.utils.solver_utils import VerbosityManager
 
 
-class InputData(ABC):
-    """Generic class for solver input data."""
-
-    @abstractmethod
-    def prepare(
-            self,
-            values: np.ndarray,
-            parameters: ParameterSet,
-            tmp_dir: str = None,
-            ) -> InputData:
-        """Prepare the input data for the simulation with a given set of parameters.
-
-        Parameters
-        ----------
-        values : np.ndarray
-            Parameters to run for.
-        parameters : ParameterSet
-            Parameter set for this problem.
-        tmp_dir : str, optional
-            Temporary directory to run the analyses, by default None
-
-        Returns
-        -------
-        InputData
-            Input data prepared for the simulation.
-        """
-
-    def check(self, parameters: ParameterSet) -> None:
-        """Check if the input data is valid according to the given parameters.
-
-        Parameters
-        ----------
-        parameters : ParameterSet
-            Parameter set for this problem.
-        """
-
-    @abstractmethod
-    def name(self) -> str:
-        """Return the name of the input data.
-
-        Returns
-        -------
-        str
-            Name of the input data.
-        """
-
-
-class OutputField(ABC):
-    """Generic class for output fields.
-
-    Methods
-    -------
-    check(case):
-        Check for validity in the input file before reading. This needs to be called prior
-        to any reading on the file.
-    get(case):
-        Read the input file and returns the requested fields.
-    """
-
-    @abstractmethod
-    def check(self, input_data: InputData) -> None:
-        """Check for validity in the input data before reading.
-
-        Parameters
-        ----------
-        input_data : InputData
-            Container for the solver input data.
-        """
-
-    @abstractmethod
-    def get(self, input_data: InputData) -> OutputResult:
-        """Read the output data from the simulation.
-
-        Parameters
-        ----------
-        input_data : InputData
-            Container for the solver input data.
-
-        Returns
-        -------
-        OutputResult
-            Output result for this field.
-        """
-
-    @staticmethod
-    @abstractmethod
-    def read(config: Dict[str, Any]) -> OutputField:
-        """Read the output field from the configuration dictionary.
-
-        Parameters
-        ----------
-        config : Dict[str, Any]
-            Configuration dictionary.
-
-        Returns
-        -------
-        OutputField
-            Output field to use for this problem.
-        """
-
-
-class ScriptOutputField(OutputField):
-    """Class for script-based output fields."""
-
-    def check(self, input_data: InputData) -> None:
-        """Check for validity in the input data before reading.
-
-        Parameters
-        ----------
-        input_data : InputData
-            Container for the solver input data.
-        """
-
-    @staticmethod
-    def read(config: Dict[str, Any]) -> ScriptOutputField:
-        """Read the output field from the configuration dictionary.
-
-        Parameters
-        ----------
-        config : Dict[str, Any]
-            Configuration dictionary.
-
-        Returns
-        -------
-        ScriptOutputField
-            Output field to use for this problem.
-        """
-        raise RuntimeError("Cannot read the configuration for a script-based output field.")
-
-
-class Case:
-    """Generic class for cases."""
-
-    def __init__(self, input_data: InputData, fields: Dict[str, OutputField]) -> None:
-        self.input_data = input_data
-        self.fields = fields
-
-    def check(self, parameters: ParameterSet) -> None:
-        """Prepare the case for the simulation."""
-        self.input_data.check(parameters)
-        for field in self.fields.values():
-            field.check(self.input_data)
-
-    def name(self) -> str:
-        """Return the name of the case.
-
-        Returns
-        -------
-        str
-            Name of the case.
-        """
-        return self.input_data.name()
+T = TypeVar('T', bound='Solver')
 
 
 @dataclass
@@ -270,39 +120,144 @@ class Solver(ABC):
     """Base class for solvers."""
 
     def __init__(
-            self,
-            cases: List[Case],
-            parameters: ParameterSet,
-            output_dir: str,
-            ) -> None:
-        """Constructor for the solver class.
+        self,
+        parameters: ParameterSet,
+        output_dir: str,
+        tmp_dir: str,
+        verbosity: str,
+    ) -> None:
+        self.parameters = parameters
+        self.output_dir = output_dir
+        self.tmp_dir = tmp_dir
+        self.verbosity_manager = VerbosityManager(verbosity, os.path.join(output_dir, 'solver'))
+        self.begin_time = time.time()
+
+    @abstractmethod
+    def prepare(self) -> None:
+        """Prepare data for the optimisation."""
+
+    @abstractmethod
+    def solve(
+        self,
+        values: np.ndarray,
+        concurrent: bool,
+    ) -> Dict[str, OutputResult]:
+        """Solve all cases for the given set of parameter values.
 
         Parameters
         ----------
-        cases : List[Case]
-            Cases to be run.
+        values : array
+            Current parameters to evaluate.
+        concurrent : bool
+            Whether this run may be concurrent to another one (so use unique file names).
+
+        Returns
+        -------
+        Dict[str, OutputResult]
+            Evaluated results for each output field.
+        """
+
+    @abstractmethod
+    def get_output_fields(self) -> List[str]:
+        """Get all output fields.
+
+        Returns
+        -------
+        List[str]
+            Output fields.
+        """
+
+    @abstractmethod
+    def get_output_response(self, param_hash: str) -> Dict[str, OutputResult]:
+        """Get the responses from all output fields for a given case.
+
+        Parameters
+        ----------
+        param_hash : str
+            Hash of the case to load.
+
+        Returns
+        -------
+        Dict[str, OutputResult]
+            Output responses.
+        """
+
+    def get_current_response(self) -> Dict[str, OutputResult]:
+        """Get the responses from a given output field for all cases.
+
+        Returns
+        -------
+        Dict[str, OutputResult]
+            Output responses.
+        """
+        raise NotImplementedError("This solver does not support getting current responses.")
+
+    @classmethod
+    @abstractmethod
+    def read(
+        cls: Type[T],
+        config: Dict[str, Any],
+        parameters: ParameterSet,
+        output_dir: str,
+    ) -> T:
+        """Read the solver from the configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Configuration dictionary.
         parameters : ParameterSet
             Parameter set for this problem.
         output_dir : str
             Path to the output directory.
+
+        Returns
+        -------
+        Solver
+            Solver to use for this problem.
         """
-        self.cases = cases
-        self.parameters = parameters
-        self.output_dir = output_dir
-        self.begin_time = time.time()
+
+
+class SingleCaseSolver(Solver, ABC):
+    """Generic class for solvers with a single case."""
+
+    def __init__(
+        self,
+        output_fields: List[str],
+        parameters: ParameterSet,
+        output_dir: str,
+        tmp_dir: str,
+        verbosity: str,
+    ) -> None:
+        """Constructor for the solver class.
+
+        Parameters
+        ----------
+        output_fields : List[str]
+            List of output fields.
+        parameters : ParameterSet
+            Parameter set for this problem.
+        output_dir : str
+            Path to the output directory.
+        tmp_dir : str
+            Path to the temporary directory.
+        """
+        super().__init__(parameters, output_dir, tmp_dir, verbosity)
+        self.output_fields = output_fields
         self.cases_dir = os.path.join(output_dir, "cases")
         self.cases_hist = os.path.join(output_dir, "cases_hist")
 
     def prepare(self) -> None:
         """Prepare data for the optimisation."""
+        self.verbosity_manager.prepare()
         # Create output directories
         os.makedirs(self.cases_dir, exist_ok=True)
         if os.path.isdir(self.cases_hist):
             shutil.rmtree(self.cases_hist)
         os.mkdir(self.cases_hist)
         # Build headers for case log files
-        for case in self.cases:
-            case_dir = os.path.join(self.cases_dir, case.name())
+        for case in self.output_fields:
+            case_dir = os.path.join(self.cases_dir, case)
             with open(case_dir, 'w', encoding='utf8') as file:
                 file.write(f"{'Start Time /s':>15}\t")
                 file.write(f"{'Run Time /s':>15}\t")
@@ -310,52 +265,16 @@ class Solver(ABC):
                 for param in self.parameters:
                     file.write(f"{param.name:>15}\t")
                 file.write(f'{"Hash":>64}\n')
-        # Prepare individual cases and output fields
-        for case in self.cases:
-            case.check(self.parameters)
 
-    def _write_history_entry(
-            self,
-            case: Case,
-            result: CaseResult,
-            ) -> None:
-        """Write this case's history entry.
-
-        Parameters
-        ----------
-        case : Case
-            Case to write.
-        result : CaseResult
-            Result for this case.
-        """
-        # Write out the case file
-        param_hash = self.parameters.hash(result.values)
-        output_case_hist = os.path.join(self.cases_hist, f'{case.name()}-{param_hash}')
-        result.write(output_case_hist, self.parameters)
-        # Add record to case log file
-        with open(os.path.join(self.cases_dir, case.name()), 'a', encoding='utf8') as file:
-            file.write(f'{result.begin_time - self.begin_time:>15.8e}\t')
-            file.write(f'{result.run_time:>15.8e}\t')
-            file.write(f'{result.success:>10}\t')
-            for val in result.values:
-                file.write(f'{val:>15.6f}\t')
-            file.write(f'{param_hash}\n')
-
-    def get_output_fields(self) -> Dict[str, Tuple[Case, OutputField]]:
+    def get_output_fields(self) -> List[str]:
         """Get all output fields.
 
         Returns
         -------
-        Dict[str, Tuple[Case, OutputField]]
+        List[str]
             Output fields.
         """
-        output_fields = {}
-        for case in self.cases:
-            for name, field in case.fields.items():
-                if name in output_fields:
-                    raise ValueError(f"Duplicate output field '{name}'.")
-                output_fields[name] = (case, field)
-        return output_fields
+        return self.output_fields
 
     def get_case_params(self, param_hash: str) -> Dict[str, float]:
         """Get the parameters for a given hash.
@@ -390,33 +309,11 @@ class Solver(ABC):
         Dict[str, OutputResult]
             Output responses.
         """
-        responses = {}
-        for case in self.cases:
-            # Read the case result
-            result = CaseResult.read(
-                os.path.join(self.cases_hist, f'{case.name()}-{param_hash}'),
-                self.parameters,
-            )
-            for name, response in result.responses.items():
-                responses[name] = response
-        return responses
+        result = CaseResult.read(os.path.join(self.cases_hist, param_hash))
+        return result.responses
 
     @abstractmethod
-    def get_current_response(self) -> Dict[str, OutputResult]:
-        """Get the responses from a given output field for all cases.
-
-        Returns
-        -------
-        Dict[str, OutputResult]
-            Output responses.
-        """
-
-    @abstractmethod
-    def _solve(
-            self,
-            values: np.ndarray,
-            concurrent: bool,
-            ) -> Dict[Case, CaseResult]:
+    def _solve(self, values: np.ndarray, concurrent: bool) -> Dict[str, OutputResult]:
         """Internal solver for the prescribed problems.
 
         Parameters
@@ -428,15 +325,15 @@ class Solver(ABC):
 
         Returns
         -------
-        Dict[Case, CaseResult]
-            Results for each case.
+        Dict[str, OutputResult]
+            Evaluated results for each output field.
         """
 
     def solve(
-            self,
-            values: np.ndarray,
-            concurrent: bool,
-            ) -> Dict[str, OutputResult]:
+        self,
+        values: np.ndarray,
+        concurrent: bool,
+    ) -> Dict[str, OutputResult]:
         """Solve all cases for the given set of parameter values.
 
         Parameters
@@ -451,32 +348,13 @@ class Solver(ABC):
         Dict[str, OutputResult]
             Evaluated results for each output field.
         """
-        # Evaluate all cases
-        results = self._solve(values, concurrent)
-        # Post-process results: write history entries and collect outputs
-        outputs: Dict[str, OutputResult] = {}
-        for case, result in results.items():
-            self._write_history_entry(case, result)
-            for name in case.fields:
-                outputs[name] = result.responses[name]
-        return outputs
-
-    @staticmethod
-    @abstractmethod
-    def read(config: Dict[str, Any], parameters: ParameterSet, output_dir: str) -> Solver:
-        """Read the solver from the configuration dictionary.
-
-        Parameters
-        ----------
-        config : Dict[str, Any]
-            Configuration dictionary.
-        parameters : ParameterSet
-            Parameter set for this problem.
-        output_dir : str
-            Path to the output directory.
-
-        Returns
-        -------
-        Solver
-            Solver to use for this problem.
-        """
+        # Run the solver
+        begin_time = time.time()
+        with self.verbosity_manager:
+            results = self._solve(values, concurrent)
+        run_time = time.time() - begin_time
+        # Post-process results: write history entries
+        param_hash = self.parameters.hash(values)
+        case_result = CaseResult(begin_time, run_time, values, True, param_hash, results)
+        case_result.write(os.path.join(self.cases_hist, case_result.param_hash), self.parameters)
+        return results

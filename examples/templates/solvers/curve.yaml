@@ -14,6 +14,14 @@ solver:
   # Solver name
   name: curve
   #
+  # Verbosity level of the solver
+  # Options:
+  # - none: No output
+  # - file: Both stdout and stderr are redirected to a file
+  # - error: Stdout is redirected to a file, stderr is printed
+  # - all: Both stdout and stderr are printed
+  verbosity: none
+  #
   # List of cases to run
   # The name of each case is the name of the output field to register. You can
   # have multiple cases.

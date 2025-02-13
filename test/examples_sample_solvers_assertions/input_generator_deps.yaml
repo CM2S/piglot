@@ -1,0 +1,26 @@
+iters: 8
+
+optimiser: random
+
+parameters:
+  x1: [1, -2, 2]
+  x2: [1, -2, 2]
+  x3: [1, -2, 2]
+
+objective:
+  name: fitting
+  solver:
+    name: sample_input_file
+    cases:
+      input.dat:
+        substitution_dependencies: ['dep_subs.txt']
+        copy_dependencies: ['dep_copy.txt']
+        generator:
+          script: sample_generator.py
+          class: SampleInputGenerator
+        fields:
+          sample_output:
+            name: sample
+  references:
+    'sine.txt':
+      prediction: ['sample_output']

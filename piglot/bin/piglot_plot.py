@@ -298,9 +298,12 @@ def plot_gp(args):
     x_max = max(par.ubound for par in parameters)
     x = torch.linspace(x_min, x_max, 1000)
     for name, data_dict in data.items():
-        values = data_dict['values']
-        param_values = data_dict['params']
-        variances = data_dict['variances'] if 'variances' in data_dict else None
+        max_calls = len(data_dict['values'])
+        if args.max_calls:
+            max_calls = min(max_calls, args.max_calls)
+        values = data_dict['values'][:max_calls]
+        param_values = data_dict['params'][:max_calls]
+        variances = data_dict['variances'][:max_calls] if 'variances' in data_dict else None
         model = get_model(param_values, values, variances)
         with torch.no_grad():
             posterior = model.posterior(x.unsqueeze(1))
@@ -313,9 +316,11 @@ def plot_gp(args):
             axis.errorbar(param_values, values, yerr=np.sqrt(variances), color='black', fmt='o')
         else:
             axis.scatter(param_values, values, color='black')
-        axis.set_xlim(x_min, x_max)
+    axis.set_xlim(x_min, x_max)
     axis.legend()
     axis.grid()
+    axis.set_xlabel(parameters[0].name)
+    axis.set_ylabel("Objective")
     fig.tight_layout()
     if args.save_fig:
         fig.savefig(args.save_fig)
@@ -622,12 +627,6 @@ def main(passed_args: List[str] = None):
         'config',
         type=str,
         help="Path for the used or generated configuration file.",
-    )
-    sp_animation.add_argument(
-        '--save_fig',
-        default=None,
-        type=str,
-        help=("Path to save the generated figure. If used, graphical output is skipped."),
     )
     sp_animation.set_defaults(func=plot_animation)
 
