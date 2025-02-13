@@ -1,35 +1,12 @@
 """Utilities for the solver module."""
+from __future__ import annotations
 import os
 import re
+import sys
+import shutil
 import importlib.util
-from typing import Dict
+from typing import Union
 from piglot.parameter import ParameterSet
-
-
-def write_parameters(param_value: Dict[str, float], source: str, dest: str) -> None:
-    """Write the set of parameters to the input file.
-
-    Parameters
-    ----------
-    param_value : Dict[str, float]
-        Collection of parameters and their values.
-    source : str
-        Source input file, to be copied to the destination.
-    dest : str
-        Destination input file.
-    """
-    with open(source, 'r', encoding='utf8') as fin:
-        with open(dest, 'w', encoding='utf8') as fout:
-            for line in fin:
-                out = line
-                for parameter, value in param_value.items():
-                    # Replace full expression
-                    regex = r'\<' + parameter + r'\(.*?\>'
-                    out = re.sub(regex, str(value), out)
-                    # Replace short expression
-                    regex = r'\<' + parameter + r'\>'
-                    out = re.sub(regex, str(value), out)
-                fout.write(out)
 
 
 def extract_parameters(input_file: str) -> ParameterSet:
@@ -188,3 +165,64 @@ def load_module_from_file(filename: str, attribute) -> object:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return getattr(module, attribute)
+
+
+class VerbosityManager:
+    """Class to manage output streams based on verbosity levels."""
+
+    DEFAULT_VERBOSITY = 'none'
+    AVAILABLE_VERBOSITIES = [
+        'none',
+        'file',
+        'error',
+        'all',
+    ]
+
+    def __init__(self, verbosity: Union[str, None], output_dir: str) -> None:
+        # Sanitise verbosity
+        if verbosity is None:
+            verbosity = self.DEFAULT_VERBOSITY
+        if verbosity not in self.AVAILABLE_VERBOSITIES:
+            raise ValueError(f"Invalid verbosity level: {verbosity}")
+        self.verbosity = verbosity
+        self.output_dir = output_dir
+        self.stdout = None
+        self.stderr = None
+        self.__devnull = None
+
+    def prepare(self) -> None:
+        """Set up the verbosity level for the solver."""
+        # Prepare output streams
+        if os.path.isdir(self.output_dir):
+            shutil.rmtree(self.output_dir)
+        self.__devnull = open(os.devnull, 'w', encoding='utf8')
+        if self.verbosity in ('file', 'error'):
+            os.mkdir(self.output_dir)
+            self.stdout = open(os.path.join(self.output_dir, 'stdout'), 'w', encoding='utf8')
+            self.stderr = (
+                open(os.path.join(self.output_dir, 'stderr'), 'w', encoding='utf8')
+                if self.verbosity == 'file' else sys.__stderr__
+            )
+        elif self.verbosity == 'all':
+            self.stdout = sys.__stdout__
+            self.stderr = sys.__stderr__
+        elif self.verbosity == 'none':
+            self.stdout = self.__devnull
+            self.stderr = self.__devnull
+
+    def flush(self) -> None:
+        """Flush the solver outputs, if needed."""
+        if self.verbosity in ('file', 'error'):
+            self.stdout.flush()
+            if self.stderr is not None:
+                self.stderr.flush()
+
+    def __enter__(self) -> VerbosityManager:
+        sys.stdout = self.stdout
+        sys.stderr = self.stderr
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.flush()
+        sys.stdout = sys.__stdout__
+        sys.stderr = sys.__stderr__

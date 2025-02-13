@@ -4,85 +4,9 @@ from typing import Dict, Any, Union
 import os
 import numpy as np
 import pandas as pd
-from piglot.parameter import ParameterSet
-from piglot.solver.solver import InputData, OutputField, OutputResult
-from piglot.utils.solver_utils import get_case_name, write_parameters
-from piglot.utils.solver_utils import has_parameter
-
-
-class CrateInputData(InputData):
-    """Container for CRATE input data."""
-
-    def __init__(self, input_file: str) -> None:
-        super().__init__()
-        self.input_file = input_file
-
-    def prepare(
-            self,
-            values: np.ndarray,
-            parameters: ParameterSet,
-            tmp_dir: str = None,
-            ) -> CrateInputData:
-        """Prepare the input data for the simulation with a given set of parameters.
-
-        Parameters
-        ----------
-        values : np.ndarray
-            Parameters to run for.
-        parameters : ParameterSet
-            Parameter set for this problem.
-        tmp_dir : str, optional
-            Temporary directory to run the analyses, by default None
-
-        Returns
-        -------
-        CrateInputData
-            Input data prepared for the simulation.
-        """
-        # Copy file and write out the parameters
-        dest_file = os.path.join(tmp_dir, os.path.basename(self.input_file))
-        write_parameters(parameters.to_dict(values), self.input_file, dest_file)
-        return CrateInputData(dest_file)
-
-    def check(self, parameters: ParameterSet) -> None:
-        """Check if the input data is valid according to the given parameters.
-
-        Parameters
-        ----------
-        parameters : ParameterSet
-            Parameter set for this problem.
-        """
-        # Generate a dummy set of parameters (to ensure proper handling of output parameters)
-        values = np.array([parameter.inital_value for parameter in parameters])
-        param_dict = parameters.to_dict(values, input_normalised=False)
-        for name in param_dict:
-            if not has_parameter(self.input_file, f'<{name}>'):
-                raise RuntimeError(f"Parameter '{name}' not found in input file.")
-
-    def name(self) -> str:
-        """Return the name of the input data.
-
-        Returns
-        -------
-        str
-            Name of the input data.
-        """
-        return os.path.basename(self.input_file)
-
-    def get_current(self, target_dir: str) -> CrateInputData:
-        """Get the current input data.
-
-        Parameters
-        ----------
-        target_dir : str
-            Target directory to copy the input file.
-
-        Returns
-        -------
-        CrateInputData
-            Current input data.
-        """
-        return CrateInputData(os.path.join(target_dir, os.path.basename(self.input_file)))
+from piglot.solver.input_file_solver import InputData, OutputField
+from piglot.solver.solver import OutputResult
+from piglot.utils.solver_utils import get_case_name
 
 
 class HresFile(OutputField):
@@ -112,22 +36,22 @@ class HresFile(OutputField):
         self.x_field = x_field
         self.separator = 16
 
-    def check(self, input_data: CrateInputData) -> None:
+    def check(self, input_data: InputData) -> None:
         """Sanity checks on the input file.
 
         Parameters
         ----------
-        input_data : CrateInputData
+        input_data : InputData
             Input data for this case.
         """
         pass
 
-    def get(self, input_data: CrateInputData) -> OutputResult:
+    def get(self, input_data: InputData) -> OutputResult:
         """Get a parameter from the .hres file.
 
         Parameters
         ----------
-        input_data : CrateInputData
+        input_data : InputData
             Input data for this case.
 
         Returns
@@ -155,8 +79,8 @@ class HresFile(OutputField):
         # Return the given quantity as the x-variable
         return OutputResult(df.iloc[:, x_column].to_numpy(), df.iloc[:, y_column].to_numpy())
 
-    @staticmethod
-    def read(config: Dict[str, Any]) -> HresFile:
+    @classmethod
+    def read(cls, config: Dict[str, Any]) -> HresFile:
         """Read the output field from the configuration dictionary.
 
         Parameters
@@ -175,30 +99,4 @@ class HresFile(OutputField):
         y_field = config['y_field']
         # Read the x field (if passed)
         x_field = config.get('x_field', 'LoadFactor')
-        return HresFile(y_field, x_field)
-
-
-def crate_fields_reader(config: Dict[str, Any]) -> OutputField:
-    """Read the output fields for the CRATE solver.
-
-    Parameters
-    ----------
-    config : Dict[str, Any]
-        Configuration dictionary.
-
-    Returns
-    -------
-    OutputField
-        Output field to use for this problem.
-    """
-    # Extract name of output field
-    if 'name' not in config:
-        raise ValueError("Missing 'name' in output field configuration.")
-    field_name = config['name']
-    # Delegate to the appropriate reader
-    readers = {
-        'hresFile': HresFile,
-    }
-    if field_name not in readers:
-        raise ValueError(f"Unknown output field name '{field_name}'.")
-    return readers[field_name].read(config)
+        return cls(y_field, x_field)

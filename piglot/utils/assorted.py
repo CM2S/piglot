@@ -1,7 +1,8 @@
 """Assorted utilities."""
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Type, TypeVar, Any
 import os
 import contextlib
+import importlib
 import numpy as np
 from scipy.stats import t
 
@@ -142,3 +143,38 @@ def change_cwd(path: str):
         yield
     finally:
         os.chdir(old)
+
+
+T = TypeVar('T')
+
+
+def read_custom_module(config: Dict[str, Any], cls: Type[T]) -> Type[T]:
+    """Read a custom module from a configuration spec.
+
+    Parameters
+    ----------
+    config : Dict[str, Any]
+        Configuration of the custom module.
+    cls : Type
+        Base class of the module to load.
+
+    Returns
+    -------
+    Type
+        Custom module type read from the script.
+    """
+    # Sanitise the configuration
+    if 'script' not in config:
+        raise ValueError("Missing 'script' field for reading the custom module script.")
+    if 'class' not in config:
+        raise ValueError("Missing 'class' field for reading the custom module script.")
+    # Load the module
+    module_name = f'piglot_{os.path.basename(config["script"]).replace(".", "_")}'
+    spec = importlib.util.spec_from_file_location(module_name, config['script'])
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module_class = getattr(module, config['class'])
+    # Sanitise the class
+    if not issubclass(module_class, cls):
+        raise ValueError(f"Custom class '{module_class}' is not a subclass of '{cls}'.")
+    return module_class

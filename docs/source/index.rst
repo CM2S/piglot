@@ -114,6 +114,14 @@ If you wish to install all optimisers at once, you can run :code:`pip install pi
 
 
 .. toctree::
+   :maxdepth: 3
+   :caption: Advanced Options
+   :hidden:
+
+   options/solvers
+
+
+.. toctree::
    :maxdepth: 1
    :caption: Input file templates
    :hidden:

@@ -13,8 +13,16 @@ solver:
   # Solver name
   name: crate
   #
+  # Verbosity level of the solver
+  # Options:
+  # - none: No output
+  # - file: Both stdout and stderr are redirected to a file
+  # - error: Stdout is redirected to a file, stderr is printed
+  # - all: Both stdout and stderr are printed
+  verbosity: none
+  #
   # Path to the CRATE executable
-  links: CRATE/src/cratepy/main.py
+  crate: CRATE/src/cratepy/main.py
   #
   # List of cases to run
   # The name of each case is the path to the input file that will be used

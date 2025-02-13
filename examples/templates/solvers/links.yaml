@@ -15,6 +15,14 @@ solver:
   # Solver name
   name: links
   #
+  # Verbosity level of the solver
+  # Options:
+  # - none: No output
+  # - file: Both stdout and stderr are redirected to a file
+  # - error: Stdout is redirected to a file, stderr is printed
+  # - all: Both stdout and stderr are printed
+  verbosity: none
+  #
   # Path to the Links binary
   links: LINKS
   #

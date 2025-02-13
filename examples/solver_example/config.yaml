@@ -1,17 +1,16 @@
-iters: 64
+iters: 4
 
 optimiser: botorch
 
 parameters:
-  a: [1, 0, 4]
-  b: [1, 0, 4]
-  c: [1, 0, 4]
-  d: [1, 0, 4]
+  freq: [1, 0, 2]
 
 objective:
   name: fitting
   solver:
-    name: sample
+    name: script
+    script: sample_solver.py
+    class: SampleSolver
   references:
-    'sample.txt':
-      prediction: ['sample_field']
+    'sine.txt':
+      prediction: ['sine']

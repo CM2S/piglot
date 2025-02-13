@@ -4,85 +4,9 @@ from typing import Dict, Any, Union
 import os
 import numpy as np
 import pandas as pd
-from piglot.parameter import ParameterSet
-from piglot.solver.solver import InputData, OutputField, OutputResult
-from piglot.utils.solver_utils import get_case_name, has_keyword, find_keyword, write_parameters
-from piglot.utils.solver_utils import has_parameter
-
-
-class LinksInputData(InputData):
-    """Container for Links input data."""
-
-    def __init__(self, input_file: str) -> None:
-        super().__init__()
-        self.input_file = input_file
-
-    def prepare(
-            self,
-            values: np.ndarray,
-            parameters: ParameterSet,
-            tmp_dir: str = None,
-            ) -> LinksInputData:
-        """Prepare the input data for the simulation with a given set of parameters.
-
-        Parameters
-        ----------
-        values : np.ndarray
-            Parameters to run for.
-        parameters : ParameterSet
-            Parameter set for this problem.
-        tmp_dir : str, optional
-            Temporary directory to run the analyses, by default None
-
-        Returns
-        -------
-        LinksInputData
-            Input data prepared for the simulation.
-        """
-        # Copy file and write out the parameters
-        dest_file = os.path.join(tmp_dir, os.path.basename(self.input_file))
-        write_parameters(parameters.to_dict(values), self.input_file, dest_file)
-        return LinksInputData(dest_file)
-
-    def check(self, parameters: ParameterSet) -> None:
-        """Check if the input data is valid according to the given parameters.
-
-        Parameters
-        ----------
-        parameters : ParameterSet
-            Parameter set for this problem.
-        """
-        # Generate a dummy set of parameters (to ensure proper handling of output parameters)
-        values = np.array([parameter.inital_value for parameter in parameters])
-        param_dict = parameters.to_dict(values, input_normalised=False)
-        for name in param_dict:
-            if not has_parameter(self.input_file, f'<{name}>'):
-                raise RuntimeError(f"Parameter '{name}' not found in input file.")
-
-    def name(self) -> str:
-        """Return the name of the input data.
-
-        Returns
-        -------
-        str
-            Name of the input data.
-        """
-        return os.path.basename(self.input_file)
-
-    def get_current(self, target_dir: str) -> LinksInputData:
-        """Get the current input data.
-
-        Parameters
-        ----------
-        target_dir : str
-            Target directory to copy the input file.
-
-        Returns
-        -------
-        LinksInputData
-            Current input data.
-        """
-        return LinksInputData(os.path.join(target_dir, os.path.basename(self.input_file)))
+from piglot.solver.input_file_solver import InputData, OutputField
+from piglot.solver.solver import OutputResult
+from piglot.utils.solver_utils import get_case_name, has_keyword, find_keyword
 
 
 class Reaction(OutputField):
@@ -104,7 +28,7 @@ class Reaction(OutputField):
         self.field_name = field
         self.group = group
 
-    def check(self, input_data: LinksInputData) -> None:
+    def check(self, input_data: InputData) -> None:
         """Sanity checks on the input file.
 
         This checks if:
@@ -113,7 +37,7 @@ class Reaction(OutputField):
 
         Parameters
         ----------
-        input_data : LinksInputData
+        input_data : InputData
             Input data for this case.
 
         Raises
@@ -132,12 +56,12 @@ class Reaction(OutputField):
             raise RuntimeError("Reactions requested on an input file without NODE_GROUPS.")
         # TODO: check group number and dimensions
 
-    def get(self, input_data: LinksInputData) -> OutputResult:
+    def get(self, input_data: InputData) -> OutputResult:
         """Reads reactions from a Links analysis.
 
         Parameters
         ----------
-        input_data : LinksInputData
+        input_data : InputData
             Input data for this case.
 
         Returns
@@ -157,8 +81,8 @@ class Reaction(OutputField):
         data_group = data[data[:, 0] == self.group, 1:]
         return OutputResult(data_group[:, 0], data_group[:, self.field])
 
-    @staticmethod
-    def read(config: Dict[str, Any]) -> Reaction:
+    @classmethod
+    def read(cls, config: Dict[str, Any]) -> Reaction:
         """Read the output field from the configuration dictionary.
 
         Parameters
@@ -177,7 +101,7 @@ class Reaction(OutputField):
         field = config['field']
         # Read the group (if passed)
         group = int(config.get('group', 1))
-        return Reaction(field, group)
+        return cls(field, group)
 
 
 class OutFile(OutputField):
@@ -224,7 +148,7 @@ class OutFile(OutputField):
         self.x_field = x_field
         self.separator = 16
 
-    def check(self, input_data: LinksInputData) -> None:
+    def check(self, input_data: InputData) -> None:
         """Sanity checks on the input file.
 
         This checks for:
@@ -234,7 +158,7 @@ class OutFile(OutputField):
 
         Parameters
         ----------
-        input_data : LinksInputData
+        input_data : InputData
             Input data for this case.
 
         Raises
@@ -273,12 +197,12 @@ class OutFile(OutputField):
         # Check if single or double precision output
         self.separator = 24 if has_keyword(input_file, "DOUBLE_PRECISION_OUTPUT") else 16
 
-    def get(self, input_data: LinksInputData) -> OutputResult:
+    def get(self, input_data: InputData) -> OutputResult:
         """Get a parameter from the .out file.
 
         Parameters
         ----------
-        input_data : LinksInputData
+        input_data : InputData
             Input data for this case.
 
         Returns
@@ -311,8 +235,8 @@ class OutFile(OutputField):
         # Return the given quantity as the x-variable
         return OutputResult(df.iloc[:, x_column].to_numpy(), df.iloc[:, y_column].to_numpy())
 
-    @staticmethod
-    def read(config: Dict[str, Any]) -> OutFile:
+    @classmethod
+    def read(cls, config: Dict[str, Any]) -> OutFile:
         """Read the output field from the configuration dictionary.
 
         Parameters
@@ -334,31 +258,4 @@ class OutFile(OutputField):
         i_gauss = int(config['i_gauss']) if 'i_gauss' in config else None
         # Read the x field (if passed)
         x_field = config.get('x_field', 'LoadFactor')
-        return OutFile(field, i_elem, i_gauss, x_field)
-
-
-def links_fields_reader(config: Dict[str, Any]) -> OutputField:
-    """Read the output fields for the Links solver.
-
-    Parameters
-    ----------
-    config : Dict[str, Any]
-        Configuration dictionary.
-
-    Returns
-    -------
-    OutputField
-        Output field to use for this problem.
-    """
-    # Extract name of output field
-    if 'name' not in config:
-        raise ValueError("Missing 'name' in output field configuration.")
-    field_name = config['name']
-    # Delegate to the appropriate reader
-    readers = {
-        'Reaction': Reaction,
-        'OutFile': OutFile,
-    }
-    if field_name not in readers:
-        raise ValueError(f"Unknown output field name '{field_name}'.")
-    return readers[field_name].read(config)
+        return cls(field, i_elem, i_gauss, x_field)

@@ -1,0 +1,16 @@
+iters: 4
+
+optimiser: botorch
+
+parameters:
+  freq: [1, 0, 2]
+
+objective:
+  name: fitting
+  solver:
+    name: script
+    script: sample_solver.py
+    class: SampleSolverBadOutput
+  references:
+    'sine.txt':
+      prediction: ['sine']

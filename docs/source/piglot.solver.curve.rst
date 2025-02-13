@@ -4,14 +4,6 @@ piglot.solver.curve package
 Submodules
 ----------
 
-piglot.solver.curve.fields module
----------------------------------
-
-.. automodule:: piglot.solver.curve.fields
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 piglot.solver.curve.solver module
 ---------------------------------
 
