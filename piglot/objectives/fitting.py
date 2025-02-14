@@ -10,7 +10,7 @@ from piglot.parameter import ParameterSet
 from piglot.solver import read_solver
 from piglot.solver.solver import OutputResult
 from piglot.utils.reductions import Reduction, read_reduction
-from piglot.utils.responses import Transformer, reduce_response, interpolate_response
+from piglot.utils.responses import reduce_response, interpolate_response
 from piglot.utils.response_transformer import (
     ResponseTransformer,
     PointwiseErrors,
@@ -31,7 +31,7 @@ class Reference:
         x_col: int = 1,
         y_col: int = 2,
         skip_header: int = 0,
-        transformer: Transformer = None,
+        transformer: ResponseTransformer = None,
         filter_tol: float = 0.0,
         show: bool = False,
     ) -> None:
@@ -180,7 +180,10 @@ class Reference:
             x_col=int(config.get('x_col', 1)),
             y_col=int(config.get('y_col', 2)),
             skip_header=int(config.get('skip_header', 0)),
-            transformer=Transformer.read(config.get('transformer', {})),
+            transformer=(
+                read_response_transformer(config['transformer'])
+                if 'transformer' in config else None
+            ),
             filter_tol=float(config.get('filter_tol', 0.0)),
             show=bool(config.get('show', False)),
         )

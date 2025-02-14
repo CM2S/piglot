@@ -1,5 +1,5 @@
 """Module for defining transformations for responses."""
-from typing import Union, Dict, Any, Type, List
+from typing import Union, Dict, Any, Type, List, Tuple
 from abc import ABC, abstractmethod
 import numpy as np
 from piglot.utils.assorted import read_custom_module
@@ -24,6 +24,25 @@ class ResponseTransformer(ABC):
         OutputResult
             Transformed time and data points of the response.
         """
+
+    def __call__(self, x_old: np.ndarray, y_old: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Transform a response function.
+
+        Parameters
+        ----------
+        x_old : np.ndarray
+            Original time grid.
+        y_old : np.ndarray
+            Original values.
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            Transformed time grid and values.
+        """
+        response = OutputResult(x_old, y_old)
+        response = self.transform(response)
+        return response.time, response.data
 
 
 class ChainResponse(ResponseTransformer):
@@ -131,15 +150,15 @@ class AffineTransformResponse(ResponseTransformer):
 
     def __init__(
         self,
-        scale_x: float = 1.0,
-        offset_x: float = 0.0,
-        scale_y: float = 1.0,
-        offset_y: float = 0.0,
+        x_scale: float = 1.0,
+        x_offset: float = 0.0,
+        y_scale: float = 1.0,
+        y_offset: float = 0.0,
     ):
-        self.scale_x = scale_x
-        self.offset_x = offset_x
-        self.scale_y = scale_y
-        self.offset_y = offset_y
+        self.x_scale = x_scale
+        self.x_offset = x_offset
+        self.y_scale = y_scale
+        self.y_offset = y_offset
 
     def transform(self, response: OutputResult) -> OutputResult:
         """Transform the input data.
@@ -155,8 +174,42 @@ class AffineTransformResponse(ResponseTransformer):
             Transformed time and data points of the response.
         """
         return OutputResult(
-            self.scale_x * response.time + self.offset_x,
-            self.scale_y * response.data + self.offset_y,
+            self.x_scale * response.time + self.x_offset,
+            self.y_scale * response.data + self.y_offset,
+        )
+
+
+class ClipResponse(ResponseTransformer):
+    """Clip x and y values of the response to given bounds."""
+
+    def __init__(
+        self,
+        x_min: float = -np.inf,
+        x_max: float = np.inf,
+        y_min: float = -np.inf,
+        y_max: float = np.inf,
+    ):
+        self.x_min = x_min
+        self.x_max = x_max
+        self.y_min = y_min
+        self.y_max = y_max
+
+    def transform(self, response: OutputResult) -> OutputResult:
+        """Transform the input data.
+
+        Parameters
+        ----------
+        response : OutputResult
+            Time and data points of the response.
+
+        Returns
+        -------
+        OutputResult
+            Transformed time and data points of the response.
+        """
+        return OutputResult(
+            np.clip(response.time, self.x_min, self.x_max),
+            np.clip(response.data, self.y_min, self.y_max),
         )
 
 
@@ -197,6 +250,7 @@ AVAILABLE_RESPONSE_TRANSFORMERS: Dict[str, Type[ResponseTransformer]] = {
     'negate': NegateResponse,
     'square': SquareResponse,
     'chain': ChainResponse,
+    'clip': ClipResponse,
     'affine': AffineTransformResponse,
 }
 

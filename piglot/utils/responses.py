@@ -1,75 +1,8 @@
 """Module for reducing the number of points in a response function"""
 from __future__ import annotations
-from typing import Tuple, Dict, Any
+from typing import Tuple
 import numpy as np
 import scipy.optimize
-
-
-class Transformer:
-    """Class for transforming a response function."""
-
-    def __init__(
-            self,
-            x_scale: float = 1.0,
-            y_scale: float = 1.0,
-            x_offset: float = 0.0,
-            y_offset: float = 0.0,
-            x_min: float = -np.inf,
-            x_max: float = np.inf,
-            ) -> None:
-        self.x_scale = x_scale
-        self.y_scale = y_scale
-        self.x_offset = x_offset
-        self.y_offset = y_offset
-        self.x_min = x_min
-        self.x_max = x_max
-
-    def __call__(self, x_old: np.ndarray, y_old: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Transform a response function.
-
-        Parameters
-        ----------
-        x_old : np.ndarray
-            Original time grid.
-        y_old : np.ndarray
-            Original values.
-
-        Returns
-        -------
-        Tuple[np.ndarray, np.ndarray]
-            Transformed time grid and values.
-        """
-        # Affine transformation
-        x_new = self.x_scale * x_old + self.x_offset
-        y_new = self.y_scale * y_old + self.y_offset
-        # Clip the time grid
-        mask = (x_new >= self.x_min) & (x_new <= self.x_max)
-        x_new = x_new[mask]
-        y_new = y_new[mask]
-        return x_new, y_new
-
-    @staticmethod
-    def read(config: Dict[str, Any]) -> Transformer:
-        """Read a transformer from a config dictionary.
-
-        Parameters
-        ----------
-        config : Dict[str, Any]
-            Configuration dictionary.
-
-        Returns
-        -------
-        Transformer
-            Transformer instance.
-        """
-        return Transformer(
-            x_scale=float(config.get("x_scale", 1.0)),
-            y_scale=float(config.get("y_scale", 1.0)),
-            x_offset=float(config.get("x_offset", 0.0)),
-            y_offset=float(config.get("y_offset", 0.0)),
-            x_min=float(config["x_min"]) if "x_min" in config else -np.inf,
-            x_max=float(config["x_max"]) if "x_max" in config else np.inf,
-        )
 
 
 class ResamplingLoss:
