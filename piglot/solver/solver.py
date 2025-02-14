@@ -289,7 +289,7 @@ class SingleCaseSolver(Solver, ABC):
         Dict[str, float]
             Parameters for this hash.
         """
-        case = next(iter(self.cases))
+        case = next(iter(self.output_fields))
         result = CaseResult.read(
             os.path.join(self.cases_hist, f'{case.name()}-{param_hash}'),
             self.parameters,
@@ -309,7 +309,7 @@ class SingleCaseSolver(Solver, ABC):
         Dict[str, OutputResult]
             Output responses.
         """
-        result = CaseResult.read(os.path.join(self.cases_hist, param_hash))
+        result = CaseResult.read(os.path.join(self.cases_hist, param_hash), self.parameters)
         return result.responses
 
     @abstractmethod

@@ -1,16 +1,12 @@
 
+iters: 4
 
-iters: 50
-
-
-optimiser: random
-
+optimiser: botorch
 
 parameters:
-  Young: [200, 100, 300]
-  poisson: [0.25, 0.1, 0.4]
+  a: [1, -2, 2]
 
 
 objective:
   name: analytical
-  # expression: ((Young/poisson)-500)**2
+  #expression: a ** 2

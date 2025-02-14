@@ -371,7 +371,7 @@ class GenericObjective(Objective):
             min_series = df.iloc[df[objective].idxmin()]
             call_hash = str(min_series["Hash"])
             # Use the single case plotting utility
-            options = {'append_title': objective} if self.multi_objective else None
+            options = {'append_title': f'Best {objective} eval'} if self.multi_objective else None
             figures += self.plot_case(call_hash, options=options)
             # Also display the best case
             print(f"Best run{' (' + objective + ')'}:")

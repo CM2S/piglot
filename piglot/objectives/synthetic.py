@@ -118,10 +118,18 @@ class SyntheticObjective(GenericObjective):
             value = self.transform(value, self.func)
         value = float(value.item())
         if self.composition is None:
-            return ObjectiveResult(values, [np.array([value])])
-        return self.composition.transform(
+            return ObjectiveResult(
+                values,
+                np.array([value]),
+                np.array([value]),
+                scalar_value=value,
+            )
+        final_value = self.composition.composition(np.array([value]), values)
+        return ObjectiveResult(
             values,
-            [[OutputResult(np.array([0.0]), np.array([value]))]],
+            np.array([value]),
+            np.array([final_value]),
+            scalar_value=final_value.item(),
         )
 
     @staticmethod

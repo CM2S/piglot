@@ -437,6 +437,11 @@ class ResponseObjective(GenericObjective):
         self.solver = solver
         self.objectives = objectives
         self.transformers = transformers if transformers is not None else {}
+        # Sanitise predictions
+        for objective in self.objectives:
+            for name in objective.prediction:
+                if name not in self.solver.get_output_fields():
+                    raise ValueError(f'Undefined prediction {name}')
 
     def prepare(self) -> None:
         """Prepare the objective for optimisation."""

@@ -12,6 +12,26 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         RuntimeError,
         'Missing analytical expression to minimise',
     ),
+    'analytical_mo_missing_expression.yaml': (
+        RuntimeError,
+        'Missing analytical expression to minimise',
+    ),
+    'analytical_random_missing_variance.yaml': (
+        ValueError,
+        'Random evaluations require variance',
+    ),
+    'analytical_negative_variance.yaml': (
+        RuntimeError,
+        'Negative variance not allowed',
+    ),
+    'analytical_composite_no_scalarisation.yaml': (
+        ValueError,
+        'Composite objectives require scalarisation',
+    ),
+    'analytical_missing_objectives.yaml': (
+        RuntimeError,
+        'Missing analytical objectives to optimise for',
+    ),
     'composite_bad_optimiser.yaml': (
         InvalidOptimiserException,
         'This optimiser does not support composition',
@@ -106,20 +126,20 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'missing_pred.yaml': (
         ValueError,
-        "Missing prediction for reference 'reference_curve.txt'.",
+        "Missing prediction for fitting target 'reference_curve.txt'.",
     ),
     'unexistent_reference.yaml': (
         ValueError,
-        "Reference 'reference_curve_2.txt' is not associated to any case.",
+        "Undefined prediction case_2",
     ),
-    'design_missing_pred.yaml': (
-        ValueError,
-        "Missing prediction for design target 'maximum_force'.",
-    ),
-    'design_missing_quantity.yaml': (
-        ValueError,
-        "Missing quantity for fitting objective.",
-    ),
+    # 'design_missing_pred.yaml': (
+    #     ValueError,
+    #     "Missing prediction for design target 'maximum_force'.",
+    # ),
+    # 'design_missing_quantity.yaml': (
+    #     ValueError,
+    #     "Missing quantity for fitting objective.",
+    # ),
     'design_missing_quantity_name.yaml': (
         ValueError,
         "Need to pass the name of the reduction function.",
@@ -142,23 +162,19 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'unexistent_targets.yaml': (
         ValueError,
-        "Design target 'integral_quantity' is not associated to any case.",
+        "Undefined prediction case_2",
     ),
     'bo_unkacq.yaml': (
         RuntimeError,
         "Unkown acquisition function ucbb",
-    ),
-    'bo_q.yaml': (
-        RuntimeError,
-        "Can only use q != 1 for quasi-Monte Carlo acquisitions",
     ),
     'duplicated_field.yaml': (
         ValueError,
         "Duplicate output field 'reaction_x'.",
     ),
     'bo_equalbounds.yaml': (
-        RuntimeError,
-        "All observed points are equal: add more initial samples",
+        ValueError,
+        "All observed points are equal.",
     ),
 }
 

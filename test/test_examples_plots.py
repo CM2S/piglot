@@ -91,7 +91,7 @@ def test_input_files(input_dir: str):
             'animation',
             input_file,
         ])
-        if input_file != 'test_analytical.yaml':
+        if 'test_analytical' not in input_file:
             piglot_plot_main([
                 'gp',
                 input_file,

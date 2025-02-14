@@ -10,3 +10,4 @@ parameters:
 objective:
   name: analytical
   expression: a ** 2
+  weight: 10000

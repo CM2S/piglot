@@ -52,7 +52,7 @@ class Standardiser:
         """
         # Are all observed points equal?
         if torch.all(~self.mask):
-            raise ValueError("All observed points are equal!.")
+            raise ValueError("All observed points are equal.")
         means = (values[:, self.mask] - self.mean[self.mask]) / self.stds[self.mask]
         if variances is None:
             return means
@@ -131,7 +131,8 @@ class PCA:
         self.standardiser.fit(data)
         data_std: torch.Tensor = self.standardiser.transform(data)
         # Compute eigenvalues and vectors of the covariance matrix and sort by decreasing variance
-        vals, vecs = torch.linalg.eigh(torch.cov(data_std.T))
+        cov = torch.cov(data_std.T).reshape(data_std.shape[-1], data_std.shape[-1])
+        vals, vecs = torch.linalg.eigh(cov)
         idx = torch.argsort(vals, descending=True)
         vals = vals[idx]
         vecs = vecs[:, idx]

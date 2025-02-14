@@ -66,7 +66,7 @@ class DesignSingleObjective(ResponseSingleObjective):
         if isinstance(prediction, str):
             prediction = [prediction]
         elif not isinstance(prediction, list):
-            raise ValueError(f"Invalid prediction '{prediction}' for objective '{name}'.")
+            raise ValueError(f"Invalid prediction '{prediction}' for design target '{name}'.")
         # Read the quantity
         if 'quantity' not in config:
             raise ValueError("Missing quantity for fitting objective.")

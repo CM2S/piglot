@@ -43,15 +43,15 @@ class AnalyticalSingleObjective(IndividualObjective):
         self.variance = None if variance is None else sympy.lambdify(symbs, variance)
         self.random_evals = random_evals
 
-    def evaluate(self, params: np.ndarray) -> Tuple[float, float]:
+    def evaluate(self, params: np.ndarray, use_random: bool = True) -> Tuple[float, float]:
         """Evaluate objective value for the given results.
 
         Parameters
         ----------
         params : np.ndarray
             Parameter values for this evaluation.
-        raw_results : Dict[str, OutputResult]
-            Raw responses from the solver.
+        use_random : bool
+            Whether to use random evaluations (true by default).
 
         Returns
         -------
@@ -59,16 +59,109 @@ class AnalyticalSingleObjective(IndividualObjective):
             Mean and variance of the objective.
         """
         value = self.expression(**self.parameters.to_dict(params))
-        variance = 0 if self.variance is None else self.variance(**self.parameters.to_dict(params))
-        if self.maximise:
-            value = -value
+        variance = 0
+        if self.variance is not None:
+            variance = self.variance(**self.parameters.to_dict(params))
+            if variance < 0:
+                raise RuntimeError("Negative variance not allowed.")
         # When random evaluations are requested, replace the data from sample evaluations
-        if self.random_evals > 0:
+        if self.random_evals > 0 and use_random:
             evals = np.random.normal(value, np.sqrt(variance), size=(self.random_evals,))
             value = np.mean(evals)
             if self.random_evals > 1:
                 variance = np.var(evals)  # / self.random_evals
+        if self.maximise:
+            value = -value
         return value, variance
+
+    def plot_1d(self, values: np.ndarray, append_title: str) -> Figure:
+        """Plot the objective in 1D.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Parameter values to plot for.
+        append_title : str
+            String to append to the title.
+
+        Returns
+        -------
+        Figure
+            Figure with the plot.
+        """
+        fig, axis = plt.subplots()
+        x = np.linspace(self.parameters[0].lbound, self.parameters[0].ubound, 1000)
+        evals = np.array([self.evaluate(np.array([x_i]), use_random=False) for x_i in x])
+        curr_eval, curr_var = self.evaluate(values)
+        axis.plot(x, evals[:, 0], c="black", label="Analytical Objective")
+        if self.variance is not None:
+            axis.fill_between(
+                x,
+                evals[:, 0] - 2 * np.sqrt(evals[:, 1]),
+                evals[:, 0] + 2 * np.sqrt(evals[:, 1]),
+                color="black",
+                alpha=0.2,
+                label="Analytical Variance",
+            )
+            axis.errorbar(
+                values[0],
+                curr_eval,
+                yerr=2 * np.sqrt(curr_var),
+                label="Case",
+                fmt="o",
+            )
+        else:
+            axis.scatter(values[0], curr_eval, label="Case")
+        axis.set_xlabel(self.parameters[0].name)
+        axis.set_ylabel("Analytical Objective")
+        axis.set_xlim(self.parameters[0].lbound, self.parameters[0].ubound)
+        axis.legend()
+        axis.grid()
+        axis.set_title(append_title)
+        return fig
+
+    def plot_2d(self, values: np.ndarray, append_title: str) -> Figure:
+        """Plot the objective in 2D.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Parameter values to plot for.
+        append_title : str
+            String to append to the title.
+
+        Returns
+        -------
+        Figure
+            Figure with the plot
+        """
+        fig, axis = plt.subplots(subplot_kw={"projection": "3d"})
+        x = np.linspace(self.parameters[0].lbound, self.parameters[0].ubound, 100)
+        y = np.linspace(self.parameters[1].lbound, self.parameters[1].ubound, 100)
+        X, Y = np.meshgrid(x, y)
+        evals = np.array(
+            [[self.evaluate(np.array([x_i, y_i]), use_random=False) for x_i in x] for y_i in y]
+        )
+        curr_eval, _ = self.evaluate(values)
+        axis.scatter(
+            values[0],
+            values[1],
+            curr_eval,
+            c="r",
+            label="Case",
+            s=50,
+        )
+        axis.plot_surface(X, Y, evals[:, :, 0], alpha=0.7, label="Analytical Objective")
+        axis.set_xlabel(self.parameters[0].name)
+        axis.set_ylabel(self.parameters[1].name)
+        axis.set_zlabel("Analytical Objective")
+        axis.set_xlim(self.parameters[0].lbound, self.parameters[0].ubound)
+        axis.set_ylim(self.parameters[1].lbound, self.parameters[1].ubound)
+        axis.legend()
+        axis.grid()
+        axis.set_title(append_title)
+        fig.tight_layout()
+        return fig
 
     @classmethod
     def read(
@@ -98,8 +191,8 @@ class AnalyticalSingleObjective(IndividualObjective):
             config['expression'],
             variance=config.get('variance', None),
             random_evals=config.get('random_evals', 0),
-            maximise=config.get('maximise', False),
-            weight=config.get('weight', 1.0),
+            maximise=bool(config.get('maximise', False)),
+            weight=float(config.get('weight', 1.0)),
             bounds=config.get('bounds', None),
         )
 
@@ -115,10 +208,10 @@ class AnalyticalObjective(GenericObjective):
         stochastic: bool = False,
         random_evals: int = 0,
         output_dir: str = None,
+        maximise: bool = False,
+        weight: float = 1.0,
+        bounds: Tuple[float, float] = None,
     ) -> None:
-        # Sanitise the stochastic and random_evals combination
-        if random_evals > 0 and variance is None:
-            raise ValueError("Random evaluations require variance.")
         super().__init__(
             parameters,
             stochastic=stochastic,
@@ -126,7 +219,15 @@ class AnalyticalObjective(GenericObjective):
             output_dir=output_dir,
         )
         self.parameters = parameters
-        self.expression = AnalyticalSingleObjective(parameters, expression, variance, random_evals)
+        self.expression = AnalyticalSingleObjective(
+            parameters,
+            expression,
+            variance,
+            random_evals,
+            maximise=maximise,
+            weight=weight,
+            bounds=bounds,
+        )
 
     def _objective(self, params: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
         """Objective computation for analytical functions.
@@ -154,78 +255,6 @@ class AnalyticalObjective(GenericObjective):
             scalar_variance=variance if self.stochastic else None,
         )
 
-    def _plot_1d(self, values: np.ndarray, append_title: str) -> Figure:
-        """Plot the objective in 1D.
-
-        Parameters
-        ----------
-        values : np.ndarray
-            Parameter values to plot for.
-        append_title : str
-            String to append to the title.
-
-        Returns
-        -------
-        Figure
-            Figure with the plot.
-        """
-        # TODO: fixme
-        raise NotImplementedError()
-        fig, axis = plt.subplots()
-        x = np.linspace(self.parameters[0].lbound, self.parameters[0].ubound, 1000)
-        y = np.array([self._objective_denorm(np.array([x_i])) for x_i in x])
-        axis.plot(x, y, c="black", label="Analytical Objective")
-        axis.scatter(values[0], self._objective_denorm(values), c="red", label="Case")
-        axis.set_xlabel(self.parameters[0].name)
-        axis.set_ylabel("Analytical Objective")
-        axis.set_xlim(self.parameters[0].lbound, self.parameters[0].ubound)
-        axis.legend()
-        axis.grid()
-        axis.set_title(append_title)
-        return fig
-
-    def _plot_2d(self, values: np.ndarray, append_title: str) -> Figure:
-        """Plot the objective in 2D.
-
-        Parameters
-        ----------
-        values : np.ndarray
-            Parameter values to plot for.
-        append_title : str
-            String to append to the title.
-
-        Returns
-        -------
-        Figure
-            Figure with the plot
-        """
-        # TODO: fixme
-        raise NotImplementedError()
-        fig, axis = plt.subplots(subplot_kw={"projection": "3d"})
-        x = np.linspace(self.parameters[0].lbound, self.parameters[0].ubound, 100)
-        y = np.linspace(self.parameters[1].lbound, self.parameters[1].ubound, 100)
-        X, Y = np.meshgrid(x, y)
-        Z = np.array([[self._objective_denorm(np.array([x_i, y_i])) for x_i in x] for y_i in y])
-        axis.scatter(
-            values[0],
-            values[1],
-            self._objective_denorm(values),
-            c="r",
-            label="Case",
-            s=50,
-        )
-        axis.plot_surface(X, Y, Z, alpha=0.7, label="Analytical Objective")
-        axis.set_xlabel(self.parameters[0].name)
-        axis.set_ylabel(self.parameters[1].name)
-        axis.set_zlabel("Analytical Objective")
-        axis.set_xlim(self.parameters[0].lbound, self.parameters[0].ubound)
-        axis.set_ylim(self.parameters[1].lbound, self.parameters[1].ubound)
-        axis.legend()
-        axis.grid()
-        axis.set_title(append_title)
-        fig.tight_layout()
-        return fig
-
     def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
         """Plot a given function call given the parameter hash.
 
@@ -251,13 +280,11 @@ class AnalyticalObjective(GenericObjective):
         if options is not None and 'append_title' in options:
             append_title = f'{options["append_title"]}'
         # Plot depending on the dimensions
-        if len(self.parameters) <= 0:
-            raise RuntimeError("Missing dimensions.")
+        if len(self.parameters) not in (1, 2):
+            raise RuntimeError("Plotting only supported for one or two dimensions.")
         if len(self.parameters) == 1:
-            return [self._plot_1d(values, append_title)]
-        if len(self.parameters) == 2:
-            return [self._plot_2d(values, append_title)]
-        raise RuntimeError("Plotting not supported for 3 or more parameters.")
+            return [self.expression.plot_1d(values, append_title)]
+        return [self.expression.plot_2d(values, append_title)]
 
     @classmethod
     def read(
@@ -292,6 +319,9 @@ class AnalyticalObjective(GenericObjective):
             stochastic=config.get('stochastic', False),
             random_evals=config.get('random_evals', 0),
             output_dir=output_dir,
+            maximise=config.get('maximise', False),
+            weight=config.get('weight', 1.0),
+            bounds=config.get('bounds', None),
         )
 
 
@@ -326,7 +356,7 @@ class AnalyticalMultiObjective(GenericObjective):
     def __init__(
         self,
         parameters: ParameterSet,
-        objectives: List[AnalyticalSingleObjective],
+        objectives: Dict[str, AnalyticalSingleObjective],
         stochastic: bool = False,
         scalarisation: Optional[Scalarisation] = None,
         composite: bool = False,
@@ -337,7 +367,7 @@ class AnalyticalMultiObjective(GenericObjective):
             if composite:
                 raise ValueError("Composite objectives require scalarisation.")
             if len(objectives) == 1:
-                scalarisation = SumScalarisation(objectives)
+                scalarisation = SumScalarisation(list(objectives.values()))
         super().__init__(
             parameters,
             stochastic=stochastic,
@@ -366,7 +396,7 @@ class AnalyticalMultiObjective(GenericObjective):
             Objective result.
         """
         # Compute values and variances for each objective
-        results = [obj.evaluate(params) for obj in self.expressions]
+        results = [obj.evaluate(params) for obj in self.expressions.values()]
         obj_values = np.array([value for value, _ in results])
         obj_variances = np.array([var for _, var in results])
         # Under single-objective, compute the scalar objective value
@@ -388,78 +418,6 @@ class AnalyticalMultiObjective(GenericObjective):
             obj_variances=obj_variances if self.stochastic else None,
             scalar_variance=scalar_variance if self.stochastic else None,
         )
-
-    def _plot_1d(self, values: np.ndarray, append_title: str) -> Figure:
-        """Plot the objective in 1D.
-
-        Parameters
-        ----------
-        values : np.ndarray
-            Parameter values to plot for.
-        append_title : str
-            String to append to the title.
-
-        Returns
-        -------
-        Figure
-            Figure with the plot.
-        """
-        # TODO: fixme
-        raise NotImplementedError()
-        fig, axis = plt.subplots()
-        x = np.linspace(self.parameters[0].lbound, self.parameters[0].ubound, 1000)
-        y = np.array([self._objective_denorm(np.array([x_i])) for x_i in x])
-        axis.plot(x, y, c="black", label="Analytical Objective")
-        axis.scatter(values[0], self._objective_denorm(values), c="red", label="Case")
-        axis.set_xlabel(self.parameters[0].name)
-        axis.set_ylabel("Analytical Objective")
-        axis.set_xlim(self.parameters[0].lbound, self.parameters[0].ubound)
-        axis.legend()
-        axis.grid()
-        axis.set_title(append_title)
-        return fig
-
-    def _plot_2d(self, values: np.ndarray, append_title: str) -> Figure:
-        """Plot the objective in 2D.
-
-        Parameters
-        ----------
-        values : np.ndarray
-            Parameter values to plot for.
-        append_title : str
-            String to append to the title.
-
-        Returns
-        -------
-        Figure
-            Figure with the plot
-        """
-        # TODO: fixme
-        raise NotImplementedError()
-        fig, axis = plt.subplots(subplot_kw={"projection": "3d"})
-        x = np.linspace(self.parameters[0].lbound, self.parameters[0].ubound, 100)
-        y = np.linspace(self.parameters[1].lbound, self.parameters[1].ubound, 100)
-        X, Y = np.meshgrid(x, y)
-        Z = np.array([[self._objective_denorm(np.array([x_i, y_i])) for x_i in x] for y_i in y])
-        axis.scatter(
-            values[0],
-            values[1],
-            self._objective_denorm(values),
-            c="r",
-            label="Case",
-            s=50,
-        )
-        axis.plot_surface(X, Y, Z, alpha=0.7, label="Analytical Objective")
-        axis.set_xlabel(self.parameters[0].name)
-        axis.set_ylabel(self.parameters[1].name)
-        axis.set_zlabel("Analytical Objective")
-        axis.set_xlim(self.parameters[0].lbound, self.parameters[0].ubound)
-        axis.set_ylim(self.parameters[1].lbound, self.parameters[1].ubound)
-        axis.legend()
-        axis.grid()
-        axis.set_title(append_title)
-        fig.tight_layout()
-        return fig
 
     def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
         """Plot a given function call given the parameter hash.
@@ -484,15 +442,19 @@ class AnalyticalMultiObjective(GenericObjective):
         # Build title
         append_title = ''
         if options is not None and 'append_title' in options:
-            append_title = f'{options["append_title"]}'
+            append_title = f'{options["append_title"]}: '
         # Plot depending on the dimensions
-        if len(self.parameters) <= 0:
-            raise RuntimeError("Missing dimensions.")
+        if len(self.parameters) not in (1, 2):
+            raise RuntimeError("Plotting only supported for one or two dimensions.")
         if len(self.parameters) == 1:
-            return [self._plot_1d(values, append_title)]
-        if len(self.parameters) == 2:
-            return [self._plot_2d(values, append_title)]
-        raise RuntimeError("Plotting not supported for 3 or more parameters.")
+            return [
+                expression.plot_1d(values, append_title + name)
+                for name, expression in self.expressions.items()
+            ]
+        return [
+            expression.plot_2d(values, append_title + name)
+            for name, expression in self.expressions.items()
+        ]
 
     @classmethod
     def read(
@@ -520,15 +482,15 @@ class AnalyticalMultiObjective(GenericObjective):
         # Read objectives
         if 'objectives' not in config:
             raise RuntimeError("Missing analytical objectives to optimise for")
-        objectives = [
-            AnalyticalSingleObjective.read(target_config, parameters)
-            for _, target_config in config.pop('objectives').items()
-        ]
+        objectives = {
+            name: AnalyticalSingleObjective.read(target_config, parameters)
+            for name, target_config in config.pop('objectives').items()
+        }
         return AnalyticalMultiObjective(
             parameters,
             objectives,
             scalarisation=(
-                read_scalarisation(config['scalarisation'], objectives)
+                read_scalarisation(config['scalarisation'], list(objectives.values()))
                 if 'scalarisation' in config else None
             ),
             stochastic=bool(config.get('stochastic', False)),

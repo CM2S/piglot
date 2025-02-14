@@ -196,15 +196,17 @@ class BayesianBoTorch(Optimiser):
                 bool(noisy) or objective.stochastic,
                 self.q,
             )
-        elif self.acquisition not in AVAILABLE_ACQUISITIONS:
-            raise RuntimeError(f"Unkown acquisition function {self.acquisition}")
-        if not self.acquisition.startswith('q') and self.q != 1:
-            raise RuntimeError("Can only use q != 1 for quasi-Monte Carlo acquisitions")
-        if not self.acquisition.startswith('q') and self.objective.composition:
-            raise RuntimeError("Cannot use analytical acquisitions with composition")
+        else:
+            orig_name = self.acquisition
+            if not self.acquisition.startswith('q'):
+                self.acquisition = 'q' + self.acquisition
+            if self.acquisition not in AVAILABLE_ACQUISITIONS:
+                raise RuntimeError(f"Unkown acquisition function {orig_name}")
         if self.pca_variance and not (objective.composition or objective.multi_objective):
             warnings.warn("Ignoring PCA variance for non-composite single-objective problem")
             self.pca_variance = None
+        elif self.pca_variance is None and objective.composition:
+            self.pca_variance = 1e-6
         torch.set_num_threads(1)
 
     def _validate_problem(self, objective: Objective) -> None:

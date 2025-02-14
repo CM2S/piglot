@@ -44,7 +44,7 @@ class TestExtractParameters(unittest.TestCase):
             ])
         if os.path.isdir(output_dir):
             shutil.rmtree(output_dir)
-        self.assertEqual(str(ex.exception), "Plotting not supported for 3 or more parameters.")
+        self.assertEqual(str(ex.exception), "Plotting only supported for one or two dimensions.")
 
     def test_gp_single_parameter(self):
         with self.assertRaises(ValueError) as ex:

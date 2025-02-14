@@ -10,3 +10,5 @@ parameters:
 objective:
   name: analytical
   expression: a ** 2
+  variance: 0.01
+  random_evals: 4

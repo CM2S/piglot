@@ -165,8 +165,8 @@ class MultiCaseSolver(Solver, ABC):
             file.write(f'{result.begin_time - self.begin_time:>15.8e}\t')
             file.write(f'{result.run_time:>15.8e}\t')
             file.write(f'{result.success:>10}\t')
-            for i, param in enumerate(self.parameters):
-                file.write(f"{param.denormalise(result.values[i]):>15.6f}\t")
+            for value in result.values:
+                file.write(f"{value:>15.6f}\t")
             file.write(f'{param_hash}\n')
 
     def get_output_fields(self) -> List[str]:
@@ -195,7 +195,10 @@ class MultiCaseSolver(Solver, ABC):
         responses = {}
         for case in self.cases:
             # Read the case result
-            result = CaseResult.read(os.path.join(self.cases_hist, f'{case.name()}-{param_hash}'))
+            result = CaseResult.read(
+                os.path.join(self.cases_hist, f'{case.name()}-{param_hash}'),
+                self.parameters,
+            )
             for name, response in result.responses.items():
                 responses[name] = response
         return responses

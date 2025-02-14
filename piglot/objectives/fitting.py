@@ -266,6 +266,8 @@ class FittingSingleObjective(ResponseSingleObjective):
         prediction = config.pop('prediction')
         if isinstance(prediction, str):
             prediction = [prediction]
+        elif not isinstance(prediction, list):
+            raise ValueError(f"Invalid prediction '{prediction}' for reference '{name}'.")
         # Read optional settings
         reduction = read_reduction(config.pop('reduction', 'mse'))
         weight = float(config.pop('weight', 1.0))
