@@ -91,6 +91,15 @@ def test_input_files(input_dir: str):
             'animation',
             input_file,
         ])
+        if '_mo' in input_file:
+            piglot_plot_main([
+                'pareto',
+                input_file,
+                '--all',
+                '--log',
+                '--save_fig',
+                os.path.join(output_dir, 'pareto.png'),
+            ])
         if 'test_analytical' not in input_file:
             piglot_plot_main([
                 'gp',

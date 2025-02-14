@@ -3,7 +3,7 @@ iters: 4
 
 optimiser:
   name: botorch
-  pca_variance: 1e-6
+  skip_initial: True
 
 parameters:
   a: [1, -2, 2]

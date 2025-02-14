@@ -1,9 +1,9 @@
 
-iters: 4
+iters: 1
 
 optimiser:
   name: botorch
-  pca_variance: 1e-6
+  acquisition: unknown
 
 parameters:
   a: [1, -2, 2]

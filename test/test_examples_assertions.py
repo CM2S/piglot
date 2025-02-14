@@ -8,6 +8,10 @@ from piglot.utils.assorted import change_cwd
 
 
 EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
+    'test_analytical_acq_unknown.yaml': (
+        RuntimeError,
+        'Unkown acquisition function unknown',
+    ),
     'analytical_expression.yaml': (
         RuntimeError,
         'Missing analytical expression to minimise',

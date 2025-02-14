@@ -64,6 +64,61 @@ class TestExtractParameters(unittest.TestCase):
         self.assertEqual(str(ex.exception),
                          "Can only plot a Gaussian process regression for a single parameter.")
 
+    def test_analytical_3d(self):
+        with self.assertRaises(RuntimeError) as ex:
+            input_file = os.path.join("test", "examples_plots_assertions",
+                                      "test_analytical_3d.yaml")
+            output_dir = os.path.join("test", "examples_plots_assertions",
+                                      "test_analytical_3d")
+            piglot_main(input_file)
+            piglot_plot_main([
+                'best',
+                input_file,
+                '--save_fig',
+                os.path.join(output_dir, 'test_analytical_3d.png'),
+            ])
+        if os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+        self.assertEqual(str(ex.exception),
+                         "Plotting only supported for one or two dimensions.")
+       
+    def test_analytical_3d_mo(self):
+        with self.assertRaises(RuntimeError) as ex:
+            input_file = os.path.join("test", "examples_plots_assertions",
+                                      "test_analytical_3d_mo.yaml")
+            output_dir = os.path.join("test", "examples_plots_assertions",
+                                      "test_analytical_3d_mo")
+            piglot_main(input_file)
+            piglot_plot_main([
+                'best',
+                input_file,
+                '--save_fig',
+                os.path.join(output_dir, 'test_analytical_3d_mo.png'),
+            ])
+        if os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+        self.assertEqual(str(ex.exception),
+                         "Plotting only supported for one or two dimensions.")
+
+    def test_analytical_mo_3obj(self):
+        with self.assertRaises(ValueError) as ex:
+            input_file = os.path.join("test", "examples_plots_assertions",
+                                      "test_analytical_mo_3obj.yaml")
+            output_dir = os.path.join("test", "examples_plots_assertions",
+                                      "test_analytical_mo_3obj")
+            piglot_main(input_file)
+            piglot_plot_main([
+                'pareto',
+                input_file,
+                '--save_fig',
+                os.path.join(output_dir, 'test_analytical_mo_3obj.png'),
+            ])
+        if os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+        self.assertEqual(str(ex.exception),
+                         "Can only plot the Pareto front for a two-objective optimisation problem.")
+
+
 
 if __name__ == '__main__':
     unittest.main()

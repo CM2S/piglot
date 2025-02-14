@@ -406,7 +406,10 @@ def plot_pareto(args):
     ax.legend()
     ax.grid()
     fig.tight_layout()
-    plt.show()
+    if args.save_fig:
+        fig.savefig(args.save_fig)
+    else:
+        plt.show()
 
 
 def make_surrogate(args):
