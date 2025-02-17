@@ -81,7 +81,7 @@ class TestExtractParameters(unittest.TestCase):
             shutil.rmtree(output_dir)
         self.assertEqual(str(ex.exception),
                          "Plotting only supported for one or two dimensions.")
-       
+
     def test_analytical_3d_mo(self):
         with self.assertRaises(RuntimeError) as ex:
             input_file = os.path.join("test", "examples_plots_assertions",
@@ -117,7 +117,6 @@ class TestExtractParameters(unittest.TestCase):
             shutil.rmtree(output_dir)
         self.assertEqual(str(ex.exception),
                          "Can only plot the Pareto front for a two-objective optimisation problem.")
-
 
 
 if __name__ == '__main__':
