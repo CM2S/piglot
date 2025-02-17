@@ -26,13 +26,13 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-    "numpy<2", # https://github.com/pytorch/pytorch/issues/107302
+    "numpy",
     "tqdm",
     "pandas",
     "sympy",
     "scipy>=1.7", # For scipy.stats.qmc
     "torch",
-    "botorch<0.12", # FixedNoiseGP has been deprecated, we need to update the code
+    "botorch",
     "Pillow",
     "matplotlib>=3.7.2", # https://github.com/matplotlib/matplotlib/pull/25565
     "PyYAML",
