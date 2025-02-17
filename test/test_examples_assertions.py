@@ -180,6 +180,30 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         ValueError,
         "All observed points are equal.",
     ),
+    'query_analytical_composite.yaml': (
+        InvalidOptimiserException,
+        "This optimiser does not support composition",
+    ),
+    'query_analytical_stochastic.yaml': (
+        InvalidOptimiserException,
+        "This optimiser does not support stochasticity",
+    ),
+    'query_analytical_bad_num_params.yaml': (
+        ValueError,
+        "Number of parameters does not match the number of columns",
+    ),
+    'query_analytical_bad_num_iters.yaml': (
+        ValueError,
+        "Number of iterations does not match the number of rows",
+    ),
+    'query_analytical_bad_lbounds.yaml': (
+        ValueError,
+        "Parameter values outside lower bounds",
+    ),
+    'query_analytical_bad_ubounds.yaml': (
+        ValueError,
+        "Parameter values outside upper bounds",
+    ),
 }
 
 

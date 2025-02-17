@@ -8,7 +8,6 @@ import botorch.test_functions.synthetic
 from botorch.test_functions.synthetic import SyntheticTestFunction
 from piglot.parameter import ParameterSet
 from piglot.objective import GenericObjective, ObjectiveResult
-from piglot.solver.solver import OutputResult
 from piglot.utils.reductions import Reduction, read_reduction
 from piglot.utils.composition.responses import ResponseComposition, FixedFlatteningUtility
 

@@ -1,6 +1,6 @@
 """Provide analytical functions for optimisation."""
 from __future__ import annotations
-from typing import Dict, Any, List, Optional, Union, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 import sympy
 import torch
 import numpy as np

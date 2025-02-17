@@ -220,7 +220,7 @@ class BayesianBoTorch(Optimiser):
 
     def _build_model(self, dataset: BayesDataset) -> Model:
         # Transform outcomes and clamp variances to prevent warnings from GPyTorch
-        values, variances = dataset.transform_outcomes(dataset.values, dataset.variances)
+        values, variances = dataset.transform_outcomes(dataset.values, dataset.covariances)
         variances = torch.clamp_min(variances, 1e-6)
         # Initialise model instance depending on noise setting
         model = SingleTaskGP(
@@ -256,7 +256,7 @@ class BayesianBoTorch(Optimiser):
         if self.n_test > 0:
             std_test_values, _ = dataset.transform_outcomes(
                 test_dataset.values,
-                test_dataset.variances,
+                test_dataset.covariances,
             )
             with torch.no_grad():
                 posterior = model.posterior(test_dataset.params)
@@ -441,7 +441,7 @@ class BayesianBoTorch(Optimiser):
         # Build initial dataset with the initial shot (if available)
         dataset = BayesDataset(
             n_dim,
-            n_outputs,
+            n_outputs,  # pylint: disable=E0606
             export=self.export,
             device=self.device,
             pca_variance=self.pca_variance,
@@ -454,6 +454,22 @@ class BayesianBoTorch(Optimiser):
             values, covariances = self._result_to_dataset(result)
             dataset.push(random_points[i], values, covariances, result.scalar_value)
         return dataset
+
+    def _get_extra_info(self, cv_error: float, dataset: BayesDataset) -> str:
+        extra = None
+        if cv_error:
+            extra = f'Val. {cv_error:6.4}'
+            if self.objective.multi_objective:
+                extra += f'  Num Pareto: {self.partitioning.pareto_Y.shape[0]}'
+            if self.pca_variance:
+                extra += f'  Num PCA: {dataset.pca.num_components}'
+        elif self.objective.multi_objective:
+            extra = f'Num Pareto: {self.partitioning.pareto_Y.shape[0]}'
+            if self.pca_variance:
+                extra += f'  Num PCA: {dataset.pca.num_components}'
+        elif self.pca_variance:
+            extra = f'Num PCA: {dataset.pca.num_components}'
+        return extra
 
     def _optimise(
         self,
@@ -556,20 +572,12 @@ class BayesianBoTorch(Optimiser):
                 best_params = candidates[best_idx, :]
 
             # Update progress (with extra data if available)
-            extra = None
-            if cv_error:
-                extra = f'Val. {cv_error:6.4}'
-                if self.objective.multi_objective:
-                    extra += f'  Num Pareto: {self.partitioning.pareto_Y.shape[0]}'
-                if self.pca_variance:
-                    extra += f'  Num PCA: {dataset.pca.num_components}'
-            elif self.objective.multi_objective:
-                extra = f'Num Pareto: {self.partitioning.pareto_Y.shape[0]}'
-                if self.pca_variance:
-                    extra += f'  Num PCA: {dataset.pca.num_components}'
-            elif self.pca_variance:
-                extra = f'Num PCA: {dataset.pca.num_components}'
-            if self._progress_check(i_iter + 1, best_value, best_params, extra_info=extra):
+            if self._progress_check(
+                i_iter + 1,
+                best_value,
+                best_params,
+                extra_info=self._get_extra_info(cv_error, dataset),
+            ):
                 break
 
         # Return optimisation result

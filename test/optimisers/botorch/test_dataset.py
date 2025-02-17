@@ -11,12 +11,13 @@ class TestBayesDataset(unittest.TestCase):
         self.dtype = torch.float64
         self.params = torch.rand(self.n_points, 6, dtype=self.dtype).repeat(self.repeats, 1)
         self.values = torch.rand(self.n_points, self.n_outs, dtype=self.dtype).repeat(self.repeats, 2)
-        self.variances = torch.rand(self.n_points, self.n_outs, dtype=self.dtype).repeat(self.repeats, 2)
+        self.variances = torch.diag_embed(torch.rand(self.n_points, self.n_outs, dtype=self.dtype).repeat(self.repeats, 2), dim1=-1, dim2=-2)
+        print(self.params.shape, self.values.shape, self.variances.shape)
 
     def test_transform_normal(self):
         dataset = BayesDataset(6, 2 * self.n_outs)
         for i in range(self.n_points * self.repeats):
-            dataset.push(self.params[i, :], self.values[i, :], self.variances[i, :])
+            dataset.push(self.params[i, :], self.values[i, :], self.variances[i, :], None)
         values, variances = dataset.transform_outcomes(self.values, self.variances)
         untransform = dataset.untransform_outcomes(values)
         diff = torch.abs(untransform - self.values)
@@ -25,9 +26,8 @@ class TestBayesDataset(unittest.TestCase):
     def test_transform_pca(self):
         dataset = BayesDataset(6, 2 * self.n_outs, pca_variance=1e-6)
         for i in range(self.n_points * self.repeats):
-            dataset.push(self.params[i, :], self.values[i, :], self.variances[i, :])
+            dataset.push(self.params[i, :], self.values[i, :], self.variances[i, :], None)
         values, variances = dataset.transform_outcomes(self.values, self.variances)
         untransform = dataset.untransform_outcomes(values)
         diff = torch.abs(untransform - self.values)
-        print(torch.mean(diff))
         self.assertTrue(torch.norm(diff) < 1e-6)

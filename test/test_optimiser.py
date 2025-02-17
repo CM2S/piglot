@@ -1,6 +1,8 @@
-from typing import Any, Callable, Optional, Tuple
+from __future__ import annotations
+from typing import Any, Callable, Optional, Tuple, Type, Dict
 import unittest
 import numpy as np
+from piglot.parameter import ParameterSet
 from piglot.optimiser import missing_method, ScalarOptimiser, InvalidOptimiserException
 from piglot.objective import Objective, GenericObjective, ObjectiveResult
 
@@ -13,6 +15,15 @@ class DummyObjective(Objective):
     def prepare(self) -> None:
         pass
 
+    @classmethod
+    def read(
+        cls: Type[DummyObjective],
+        config: Dict[str, Any],
+        parameters: ParameterSet,
+        output_dir: str,
+    ) -> DummyObjective:
+        pass
+
 
 class DummyGenericObjective(GenericObjective):
 
@@ -20,6 +31,15 @@ class DummyGenericObjective(GenericObjective):
         super().__init__(None, stochastic=stochastic)
 
     def _objective(self, values: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
+        pass
+
+    @classmethod
+    def read(
+        cls: Type[DummyObjective],
+        config: Dict[str, Any],
+        parameters: ParameterSet,
+        output_dir: str,
+    ) -> DummyObjective:
         pass
 
 

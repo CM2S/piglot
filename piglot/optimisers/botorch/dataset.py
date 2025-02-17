@@ -16,6 +16,8 @@ class Standardiser:
         self.mean: torch.Tensor = None
         self.stds: torch.Tensor = None
         self.mask: torch.Tensor = None
+        self.inv_mask: torch.Tensor = None
+        self.num_components: int = None
         self.std_tol = std_tol
 
     def fit(self, data: torch.Tensor) -> None:
@@ -30,11 +32,13 @@ class Standardiser:
         self.stds = torch.std(data, dim=-2) if data.shape[-2] > 1 else torch.zeros_like(self.mean)
         y_abs_avg = torch.mean(torch.abs(data), dim=-2)
         self.mask = torch.abs(self.stds / y_abs_avg) > self.std_tol
+        self.inv_mask = ~self.mask  # pylint: disable=invalid-unary-operand-type
+        self.num_components = torch.count_nonzero(self.mask)
 
     def transform(
         self,
         values: torch.Tensor,
-        variances: torch.Tensor | None = None,
+        covariances: torch.Tensor | None = None,
     ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
         """Standardise data.
 
@@ -42,22 +46,23 @@ class Standardiser:
         ----------
         values : torch.Tensor
             Values to transform.
-        variances : torch.Tensor | None
+        covariances : torch.Tensor | None
             Variances to transform, if any.
 
         Returns
         -------
         torch.Tensor | Tuple[torch.Tensor, torch.Tensor]
-            Transformed values and variances (if any).
+            Transformed values and covariances (if any).
         """
         # Are all observed points equal?
-        if torch.all(~self.mask):
-            raise ValueError("All observed points are equal.")
+        if torch.all(self.inv_mask):
+            raise ValueError("All observed points are equal!.")
         means = (values[:, self.mask] - self.mean[self.mask]) / self.stds[self.mask]
-        if variances is None:
+        if covariances is None:
             return means
-        stds = variances[:, self.mask] / self.stds[self.mask]
-        return means, stds
+        covariances = covariances[:, :, self.mask][:, self.mask, :]
+        scale_matrix = torch.diag(1 / self.stds[self.mask])
+        return means, scale_matrix @ covariances @ scale_matrix.T
 
     def untransform(self, data: torch.Tensor) -> torch.Tensor:
         """Unstandardise data.
@@ -85,7 +90,7 @@ class Standardiser:
         # ii) missing outcomes are filled with the average of the observed ones
         expanded_flat = expanded.view(-1, new_shape[-1])
         expanded_flat[:, self.mask] = values.view(-1, values.shape[-1])
-        expanded_flat[:, ~self.mask] = self.mean[~self.mask]
+        expanded_flat[:, self.inv_mask] = self.mean[self.inv_mask]
         # Note: we are using a view, so the expanded tensor is already modified
         return expanded
 
@@ -119,20 +124,24 @@ class PCA:
         self.num_components: int = None
         self.transformation: torch.Tensor = None
 
-    def fit(self, data: torch.Tensor) -> None:
+    def fit(self, data: torch.Tensor, covariances: torch.Tensor) -> None:
         """Fit the PCA transformation to the given data.
 
         Parameters
         ----------
         data : torch.Tensor
             Data to fit the PCA transformation to.
+        covariances : torch.Tensor
+            Covariances of the data to fit the PCA transformation to.
         """
         # Standardise data
         self.standardiser.fit(data)
-        data_std: torch.Tensor = self.standardiser.transform(data)
+        data_std, covariances_std = self.standardiser.transform(data, covariances)
+        # Compute the joint covariance matrix
+        # Refer to Eq.(4) of https://doi.org/10.1109/TVCG.2019.2934812 for this
+        cov = torch.cov(data_std.T) + torch.mean(covariances_std, dim=0)
         # Compute eigenvalues and vectors of the covariance matrix and sort by decreasing variance
-        cov = torch.cov(data_std.T).reshape(data_std.shape[-1], data_std.shape[-1])
-        vals, vecs = torch.linalg.eigh(cov)
+        vals, vecs = torch.linalg.eigh(cov)  # pylint: disable=not-callable
         idx = torch.argsort(vals, descending=True)
         vals = vals[idx]
         vecs = vecs[:, idx]
@@ -146,7 +155,7 @@ class PCA:
     def transform(
         self,
         values: torch.Tensor,
-        variances: torch.Tensor | None = None,
+        covariances: torch.Tensor | None = None,
     ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
         """Transform data to the latent space.
 
@@ -154,20 +163,20 @@ class PCA:
         ----------
         values : torch.Tensor
             Values to transform.
-        variances : torch.Tensor | None
+        covariances : torch.Tensor | None
             Variances to transform, if any.
 
         Returns
         -------
         torch.Tensor | Tuple[torch.Tensor, torch.Tensor]
-            Transformed values and variances (if any).
+            Transformed values and covariances (if any).
         """
-        if variances is None:
-            return torch.matmul(self.standardiser.transform(values), self.transformation)
-        values, variances = self.standardiser.transform(values, variances)
+        if covariances is None:
+            return self.standardiser.transform(values) @ self.transformation
+        values, covariances = self.standardiser.transform(values, covariances)
         return (
-            torch.matmul(values, self.transformation),
-            torch.matmul(variances, self.transformation),
+            values @ self.transformation,
+            self.transformation.T @ covariances @ self.transformation,
         )
 
     def untransform(self, data: torch.Tensor) -> torch.Tensor:
@@ -183,7 +192,7 @@ class PCA:
         torch.Tensor
             Untransformed data.
         """
-        return self.standardiser.untransform(torch.matmul(data, self.transformation.T))
+        return self.standardiser.untransform(data @ self.transformation.T)
 
     def to(self, device: str) -> PCA:
         """Move the PCA to a given device.
@@ -239,10 +248,22 @@ class BayesDataset:
         values = torch.clone(self.values)
         # Update PCA transformation
         if self.pca_variance is not None and values.shape[0] > 1:
-            self.pca.fit(values)
+            self.pca.fit(values, self.covariances)
             values = self.pca.transform(self.values)
         # Update standardisation transformation
         self.standardiser.fit(values)
+
+    def numel_latent_space(self) -> int:
+        """Return the number of components of the latent space.
+
+        Returns
+        -------
+        int
+            Number of components of the latent space.
+        """
+        if self.pca_variance is not None and self.values.shape[0] > 1:
+            return self.pca.num_components
+        return self.standardiser.num_components
 
     @classmethod
     def load(cls: Type[T], filename: str) -> T:
@@ -311,8 +332,9 @@ class BayesDataset:
 
     def transform_outcomes(
         self,
-        values: torch.Tensor,
-        variances: torch.Tensor,
+        values: torch.Tensor = None,
+        covariances: torch.Tensor = None,
+        diagonalise: bool = True,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Transform outcomes to the latent standardised space.
 
@@ -320,17 +342,28 @@ class BayesDataset:
         ----------
         values : torch.Tensor
             Values to transform.
-        variances : torch.Tensor
+        covariances : torch.Tensor
             Variances to transform.
+        diagonalise : bool
+            Whether to diagonalise the covariance matrix (default: True).
 
         Returns
         -------
         Tuple[torch.Tensor, torch.Tensor]
             Transformed values and variances.
         """
+        if (values is None) != (covariances is None):
+            raise ValueError("Values and covariances must be provided together.")
+        # When computing the outcomes from the dataset, use the stored values and covariances
+        if values is None:
+            values = self.values
+            covariances = self.covariances
+        # Transform outcomes
         if self.pca is not None:
-            values, variances = self.pca.transform(values, variances)
-        return self.standardiser.transform(values, variances)
+            values, covariances = self.pca.transform(values, covariances)
+        values, covariances = self.standardiser.transform(values, covariances)
+        # Diagonalise the covariance matrix
+        return values, torch.diagonal(covariances, dim1=-2, dim2=-1) if diagonalise else covariances
 
     def untransform_outcomes(self, values: torch.Tensor) -> torch.Tensor:
         """Transform outcomes back to the original space.
