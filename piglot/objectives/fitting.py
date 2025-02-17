@@ -10,7 +10,7 @@ from piglot.parameter import ParameterSet
 from piglot.solver import read_solver
 from piglot.solver.solver import OutputResult
 from piglot.utils.reductions import Reduction, read_reduction
-from piglot.utils.responses import reduce_response, interpolate_response
+from piglot.utils.responses import reduce_response
 from piglot.utils.response_transformer import (
     ResponseTransformer,
     PointwiseErrors,
@@ -112,49 +112,6 @@ class Reference:
             Data column.
         """
         return self.y_data
-
-    def get_orig_time(self) -> np.ndarray:
-        """Get the original time column of the reference.
-
-        Returns
-        -------
-        np.ndarray
-            Original time column.
-        """
-        return self.x_orig
-
-    def get_orig_data(self) -> np.ndarray:
-        """Get the original data column of the reference.
-
-        Returns
-        -------
-        np.ndarray
-            Original data column.
-        """
-        return self.y_orig
-
-    def compute_errors(self, results: OutputResult) -> OutputResult:
-        """Compute the pointwise normalised errors for the given results.
-
-        Parameters
-        ----------
-        results : OutputResult
-            Results to compute the errors for.
-
-        Returns
-        -------
-        OutputResult
-            Pointwise normalised errors.
-        """
-        # Interpolate response to the reference grid
-        resp_interp = interpolate_response(
-            results.get_time(),
-            results.get_data(),
-            self.get_time(),
-        )
-        # Compute normalised error
-        factor = np.mean(np.abs(self.get_data()))
-        return OutputResult(self.get_time(), (resp_interp - self.get_data()) / factor)
 
     @staticmethod
     def read(filename: str, config: Dict[str, Any], output_dir: str) -> Reference:
@@ -289,6 +246,11 @@ class FittingSingleObjective(ResponseSingleObjective):
 
 class ResponseFittingObjective(ResponseObjective):
     """Class for fitting of response-based objectives."""
+
+    def prepare(self):
+        super().prepare()
+        for objective in self.objectives:
+            objective.reference.prepare()
 
     @classmethod
     def read(

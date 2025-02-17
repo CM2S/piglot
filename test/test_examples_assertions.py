@@ -252,6 +252,22 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         ValueError,
         'Bad shape after reduction for',
     ),
+    'transformer_bad_name.yaml': (
+        ValueError,
+        'Response transformer "missing" is not available.',
+    ),
+    'transformer_bad_name_2.yaml': (
+        ValueError,
+        'Response transformer "missing" is not available.',
+    ),
+    'transformer_script.yaml': (
+        ValueError,
+        'Need to pass the file path for the "script" transformer.',
+    ),
+    'transformer_missing_name.yaml': (
+        ValueError,
+        'Need to pass the name of the response transformer.',
+    ),
 }
 
 
