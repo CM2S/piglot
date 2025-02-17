@@ -2,6 +2,6 @@
 
 __title__ = 'piglot'
 __author__ = 'CM2S'
-__copyright__ = '2024, CM2S'
+__copyright__ = '2025, CM2S'
 __license__ = 'MIT'
-__version__ = '0.4.1'
+__version__ = '0.5.0'
