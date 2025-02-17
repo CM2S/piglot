@@ -3,7 +3,7 @@ iters: 10
 
 optimiser:
   name: botorch
-  acquisition: pi
+  acquisition: qpi
 
 
 parameters:

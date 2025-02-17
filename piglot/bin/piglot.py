@@ -4,6 +4,7 @@ import os.path
 import argparse
 import shutil
 from yaml import safe_dump
+import torch
 from piglot.objectives import read_objective
 from piglot.optimisers import read_optimiser
 from piglot.parameter import read_parameters
@@ -31,6 +32,13 @@ def parse_args():
         type=str,
         help='Configuration file to use',
     )
+    # PyTorch compute device
+    parser.add_argument(
+        '--device',
+        type=str,
+        default='cpu',
+        help='Default device to use with PyTorch',
+    )
 
     return parser.parse_args()
 
@@ -40,6 +48,7 @@ def main(config_path: str = None):
     if config_path is None:
         args = parse_args()
         config_path = args.config
+        torch.set_default_device(args.device)
     config = parse_config_file(config_path)
     # Build output directory with a copy of the configuration file
     output_dir = config["output"]
@@ -62,8 +71,8 @@ def main(config_path: str = None):
         stop_criteria=stop,
     )
     # Re-run the best case
-    if 'skip_last_run' not in config:
-        objective(parameters.normalise(best_params))
+    if 'skip_last_run' not in config and best_params is not None:
+        objective(best_params)
 
 
 if __name__ == '__main__':

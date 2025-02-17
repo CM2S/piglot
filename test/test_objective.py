@@ -1,5 +1,7 @@
-from typing import Any
+from __future__ import annotations
+from typing import Any, Type, Dict
 import unittest
+from piglot.parameter import ParameterSet
 from piglot.objective import Objective
 
 
@@ -11,16 +13,19 @@ class DummyObjective(Objective):
     def prepare(self) -> None:
         pass
 
+    @classmethod
+    def read(
+        cls: Type[DummyObjective],
+        config: Dict[str, Any],
+        parameters: ParameterSet,
+        output_dir: str,
+    ) -> DummyObjective:
+        pass
+
 
 class TestDummyObjective(unittest.TestCase):
     def setUp(self):
         self.objective = DummyObjective()
-
-    def test_missing_read(self):
-        with self.assertRaises(NotImplementedError) as ex:
-            self.objective.read(None, None, None)
-        self.assertEqual(ex.exception.args[0],
-                         "Reading not implemented for this objective")
 
     def test_missing_plot_case(self):
         with self.assertRaises(NotImplementedError) as ex:

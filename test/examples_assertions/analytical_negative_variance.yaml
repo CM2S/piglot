@@ -1,0 +1,13 @@
+
+iters: 4
+
+optimiser: botorch
+
+parameters:
+  a: [1, -2, 2]
+
+
+objective:
+  name: analytical
+  expression: a ** 2
+  variance: -0.01

@@ -1,0 +1,20 @@
+
+iters: 4
+
+optimiser:
+  name: query
+  param_list_file: query_params_1d.txt
+
+parameters:
+  a: [1, -2, 2]
+
+
+objective:
+  name: analytical_mo
+  scalarisation: mean
+  composite: True
+  objectives:
+    obj_1:
+      expression: a ** 2
+    obj_2:
+      expression: a

@@ -33,4 +33,5 @@ objective:
       quantity: max
       prediction: ['case_1', 'case_2']
       negate: False
+      n_points: 10
 

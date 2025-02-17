@@ -1,16 +1,15 @@
 
-iters: 10
+iters: 4
 
-optimiser: random
-
+optimiser:
+  name: botorch
 
 parameters:
-  a: [0, -4, 4]
+  a: [1, -4, 4]
 
 
 objective:
   name: fitting
-  composite: False
   solver:
     name: curve
     cases:
@@ -19,12 +18,9 @@ objective:
         parametric: x
         bounds: [-5, 5]
         points: 100
+  transformers:
+    case_1:
+      not_name: negate
   references:
     'reference_curve.txt':
       prediction: ['case_1']
-      transformer:
-        x_scale: -1
-        y_scale: -2
-        x_offset: -1
-        y_offset: -2
-        x_max: 0.8

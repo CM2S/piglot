@@ -1,4 +1,5 @@
 import unittest
+import numpy as np
 from piglot.parameter import Parameter, ParameterSet, DualParameterSet, read_parameters
 
 
@@ -9,16 +10,6 @@ class TestParameter(unittest.TestCase):
     def test_bounds(self):
         with self.assertRaises(RuntimeError):
             Parameter("test", 5, 10, 0)
-
-    def test_normalise(self):
-        self.assertEqual(self.parameter.normalise(5), 0)
-        self.assertEqual(self.parameter.normalise(10), 1)
-        self.assertEqual(self.parameter.normalise(0), -1)
-
-    def test_denormalise(self):
-        self.assertEqual(self.parameter.denormalise(0), 5)
-        self.assertEqual(self.parameter.denormalise(1), 10)
-        self.assertEqual(self.parameter.denormalise(-1), 0)
 
     def test_clip(self):
         self.assertEqual(self.parameter.clip(5), 5)
@@ -48,16 +39,6 @@ class TestParameterSet(unittest.TestCase):
         self.assertEqual(len(self.parameter_set), len(target))
         self.assertEqual(self.parameter_set[0].name, 'test')
 
-    def test_normalise(self):
-        self.assertEqual(self.parameter_set.normalise([5]), [0])
-        self.assertEqual(self.parameter_set.normalise([10]), [1])
-        self.assertEqual(self.parameter_set.normalise([0]), [-1])
-
-    def test_denormalise(self):
-        self.assertEqual(self.parameter_set.denormalise([0]), [5])
-        self.assertEqual(self.parameter_set.denormalise([1]), [10])
-        self.assertEqual(self.parameter_set.denormalise([-1]), [0])
-
     def test_clip(self):
         self.assertEqual(self.parameter_set.clip([5]), [5])
         self.assertEqual(self.parameter_set.clip([11]), [10])
@@ -76,11 +57,10 @@ class TestDualParameterSet(unittest.TestCase):
             self.dual_parameter_set.add_output("test_output", lambda test: test * 2)
 
     def test_to_output(self):
-        self.assertEqual(self.dual_parameter_set.to_output([5], input_normalised=False), [10, 5])
-        self.assertEqual(self.dual_parameter_set.to_output([10], input_normalised=False), [20, 10])
-        self.assertEqual(self.dual_parameter_set.to_output([0], input_normalised=False), [0, 0])
-        self.assertEqual(self.dual_parameter_set.to_dict([5], input_normalised=False),
-                         {'test': 5, 'test_output': 10})
+        self.assertTrue(np.all(self.dual_parameter_set.to_output([5]) == np.array([10, 5])))
+        self.assertTrue(np.all(self.dual_parameter_set.to_output([10]) == np.array([20, 10])))
+        self.assertTrue(np.all(self.dual_parameter_set.to_output([0]) == np.array([0, 0])))
+        self.assertEqual(self.dual_parameter_set.to_dict([5]), {'test': 5, 'test_output': 10})
 
 
 class TestReadParameters(unittest.TestCase):

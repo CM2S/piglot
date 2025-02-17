@@ -1,0 +1,14 @@
+
+iters: 6
+
+optimiser:
+  name: query
+  param_list_file: query_params_1d.txt
+
+parameters:
+  a: [1, -2, 2]
+
+
+objective:
+  name: analytical
+  expression: a ** 2

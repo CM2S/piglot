@@ -7,8 +7,9 @@ import torch
 import botorch.test_functions.synthetic
 from botorch.test_functions.synthetic import SyntheticTestFunction
 from piglot.parameter import ParameterSet
-from piglot.objective import GenericObjective, ObjectiveResult, Composition
-from piglot.objectives.compositions import AVAILABLE_COMPOSITIONS
+from piglot.objective import GenericObjective, ObjectiveResult
+from piglot.utils.reductions import Reduction, read_reduction
+from piglot.utils.composition.responses import ResponseComposition, FixedFlatteningUtility
 
 
 class SyntheticObjective(GenericObjective):
@@ -20,13 +21,13 @@ class SyntheticObjective(GenericObjective):
             name: str,
             output_dir: str,
             transform: str = None,
-            composition: Composition = None,
+            composition: Reduction = None,
             **kwargs,
             ) -> None:
         super().__init__(
             parameters,
             stochastic=False,
-            composition=composition,
+            composition=self.__composition(composition) if composition is not None else None,
             output_dir=output_dir,
         )
         test_functions = self.get_test_functions()
@@ -38,6 +39,28 @@ class SyntheticObjective(GenericObjective):
             self.transform = lambda v, func: torch.square(torch.tensor([v - func.optimal_value]))
         with open(os.path.join(output_dir, 'optimum_value'), 'w', encoding='utf8') as file:
             file.write(f'{self.transform(self.func.optimal_value, self.func)}')
+
+    @staticmethod
+    def __composition(reduction: Reduction) -> ResponseComposition:
+        """Create a response composition from a reduction.
+
+        Parameters
+        ----------
+        reduction : Reduction
+            Reduction to apply.
+
+        Returns
+        -------
+        ResponseComposition
+            Composition to apply.
+        """
+        return ResponseComposition(
+            True,
+            False,
+            [1.0],
+            [reduction],
+            [FixedFlatteningUtility(np.array([0.0]))],
+        )
 
     @staticmethod
     def get_test_functions() -> Dict[str, Type[SyntheticTestFunction]]:
@@ -86,14 +109,27 @@ class SyntheticObjective(GenericObjective):
         ObjectiveResult
             Objective value.
         """
-        params = torch.tensor(self.parameters.denormalise(values))
+        params = torch.from_numpy(values)
         value = self.func.evaluate_true(params)
         if self.composition is not None:
             value -= self.func.optimal_value
         elif self.transform is not None:
             value = self.transform(value, self.func)
         value = float(value.item())
-        return ObjectiveResult([np.array([value])])
+        if self.composition is None:
+            return ObjectiveResult(
+                values,
+                np.array([value]),
+                np.array([value]),
+                scalar_value=value,
+            )
+        final_value = self.composition.composition(np.array([value]), values)
+        return ObjectiveResult(
+            values,
+            np.array([value]),
+            np.array([final_value]),
+            scalar_value=final_value.item(),
+        )
 
     @staticmethod
     def read(
@@ -123,11 +159,8 @@ class SyntheticObjective(GenericObjective):
         function = config.pop('function')
         # Optional arguments
         composition = None
-        composition_name = config.pop('composition', None)
-        if composition_name is not None:
-            if composition_name not in AVAILABLE_COMPOSITIONS:
-                raise RuntimeError(f'Unknown composition {composition_name}.')
-            composition = AVAILABLE_COMPOSITIONS[composition_name]()
+        if 'composition' in config:
+            composition = read_reduction(config.pop('composition'))
         return SyntheticObjective(
             parameters,
             function,

@@ -1,5 +1,5 @@
 """Optimisation parameter module."""
-from typing import Iterator, Dict, Any
+from typing import Iterator, Dict, Any, List, Callable
 import os
 from hashlib import sha256
 import numpy as np
@@ -11,19 +11,19 @@ from piglot.utils.yaml_parser import parse_config_file
 class Parameter:
     """Base parameter class."""
 
-    def __init__(self, name, inital_value, lbound, ubound):
+    def __init__(self, name: str, inital_value: float, lbound: float, ubound: float):
         """Constructor for the parameter class.
 
         Parameters
         ----------
         name : str
-            Parameter name
+            Parameter name.
         inital_value : float
-            Initial value for the parameter
+            Initial value for the parameter.
         lbound : float
-            Lower bound for the parameter
+            Lower bound for the parameter.
         ubound : float
-            Upper bound for the parameter
+            Upper bound for the parameter.
         """
         self.name = name
         self.inital_value = inital_value
@@ -32,37 +32,7 @@ class Parameter:
         if inital_value > ubound or inital_value < lbound:
             raise RuntimeError("Initial shot outside of bounds")
 
-    def normalise(self, value):
-        """Normalise a value to internal [-1,1] bounds.
-
-        Parameters
-        ----------
-        value : float
-            Value to normalise
-
-        Returns
-        -------
-        float
-            Normalised value
-        """
-        return 2 * (value - self.lbound) / (self.ubound - self.lbound) - 1
-
-    def denormalise(self, value):
-        """Denormalise a value from internal [-1,1] bounds.
-
-        Parameters
-        ----------
-        value : float
-            Value to denormalise
-
-        Returns
-        -------
-        float
-            Denormalised value
-        """
-        return (self.ubound - self.lbound) * (value + 1) / 2 + self.lbound
-
-    def clip(self, value):
+    def clip(self, value: float) -> float:
         """Clamp a value to the [lbound,ubound] interval.
 
         Parameters
@@ -81,14 +51,14 @@ class Parameter:
 class OutputParameter:
     """Base class for output parameters."""
 
-    def __init__(self, name, mapping):
+    def __init__(self, name: str, mapping: Callable[[Dict[str, float]], float]):
         """Constructor for an output parameter
 
         Parameters
         ----------
         name : str
             Output parameter name
-        mapping : callable
+        mapping : Callable[..., float]
             Function to map from internal to output parameters.
             The internal parameters are passed in an expanded dict.
         """
@@ -105,21 +75,41 @@ class ParameterSet:
 
     def __init__(self):
         """Constructor for a parameter set."""
-        self.parameters = []
+        self.parameters: List[Parameter] = []
 
     def __iter__(self) -> Iterator[Parameter]:
-        """Iterator for a parameter set."""
+        """Iterator for a parameter set.
+
+        Returns
+        -------
+        Iterator[Parameter]
+            Iterator for a parameter set."""
         return iter(self.parameters)
 
     def __len__(self) -> int:
-        """Length of the parameter set."""
+        """Length of the parameter set.
+
+        Returns
+        -------
+        int
+            Length of the parameter set."""
         return len(self.parameters)
 
-    def __getitem__(self, key) -> Parameter:
-        """Get a parameter by name."""
+    def __getitem__(self, key: int) -> Parameter:
+        """Get a parameter by index.
+
+        Parameters
+        ----------
+        key : int
+            Index of the parameter.
+
+        Returns
+        -------
+        Parameter
+            Parameter with the given index."""
         return self.parameters[key]
 
-    def add(self, name, inital_value, lbound, ubound):
+    def add(self, name: str, inital_value: float, lbound: float, ubound: float) -> None:
         """Add a parameter to this set.
 
         Parameters
@@ -127,11 +117,11 @@ class ParameterSet:
         name : str
             Parameter name.
         inital_value : float
-            Initial value for the parameter
+            Initial value for the parameter.
         lbound : float
-            Lower bound of the parameter
+            Lower bound of the parameter.
         ubound : float
-            Upper bound of the parameter
+            Upper bound of the parameter.
 
         Raises
         ------
@@ -143,82 +133,49 @@ class ParameterSet:
             raise RuntimeError(f"Repeated parameter {name} in set!")
         self.parameters.append(Parameter(name, inital_value, lbound, ubound))
 
-    def normalise(self, values):
-        """Normalises a parameter set to the internal [-1,1] bounds.
-
-        Parameters
-        ----------
-        values : array
-            Values to normalise. Their order is used for parameter resolution.
-
-        Returns
-        -------
-        array
-            Normalised parameters.
-        """
-        return [p.normalise(values[i]) for i, p in enumerate(self.parameters)]
-
-    def denormalise(self, values):
-        """Denormalises a parameter set from the internal [-1,1] bounds.
-
-        Parameters
-        ----------
-        values : array
-            Values to denormalise. Their order is used for parameter resolution.
-
-        Returns
-        -------
-        array
-            Denormalised parameters.
-        """
-        return [p.denormalise(values[i]) for i, p in enumerate(self.parameters)]
-
-    def clip(self, values):
+    def clip(self, values: np.ndarray) -> np.ndarray:
         """Clamp the parameter set to the [lbound,ubound] interval.
 
         Parameters
         ----------
-        values : array
+        values : np.ndarray
             Values to clip. Their order is used for parameter resolution.
 
         Returns
         -------
-        float
+        np.ndarray
             Clamped parameters.
         """
-        return [p.clip(values[i]) for i, p in enumerate(self.parameters)]
+        return np.array([p.clip(values[i]) for i, p in enumerate(self.parameters)])
 
-    def to_dict(self, values, input_normalised=True):
+    def to_dict(self, values: np.ndarray) -> Dict[str, float]:
         """Build a dict with name-value pairs given a list of values.
 
         Parameters
         ----------
-        values : array
+        values : np.ndarray
             Values to pack. Their order is used for parameter resolution.
-        input_normalised : bool, optional
-            Whether the parameters are given in normalised bounds or not, by default True.
 
         Returns
         -------
-        dict[str: float]
+        Dict[str, float]
             Name-value pair for each parameter.
         """
-        vals = self.denormalise(values) if input_normalised else values
-        return dict(zip([p.name for p in self.parameters], vals))
+        return dict(zip([p.name for p in self.parameters], values))
 
     @staticmethod
-    def hash(values):
+    def hash(values) -> str:
         """Build the hash for the current parameter values.
 
         Parameters
         ----------
         values : array
-            Parameters to hash
+            Parameters to hash.
 
         Returns
         -------
         str
-            Hex digest of the hash
+            Hex digest of the hash.
         """
         hasher = sha256()
         values = np.array(values)
@@ -240,14 +197,14 @@ class DualParameterSet(ParameterSet):
         super().__init__()
         self.output_parameters = []
 
-    def add_output(self, name, mapping):
+    def add_output(self, name: str, mapping: Callable[[Dict[str, float]], float]) -> None:
         """Adds an output parameter to the set.
 
         Parameters
         ----------
         name : str
             Parameter name
-        mapping : callable
+        mapping : Callable[[Dict[str, float]], float]
             Mapping function from internal parameters to this output parameter's value.
             Internal parameters are passed as arguments for this function as an expanded
             dict.
@@ -262,7 +219,7 @@ class DualParameterSet(ParameterSet):
             raise RuntimeError(f"Repeated output parameter {name} in set!")
         self.output_parameters.append(OutputParameter(name, mapping))
 
-    def clone_output(self, name):
+    def clone_output(self, name: str) -> None:
         """Creates an output parameter identical to a given internal parameter.
 
         Parameters
@@ -272,42 +229,36 @@ class DualParameterSet(ParameterSet):
         """
         self.output_parameters.append(OutputParameter(name, lambda **vals_dict: vals_dict[name]))
 
-    def to_output(self, values, input_normalised=True):
+    def to_output(self, values: np.ndarray) -> np.ndarray:
         """Compute the output parameters' values given an array of internal inputs.
 
         Parameters
         ----------
-        values : array
+        values : np.ndarray
             Values to pack. Their order is used for parameter resolution.
-        input_normalised : bool, optional
-            Whether the parameters are given in normalised bounds or not, by default True.
 
         Returns
         -------
-        array
+        np.ndarray
             Values of the output parameters.
         """
-        vals_dict = super().to_dict(values, input_normalised)
-        return [p.mapping(**vals_dict) for p in self.output_parameters]
+        vals_dict = super().to_dict(values)
+        return np.array([p.mapping(**vals_dict) for p in self.output_parameters])
 
-    def to_dict(self, values, input_normalised=True):
+    def to_dict(self, values: np.ndarray) -> Dict[str, float]:
         """Build a dict with name-value pairs for output parameters given a list of values.
 
         Parameters
         ----------
-        values : array
+        values : np.ndarray
             Values to pack. Their order is used for parameter resolution.
-        input_normalised : bool, optional
-            Whether the parameters are given in normalised bounds or not, by default True.
 
         Returns
         -------
-        dict[str: float]
+        Dict[str, float]
             Name-value pair for each output parameter.
         """
-        data = dict(zip([p.name for p in self.output_parameters],
-                        self.to_output(values, input_normalised)))
-        return data
+        return dict(zip([p.name for p in self.output_parameters], self.to_output(values)))
 
 
 def read_parameters(config: Dict[str, Any]) -> ParameterSet:

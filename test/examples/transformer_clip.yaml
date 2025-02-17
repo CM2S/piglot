@@ -1,19 +1,15 @@
 
-iters: 10
+iters: 4
 
 optimiser:
   name: botorch
 
-
 parameters:
-  a: [0, -4, 4]
+  a: [1, 0, 4]
 
 
 objective:
   name: fitting
-  composite: True
-  stochastic: True
-  reduction: mae
   solver:
     name: curve
     cases:
@@ -22,13 +18,13 @@ objective:
         parametric: x
         bounds: [-5, 5]
         points: 100
-      'case_2':
-        expression: 1.1 * <a> * x ** 2
-        parametric: x
-        bounds: [-5, 5]
-        points: 100
-
-
+  transformers:
+    case_1:
+      name: clip
+      x_min: -3
+      x_max: 3
+      y_min: -10
+      y_max: 10
   references:
     'reference_curve.txt':
-      prediction: ['case_1', 'case_2']
+      prediction: ['case_1']

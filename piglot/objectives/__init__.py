@@ -2,17 +2,18 @@
 from typing import Any, Dict, Type
 from piglot.parameter import ParameterSet
 from piglot.objective import Objective
-from piglot.objectives.analytical import AnalyticalObjective
+from piglot.objectives.analytical import AnalyticalObjective, AnalyticalMultiObjective
 from piglot.objectives.synthetic import SyntheticObjective
-from piglot.objectives.fitting import FittingObjective
-from piglot.objectives.design import DesignObjective
+from piglot.objectives.fitting import ResponseFittingObjective
+from piglot.objectives.design import ResponseDesignObjective
 
 
 AVAILABLE_OBJECTIVES: Dict[str, Type[Objective]] = {
     'analytical': AnalyticalObjective,
+    'analytical_mo': AnalyticalMultiObjective,
     'test_function': SyntheticObjective,
-    'fitting': FittingObjective,
-    'design': DesignObjective,
+    'fitting': ResponseFittingObjective,
+    'design': ResponseDesignObjective,
 }
 
 

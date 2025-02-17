@@ -1,0 +1,29 @@
+
+iters: 10
+
+optimiser: botorch
+
+
+parameters:
+  a: [2, 0.5, 4]
+
+
+
+objective:
+  name: design
+  solver:
+    name: curve
+    cases:
+      'case_1':
+        expression: <a> * x ** 2
+        parametric: x
+        bounds: [-5, 5]
+        points: 100
+  targets:
+    'integral_quantity':
+      quantity:
+        name: script
+        script: script_reduction.py
+        class: BadReductionShape
+      prediction: ['case_1']
+      n_points: 20

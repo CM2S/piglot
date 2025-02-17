@@ -4,14 +4,16 @@ import os
 import time
 import argparse
 from tempfile import TemporaryDirectory
+from tqdm import tqdm
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.integrate import trapezoid
 from PIL import Image
 import torch
 from piglot.parameter import read_parameters
 from piglot.objectives import read_objective
-from piglot.utils.surrogate import get_model
+from piglot.utils.surrogate import get_model, optmise_posterior_mean
 from piglot.utils.yaml_parser import parse_config_file
 
 
@@ -326,6 +328,117 @@ def plot_gp(args):
     plt.close()
 
 
+def plot_pareto(args):
+    """Driver for plotting the Pareto front for a given multi-objective optimisation problem.
+
+    Parameters
+    ----------
+    args : dict
+        Passed arguments.
+    """
+    config = parse_config_file(args.config)
+    objective = read_objective(config["objective"], read_parameters(config), config["output"])
+    if objective.num_objectives != 2:
+        raise ValueError("Can only plot the Pareto front for a two-objective optimisation problem.")
+    data = objective.get_history()
+    fig, ax = plt.subplots()
+    # Read all the points and variances
+    total_points = np.array([entry['values'] for entry in data.values()]).T
+    variances = np.array([entry['variances'] for entry in data.values() if 'variances' in entry]).T
+    has_variance = variances.size > 0
+    # Separate the dominated points
+    dominated = []
+    nondominated = []
+    pareto_data = pd.read_table(os.path.join(config["output"], 'pareto_front')).to_numpy()
+    pareto = pareto_data[:, :objective.num_objectives]
+    for i, point in enumerate(total_points):
+        if np.isclose(point, pareto).all(axis=1).any():
+            nondominated.append((point, variances[i, :] if has_variance else None))
+        else:
+            dominated.append((point, variances[i, :] if has_variance else None))
+    # Sort the Pareto front by the first objective
+    nondominated = sorted(nondominated, key=lambda x: x[0][0])
+    # Plot the points
+    if has_variance:
+        ax.errorbar(
+            [point[0][0] for point in nondominated],
+            [point[0][1] for point in nondominated],
+            xerr=np.sqrt([point[1][0] for point in nondominated]),
+            yerr=np.sqrt([point[1][0] for point in nondominated]),
+            c='r',
+            fmt='-o',
+            label='Pareto front',
+        )
+        if args.all:
+            ax.errorbar(
+                [point[0][0] for point in dominated],
+                [point[0][1] for point in dominated],
+                xerr=np.sqrt([point[1][0] for point in dominated]),
+                yerr=np.sqrt([point[1][0] for point in dominated]),
+                c='k',
+                fmt='o',
+                label='Dominated points',
+            )
+    else:
+        ax.plot(
+            [point[0][0] for point in nondominated],
+            [point[0][1] for point in nondominated],
+            c='r',
+            ls='--',
+            marker='o',
+            label='Pareto front',
+        )
+        if args.all:
+            ax.scatter(
+                [point[0][0] for point in dominated],
+                [point[0][1] for point in dominated],
+                c='k',
+                label='Dominated points',
+            )
+    if args.log:
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+    ax.set_xlabel('Objective 1')
+    ax.set_ylabel('Objective 2')
+    ax.legend()
+    ax.grid()
+    fig.tight_layout()
+    if args.save_fig:
+        fig.savefig(args.save_fig)
+    else:
+        plt.show()
+
+
+def make_surrogate(args):
+    """Driver for training a surrogate model for the available data.
+
+    Parameters
+    ----------
+    args : dict
+        Passed arguments.
+    """
+    # Build piglot problem
+    config = parse_config_file(args.config)
+    parameters = read_parameters(config)
+    objective = read_objective(config["objective"], parameters, config["output"])
+    data = objective.get_history()
+    bounds = np.array([[par.lbound, par.ubound] for par in parameters]).T
+    for name, data_dict in data.items():
+        param_values = data_dict['params']
+        values = data_dict['values']
+        variances = data_dict['variances'] if 'variances' in data_dict else None
+        if len(values) < 2:
+            continue
+        output_data = np.empty((len(values) - 2, bounds.shape[1]))
+        for i in tqdm(range(2, len(values))):
+            sliced_params = param_values[:i, :]
+            sliced_values = values[:i]
+            sliced_variances = variances[:i] if variances is not None else None
+            model = get_model(sliced_params, sliced_values, sliced_variances)
+            output_data[i - 2, :] = optmise_posterior_mean(model, bounds)
+        np.savetxt(os.path.join(config['output'], f'{name}.csv'), output_data)
+
+
 def main(passed_args: List[str] = None):
     """Entry point for this script."""
     # Global argument parser settings
@@ -542,6 +655,50 @@ def main(passed_args: List[str] = None):
         help=("Max number of calls to plot."),
     )
     sp_gp.set_defaults(func=plot_gp)
+
+    # Pareto front plotting
+    sp_pareto = subparsers.add_parser(
+        'pareto',
+        help='plot the Pareto front for a given multi-objective optimisation problem',
+        description=("Plot the Pareto front for a given multi-objective optimisation problem. This "
+                     "must be executed in the same path as the running piglot instance."),
+    )
+    sp_pareto.add_argument(
+        'config',
+        type=str,
+        help="Path for the used or generated configuration file.",
+    )
+    sp_pareto.add_argument(
+        '--save_fig',
+        default=None,
+        type=str,
+        help=("Path to save the generated figure. If used, graphical output is skipped."),
+    )
+    sp_pareto.add_argument(
+        '--log',
+        action='store_true',
+        help="Plot in a log scale."
+    )
+    sp_pareto.add_argument(
+        '--all',
+        action='store_true',
+        help="Plot the both the Pareto front and the dominated points."
+    )
+    sp_pareto.set_defaults(func=plot_pareto)
+
+    # Surrogate model training
+    sp_surrogate = subparsers.add_parser(
+        'surrogate',
+        help='train a surrogate model for the available data',
+        description=("Train a surrogate model for the available data. This must be "
+                     "executed in the same path as the running piglot instance."),
+    )
+    sp_surrogate.add_argument(
+        'config',
+        type=str,
+        help="Path for the used or generated configuration file.",
+    )
+    sp_surrogate.set_defaults(func=make_surrogate)
 
     args = parser.parse_args() if passed_args is None else parser.parse_args(passed_args)
     args.func(args)

@@ -1,75 +1,8 @@
 """Module for reducing the number of points in a response function"""
 from __future__ import annotations
-from typing import Tuple, Dict, Any
+from typing import Tuple
 import numpy as np
 import scipy.optimize
-
-
-class Transformer:
-    """Class for transforming a response function."""
-
-    def __init__(
-            self,
-            x_scale: float = 1.0,
-            y_scale: float = 1.0,
-            x_offset: float = 0.0,
-            y_offset: float = 0.0,
-            x_min: float = -np.inf,
-            x_max: float = np.inf,
-            ) -> None:
-        self.x_scale = x_scale
-        self.y_scale = y_scale
-        self.x_offset = x_offset
-        self.y_offset = y_offset
-        self.x_min = x_min
-        self.x_max = x_max
-
-    def __call__(self, x_old: np.ndarray, y_old: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Transform a response function.
-
-        Parameters
-        ----------
-        x_old : np.ndarray
-            Original time grid.
-        y_old : np.ndarray
-            Original values.
-
-        Returns
-        -------
-        Tuple[np.ndarray, np.ndarray]
-            Transformed time grid and values.
-        """
-        # Affine transformation
-        x_new = self.x_scale * x_old + self.x_offset
-        y_new = self.y_scale * y_old + self.y_offset
-        # Clip the time grid
-        mask = (x_new >= self.x_min) & (x_new <= self.x_max)
-        x_new = x_new[mask]
-        y_new = y_new[mask]
-        return x_new, y_new
-
-    @staticmethod
-    def read(config: Dict[str, Any]) -> Transformer:
-        """Read a transformer from a config dictionary.
-
-        Parameters
-        ----------
-        config : Dict[str, Any]
-            Configuration dictionary.
-
-        Returns
-        -------
-        Transformer
-            Transformer instance.
-        """
-        return Transformer(
-            x_scale=config.get("x_scale", 1.0),
-            y_scale=config.get("y_scale", 1.0),
-            x_offset=config.get("x_offset", 0.0),
-            y_offset=config.get("y_offset", 0.0),
-            x_min=config.get("x_min", -np.inf),
-            x_max=config.get("x_max", np.inf),
-        )
 
 
 class ResamplingLoss:
@@ -213,14 +146,14 @@ def interpolate_response(
     """
     # Do we have sufficient points to interpolate?
     if len(x_resp) < 2:
-        return np.zeros_like(x_grid)
+        return np.ones_like(x_grid) * y_resp.item()
     # Filter out points with the same x coordinate (to prevent issues during interpolation)
     mask = np.append(np.abs(np.diff(x_resp)) > 1e-16, np.array([True]), axis=0)
     x_resp = x_resp[mask]
     y_resp = y_resp[mask]
     # Re-check the number of points
     if len(x_resp) < 2:
-        return np.zeros_like(x_grid)
+        return np.ones_like(x_grid) * y_resp.item()
     # Ensure the grid is sorted
     idx = np.argsort(x_resp)
     x_resp = x_resp[idx]
