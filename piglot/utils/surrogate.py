@@ -1,22 +1,21 @@
 """Module for surrogate models."""
-from typing import Union
 import numpy as np
 import torch
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from botorch.acquisition import PosteriorMean
 from botorch.optim import optimize_acqf
 from botorch.fit import fit_gpytorch_mll
-from botorch.models import SingleTaskGP, FixedNoiseGP
+from botorch.models import SingleTaskGP
 from botorch.models.transforms.input import Normalize
 from botorch.models.transforms.outcome import Standardize
 
 
 def get_model(
-        x_data: np.ndarray,
-        y_data: np.ndarray,
-        var_data: np.ndarray = None,
-        noisy: bool = False,
-        ) -> Union[SingleTaskGP, FixedNoiseGP]:
+    x_data: np.ndarray,
+    y_data: np.ndarray,
+    var_data: np.ndarray = None,
+    noisy: bool = False,
+) -> SingleTaskGP:
     """Get a GP regression model for the current data.
 
     Parameters
@@ -32,7 +31,7 @@ def get_model(
 
     Returns
     -------
-    Union[SingleTaskGP, FixedNoiseGP]
+    SingleTaskGP
         GP regression model.
     """
     x = torch.tensor(x_data, dtype=torch.float64)
