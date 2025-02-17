@@ -10,7 +10,6 @@ from piglot.utils.composition.responses import (
 class TestFlattenUtilities(unittest.TestCase):
     def test_fixed_flat(self):
         x_ref = np.array([0.0, 0.5, 1.0])
-        y_ref = np.array([0.0, 0.5, 1.0])
         utility = FixedFlatteningUtility(x_ref)
         self.assertEqual(utility.length(), 3)
         x_new = np.array([-1.0, 0.5, 2.0])
