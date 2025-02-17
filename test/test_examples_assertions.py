@@ -136,14 +136,18 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         ValueError,
         "Undefined prediction case_2",
     ),
-    # 'design_missing_pred.yaml': (
-    #     ValueError,
-    #     "Missing prediction for design target 'maximum_force'.",
-    # ),
-    # 'design_missing_quantity.yaml': (
-    #     ValueError,
-    #     "Missing quantity for fitting objective.",
-    # ),
+    'design_missing_pred.yaml': (
+        ValueError,
+        "Missing prediction for design target 'maximum_force'.",
+    ),
+    'design_missing_quantity.yaml': (
+        ValueError,
+        "Missing quantity for design target 'maximum_force'.",
+    ),
+    'design_composite_points.yaml': (
+        ValueError,
+        "All objectives must have a number of points specified for the composition.",
+    ),
     'design_missing_quantity_name.yaml': (
         ValueError,
         "Need to pass the name of the reduction function.",

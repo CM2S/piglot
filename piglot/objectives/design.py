@@ -69,7 +69,7 @@ class DesignSingleObjective(ResponseSingleObjective):
             raise ValueError(f"Invalid prediction '{prediction}' for design target '{name}'.")
         # Read the quantity
         if 'quantity' not in config:
-            raise ValueError("Missing quantity for fitting objective.")
+            raise ValueError(f"Missing quantity for design target '{name}'.")
         return DesignSingleObjective(
             name,
             prediction,
