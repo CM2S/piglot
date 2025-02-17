@@ -23,7 +23,7 @@ objective:
     'integral_quantity':
       quantity:
         name: script
-        script: scrip_reduction.py
+        script: script_reduction.py
         class: SampleReduction
       prediction: ['case_1']
       n_points: 20
