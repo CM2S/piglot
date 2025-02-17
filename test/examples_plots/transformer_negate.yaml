@@ -1,16 +1,15 @@
 
-iters: 10
+iters: 4
 
-optimiser: random
-
+optimiser:
+  name: botorch
 
 parameters:
-  a: [2, 0.5, 4]
-
+  a: [1, -4, 4]
 
 
 objective:
-  name: design
+  name: fitting
   solver:
     name: curve
     cases:
@@ -19,7 +18,8 @@ objective:
         parametric: x
         bounds: [-5, 5]
         points: 100
-  targets:
-    'integral_quantity':
-      quantity: integral
+  transformers:
+    case_1: negate
+  references:
+    'reference_curve.txt':
       prediction: ['case_1']

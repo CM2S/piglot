@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.integrate import trapezoid
-from scipy.spatial import ConvexHull
 from PIL import Image
 import torch
 from piglot.parameter import read_parameters
@@ -357,12 +356,8 @@ def plot_pareto(args):
             nondominated.append((point, variances[i, :] if has_variance else None))
         else:
             dominated.append((point, variances[i, :] if has_variance else None))
-    # Build the Pareto hull
-    hull = ConvexHull(pareto)
-    for simplex in hull.simplices:
-        # Hacky: filter the line between the two endpoints (assuming the list is sorted by x)
-        if abs(simplex[0] - simplex[1]) < pareto.shape[0] - 1:
-            ax.plot(pareto[simplex, 0], pareto[simplex, 1], 'r', ls='--')
+    # Sort the Pareto front by the first objective
+    nondominated = sorted(nondominated, key=lambda x: x[0][0])
     # Plot the points
     if has_variance:
         ax.errorbar(
@@ -371,7 +366,7 @@ def plot_pareto(args):
             xerr=np.sqrt([point[1][0] for point in nondominated]),
             yerr=np.sqrt([point[1][0] for point in nondominated]),
             c='r',
-            fmt='o',
+            fmt='-o',
             label='Pareto front',
         )
         if args.all:
@@ -385,10 +380,12 @@ def plot_pareto(args):
                 label='Dominated points',
             )
     else:
-        ax.scatter(
+        ax.plot(
             [point[0][0] for point in nondominated],
             [point[0][1] for point in nondominated],
             c='r',
+            ls='--',
+            marker='o',
             label='Pareto front',
         )
         if args.all:
@@ -439,7 +436,7 @@ def make_surrogate(args):
             sliced_variances = variances[:i] if variances is not None else None
             model = get_model(sliced_params, sliced_values, sliced_variances)
             output_data[i - 2, :] = optmise_posterior_mean(model, bounds)
-        np.savetxt(f'{config["output"]}_{name}.csv', output_data)
+        np.savetxt(os.path.join(config['output'], f'{name}.csv'), output_data)
 
 
 def main(passed_args: List[str] = None):

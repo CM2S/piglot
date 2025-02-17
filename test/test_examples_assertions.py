@@ -204,6 +204,54 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         ValueError,
         "Parameter values outside upper bounds",
     ),
+    'curve_bad_composite_scalarisation.yaml': (
+        ValueError,
+        "Multi-objective composite problems require full composition",
+    ),
+    'curve_mo_bad_scalarisation.yaml': (
+        ValueError,
+        'Scalarisation function "missing" is not available.',
+    ),
+    'curve_mo_bad_scalarisation_2.yaml': (
+        ValueError,
+        'Scalarisation function "missing" is not available.',
+    ),
+    'curve_mo_bad_scalarisation_script.yaml': (
+        ValueError,
+        'Need to pass the file path for the "script" scalarisation.',
+    ),
+    'curve_mo_scalarisation_missing_name.yaml': (
+        ValueError,
+        'Need to pass the name of the scalarisation function.',
+    ),
+    'curve_bad_reduction.yaml': (
+        ValueError,
+        'Reduction function "missing" is not available.',
+    ),
+    'curve_bad_reduction_2.yaml': (
+        ValueError,
+        'Reduction function "missing" is not available.',
+    ),
+    'curve_bad_reduction_script.yaml': (
+        ValueError,
+        'Need to pass the file path for the "script" reduction.',
+    ),
+    'curve_reduction_missing_name.yaml': (
+        ValueError,
+        'Need to pass the name of the reduction function.',
+    ),
+    'curve_bad_reduction_grad.yaml': (
+        ValueError,
+        'Gradient check failed',
+    ),
+    'curve_bad_reduction_exception.yaml': (
+        ValueError,
+        'Test failed for reduction',
+    ),
+    'curve_bad_reduction_shape.yaml': (
+        ValueError,
+        'Bad shape after reduction for',
+    ),
 }
 
 

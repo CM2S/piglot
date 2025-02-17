@@ -1,7 +1,7 @@
 
 iters: 10
 
-optimiser: random
+optimiser: botorch
 
 
 parameters:
@@ -11,6 +11,8 @@ parameters:
 
 objective:
   name: design
+  composite: True
+  scalarisation: mean
   solver:
     name: curve
     cases:
@@ -23,3 +25,8 @@ objective:
     'integral_quantity':
       quantity: integral
       prediction: ['case_1']
+      n_points: 20
+    'max_quantity':
+      quantity: max
+      prediction: ['case_1']
+      n_points: 20

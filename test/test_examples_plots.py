@@ -100,6 +100,11 @@ def test_input_files(input_dir: str):
                 '--save_fig',
                 os.path.join(output_dir, 'pareto.png'),
             ])
+        if input_file.endswith('random.yaml'):
+            piglot_plot_main([
+                'surrogate',
+                input_file,
+            ])
         if 'test_analytical' not in input_file:
             piglot_plot_main([
                 'gp',

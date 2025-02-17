@@ -1,7 +1,7 @@
 
 iters: 10
 
-optimiser: random
+optimiser: botorch
 
 
 parameters:
@@ -11,6 +11,9 @@ parameters:
 
 objective:
   name: design
+  composite: True
+  scalarisation: mean
+  full_composite: False
   solver:
     name: curve
     cases:
@@ -20,10 +23,11 @@ objective:
         bounds: [-5, 5]
         points: 100
   targets:
-    'script_quantity':
-      quantity:
-        name: script
-        script: min_script.py # Path to the script
-        class: MinQuantity # Class name (must be derived from Quantity)
+    'integral_quantity':
+      quantity: integral
       prediction: ['case_1']
-      negate: True
+      n_points: 20
+    'max_quantity':
+      quantity: max
+      prediction: ['case_1']
+      n_points: 20

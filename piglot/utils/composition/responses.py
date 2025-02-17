@@ -1,5 +1,6 @@
 """Module with utilities for transforming responses under compositions."""
 from typing import List, Tuple
+import warnings
 from abc import ABC, abstractmethod
 import numpy as np
 import torch
@@ -326,6 +327,7 @@ class ResponseComposition(Composition):
         reductions: List[Reduction],
         flatten_list: List[FlattenUtility],
     ) -> None:
+        warnings.warn("ResponseComposition is deprecated", DeprecationWarning)
         if len(flatten_list) != len(reductions):
             raise ValueError("Mismatched number of reductions and responses.")
         self.scalarise = scalarise
