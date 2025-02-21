@@ -2,6 +2,7 @@
 from typing import Dict, Type, Tuple, List, Any
 import os
 import re
+import sys
 import subprocess
 from piglot.solver.input_file_solver import (
     InputDataGenerator,
@@ -162,8 +163,8 @@ class AbaqusCase(InputFileCase):
             ] + extra_args,
             cwd=tmp_dir,
             shell=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
             check=False
         )
         variables = self._post_proc_variables(input_data)
@@ -191,8 +192,8 @@ class AbaqusCase(InputFileCase):
             ],
             cwd=tmp_dir,
             shell=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
             check=False,
         )
         if run_inp.returncode != 0 or run_odb.returncode != 0:
