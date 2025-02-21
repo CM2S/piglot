@@ -11,7 +11,7 @@ from piglot.solver.input_file_solver import (
     InputFileSolver,
     OutputField,
 )
-from piglot.solver.abaqus.fields import Reaction
+from piglot.solver.abaqus.fields import FieldsOutput
 
 
 class AbaqusCase(InputFileCase):
@@ -210,7 +210,7 @@ class AbaqusCase(InputFileCase):
             Names and supported fields for this input file type.
         """
         return {
-            'Reaction': Reaction,
+            'FieldsOutput': FieldsOutput,
         }
 
     @classmethod

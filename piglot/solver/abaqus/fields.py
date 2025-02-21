@@ -10,10 +10,10 @@ from piglot.solver.solver import OutputResult
 from piglot.utils.solver_utils import get_case_name
 
 
-class Reaction(OutputField):
-    """Reaction outputs reader."""
+class FieldsOutput(OutputField):
+    """Fields output reader."""
 
-    def __init__(self, field: str, x_field: str, set_name: str, direction: str) -> None:
+    def __init__(self, field: str, x_field: str, set_name: str) -> None:
         """Constructor for reaction reader
 
         Parameters
@@ -24,15 +24,11 @@ class Reaction(OutputField):
             x_field to read.
         set_name : str
             Node set to read.
-        direction : str
-            Direction to read.
         """
         super().__init__()
-        direction_dict = {'x': 1, 'y': 2, 'z': 3}
         self.field = field
         self.x_field = x_field
         self.set_name = set_name
-        self.direction = direction_dict[direction]
 
     def check(self, input_data: InputData) -> None:
         """Sanity checks on the input file.
@@ -57,6 +53,24 @@ class Reaction(OutputField):
             if self.set_name not in nsets_list:
                 raise ValueError(f"Set name '{self.set_name}' not found in the file.")
 
+    @staticmethod
+    def get_reduction(field: str) -> np.ufunc:
+        """Get the reduction function for the field.
+
+        Parameters
+        ----------
+        field : str
+            Field to read.
+
+        Returns
+        -------
+        np.ufunc
+            Reduction function.
+        """
+        if field.startswith('RF') or field.startswith('RM'):
+            return np.sum
+        return np.mean
+
     def get(self, input_data: InputData) -> OutputResult:
         """Reads reactions from a Abaqus analysis.
 
@@ -79,13 +93,6 @@ class Reaction(OutputField):
         )
         output_dir = os.path.dirname(output_dir)
 
-        reduction = {
-            'RF': np.sum,
-            'U': np.mean,
-            'S': np.mean,
-            'LE': np.mean,
-            'E': np.mean,
-        }
         # X field
         field_filename = os.path.join(
             output_dir,
@@ -95,10 +102,11 @@ class Reaction(OutputField):
         if not os.path.exists(field_filename):
             return OutputResult(np.empty(0), np.empty(0))
         data = pd.read_csv(field_filename, sep=' ', index_col=False)
-        columns = [a for a in data.columns if f"{self.x_field}{self.direction}" in a]
+        columns = [a for a in data.columns if self.x_field in a]
+        x_reduction = self.get_reduction(self.x_field)
         # Extract columns from data frame
         data_group = data[columns].to_numpy()
-        x_field = reduction[self.x_field](data_group, axis=1)
+        x_field = x_reduction(data_group, axis=1)
 
         # Y field
         field_filename = os.path.join(
@@ -109,15 +117,16 @@ class Reaction(OutputField):
         if not os.path.exists(field_filename):
             return OutputResult(np.empty(0), np.empty(0))
         data = pd.read_csv(field_filename, sep=' ', index_col=False)
-        columns = [a for a in data.columns if f"{self.field}{self.direction}" in a]
+        columns = [a for a in data.columns if self.field in a]
+        y_reduction = self.get_reduction(self.field)
         # Extract columns from data frame
         data_group = data[columns].to_numpy()
-        y_field = reduction[self.field](data_group, axis=1)
+        y_field = y_reduction(data_group, axis=1)
 
         return OutputResult(x_field, y_field)
 
     @classmethod
-    def read(cls, config: Dict[str, Any]) -> Reaction:
+    def read(cls, config: Dict[str, Any]) -> FieldsOutput:
         """Read the output field from the configuration dictionary.
 
         Parameters
@@ -142,9 +151,4 @@ class Reaction(OutputField):
         if 'set_name' not in config:
             raise ValueError("Missing 'set_name' in reaction configuration.")
         set_name = config['set_name']
-        # Read the direction
-        if 'direction' not in config:
-            raise ValueError("Missing 'direction' in reaction configuration.")
-        direction = config['direction']
-
-        return cls(field, x_field, set_name, direction)
+        return cls(field, x_field, set_name)
