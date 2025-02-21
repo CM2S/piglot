@@ -1,5 +1,5 @@
 """Module for CRATE solver."""
-from typing import Dict, Type, Tuple, List
+from typing import Dict, Type
 import os
 import sys
 import subprocess

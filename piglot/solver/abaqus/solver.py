@@ -1,5 +1,5 @@
 """Module for Links solver."""
-from typing import Dict, Type, Tuple, List, Any
+from typing import Dict, Type, List, Any
 import os
 import re
 import sys
