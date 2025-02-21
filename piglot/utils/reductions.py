@@ -152,8 +152,8 @@ class SimpleReduction(Reduction):
 
 AVAILABLE_REDUCTIONS: Dict[str, Reduction] = {
     'mean': SimpleReduction(lambda time, data: torch.mean(data, dim=-1)),
-    'max': SimpleReduction(lambda time, data: torch.max(data, dim=-1).values),
-    'min': SimpleReduction(lambda time, data: torch.min(data, dim=-1).values),
+    'max': SimpleReduction(lambda time, data: torch.amax(data, dim=-1)),
+    'min': SimpleReduction(lambda time, data: torch.amin(data, dim=-1)),
     'sum': SimpleReduction(lambda time, data: torch.sum(data, dim=-1)),
     'std': SimpleReduction(lambda time, data: torch.std(data, dim=-1)),
     'var': SimpleReduction(lambda time, data: torch.var(data, dim=-1)),
@@ -161,8 +161,8 @@ AVAILABLE_REDUCTIONS: Dict[str, Reduction] = {
     'mae': SimpleReduction(lambda time, data: torch.mean(torch.abs(data), dim=-1)),
     'last': SimpleReduction(lambda time, data: data[..., -1]),
     'first': SimpleReduction(lambda time, data: data[..., 0]),
-    'max_abs': SimpleReduction(lambda time, data: torch.max(torch.abs(data), dim=-1).values),
-    'min_abs': SimpleReduction(lambda time, data: torch.min(torch.abs(data), dim=-1).values),
+    'max_abs': SimpleReduction(lambda time, data: torch.amax(torch.abs(data), dim=-1)),
+    'min_abs': SimpleReduction(lambda time, data: torch.amin(torch.abs(data), dim=-1)),
     'integral': SimpleReduction(lambda time, data: torch.trapz(data, time, dim=-1)),
     'square_integral': SimpleReduction(
         lambda time, data: torch.trapz(torch.square(data), time, dim=-1),
