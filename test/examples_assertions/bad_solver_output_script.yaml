@@ -1,0 +1,22 @@
+iters: 10
+
+optimiser: botorch
+
+parameters:
+  a: [1, 0, 4]
+
+objective:
+  name: fitting
+  solver:
+    name: links
+    links: LINKS
+    cases:
+      'case_1.dat':
+        fields:
+          'script_output':
+            name: script
+            script: solver_output_field.py
+            class: BadOutputField
+  references:
+    'reference_curve.txt':
+      prediction: ['case_1']

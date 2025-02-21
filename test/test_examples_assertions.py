@@ -272,6 +272,10 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         ValueError,
         'Need to pass the name of the response transformer.',
     ),
+    'bad_solver_output_script.yaml': (
+        RuntimeError,
+        'Cannot read the configuration for a script-based output field.',
+    ),
 }
 
 
