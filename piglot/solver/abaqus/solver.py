@@ -83,9 +83,7 @@ class AbaqusCase(InputFileCase):
         parameters : ParameterSet
             Parameter set for this problem.
         """
-        cwd = os.getcwd()
-        case_name, ext = os.path.splitext(os.path.basename(input_data.input_file))
-        input_file = os.path.join(cwd, case_name + ext)
+        input_file = os.path.join(input_data.tmp_dir, input_data.input_file)
 
         with open(input_file, 'r', encoding='utf-8') as file:
             data = file.read()
@@ -116,9 +114,8 @@ class AbaqusCase(InputFileCase):
         Dict[str, Any]
             Dictionary with the post processing variables.
         """
-        input_file = os.path.basename(input_data.input_file)
         variables = {
-            'input_file': input_file,
+            'input_file': input_data.input_file,
             'job_name': self.job_name,
             'step_name': self.step_name,
             'instance_name': self.instance_name,
@@ -157,7 +154,7 @@ class AbaqusCase(InputFileCase):
             [
                 self.abaqus_bin,
                 f"job={self.job_name}",
-                f"input={os.path.basename(input_data.input_file)}",
+                f"input={input_data.input_file}",
                 'interactive',
                 'ask_delete=OFF',
             ] + extra_args,
@@ -212,45 +209,6 @@ class AbaqusCase(InputFileCase):
         return {
             'FieldsOutput': FieldsOutput,
         }
-
-    @classmethod
-    def _get_file_dependencies(cls, input_file: str) -> List[str]:
-        """Get the dependencies for a single given input file.
-
-        Parameters
-        ----------
-        input_file : str
-            Input file to check for dependencies.
-
-        Returns
-        -------
-        List[str]
-            Substitution dependencies for this input file.
-        """
-        if not os.path.exists(input_file):
-            raise ValueError(f'Input file "{input_file}" does not exist.')
-        deps = []
-        return deps
-
-    @classmethod
-    def get_dependencies(cls, input_file: str) -> Tuple[List[str], List[str]]:
-        """Get the dependencies for a given input file.
-
-        Parameters
-        ----------
-        input_file : str
-            Input file to check for dependencies.
-
-        Returns
-        -------
-        Tuple[List[str], List[str]]
-            Substitution and copy dependencies for this input file.
-        """
-        if not os.path.exists(input_file):
-            raise ValueError(f'Input file "{input_file}" does not exist.')
-        # Start with the raw dependencies of the input file
-        deps = cls._get_file_dependencies(input_file)
-        return deps, []
 
 
 class AbaqusSolver(InputFileSolver):

@@ -39,9 +39,7 @@ class FieldsOutput(OutputField):
             Input data for this case.
         """
         has_space = ' ' in self.set_name
-        cwd = os.getcwd()
-        case_name, ext = os.path.splitext(os.path.basename(input_data.input_file))
-        input_file = os.path.join(cwd, case_name + ext)
+        input_file = os.path.join(input_data.tmp_dir, input_data.input_file)
         with open(input_file, 'r', encoding='utf-8') as file:
             data = file.read()
             if has_space:
@@ -84,14 +82,9 @@ class FieldsOutput(OutputField):
         array
             2D array with load factor in the first column and reactions in the second.
         """
-        cwd = os.getcwd()
-        input_file = input_data.input_file
+        input_file = os.path.join(input_data.tmp_dir, input_data.input_file)
         casename = get_case_name(input_file)
-        output_dir = os.path.join(
-            cwd,
-            os.path.splitext(input_file)[0],
-        )
-        output_dir = os.path.dirname(output_dir)
+        output_dir = input_data.tmp_dir
 
         # X field
         field_filename = os.path.join(

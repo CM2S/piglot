@@ -13,10 +13,10 @@ class HresFile(OutputField):
     """CRATE .hres file reader."""
 
     def __init__(
-            self,
-            y_field: Union[str, int],
-            x_field: str = "LoadFactor",
-            ):
+        self,
+        y_field: Union[str, int],
+        x_field: str = "LoadFactor",
+    ) -> None:
         """Constructor for .out file reader
 
         Parameters
@@ -44,7 +44,6 @@ class HresFile(OutputField):
         input_data : InputData
             Input data for this case.
         """
-        pass
 
     def get(self, input_data: InputData) -> OutputResult:
         """Get a parameter from the .hres file.
@@ -59,7 +58,7 @@ class HresFile(OutputField):
         DataFrame
             DataFrame with the requested fields.
         """
-        input_file = input_data.input_file
+        input_file = os.path.join(input_data.tmp_dir, input_data.input_file)
         casename = get_case_name(input_file)
         output_dir = os.path.splitext(input_file)[0]
         filename = os.path.join(output_dir, f'{casename}.hres')

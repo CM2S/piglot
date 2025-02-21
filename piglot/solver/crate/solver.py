@@ -60,11 +60,12 @@ class CrateCase(InputFileCase):
             stdout=sys.stdout,
             stderr=sys.stderr,
             check=False,
+            cwd=tmp_dir,
         )
         if process_result.returncode != 0:
             return False
         # Check if simulation completed
-        output_dir, _ = os.path.splitext(input_data.input_file)
+        output_dir, _ = os.path.splitext(os.path.join(input_data.tmp_dir, input_data.input_file))
         case_name = os.path.basename(output_dir)
         screen_file = os.path.join(output_dir, f'{case_name}.screen')
         return has_keyword(screen_file, "Program Completed")
@@ -81,45 +82,6 @@ class CrateCase(InputFileCase):
         return {
             'hresFile': HresFile,
         }
-
-    @classmethod
-    def _get_file_dependencies(cls, input_file: str) -> List[str]:
-        """Get the dependencies for a single given input file.
-
-        Parameters
-        ----------
-        input_file : str
-            Input file to check for dependencies.
-
-        Returns
-        -------
-        List[str]
-            Substitution dependencies for this input file.
-        """
-        if not os.path.exists(input_file):
-            raise ValueError(f'Input file "{input_file}" does not exist.')
-        deps = []
-        return deps
-
-    @classmethod
-    def get_dependencies(cls, input_file: str) -> Tuple[List[str], List[str]]:
-        """Get the dependencies for a given input file.
-
-        Parameters
-        ----------
-        input_file : str
-            Input file to check for dependencies.
-
-        Returns
-        -------
-        Tuple[List[str], List[str]]
-            Substitution and copy dependencies for this input file.
-        """
-        if not os.path.exists(input_file):
-            raise ValueError(f'Input file "{input_file}" does not exist.')
-        # Start with the raw dependencies of the input file
-        deps = cls._get_file_dependencies(input_file)
-        return deps, []
 
 
 class CrateSolver(InputFileSolver):

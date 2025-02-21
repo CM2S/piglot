@@ -56,11 +56,12 @@ class LinksCase(InputFileCase):
             stdout=sys.stdout,
             stderr=sys.stderr,
             check=False,
+            cwd=tmp_dir,
         )
         if process_result.returncode != 0:
             return False
         # Check if simulation completed
-        output_dir, _ = os.path.splitext(input_data.input_file)
+        output_dir, _ = os.path.splitext(os.path.join(input_data.tmp_dir, input_data.input_file))
         case_name = os.path.basename(output_dir)
         screen_file = os.path.join(output_dir, f'{case_name}.screen')
         return has_keyword(screen_file, "Program L I N K S successfully completed.")
