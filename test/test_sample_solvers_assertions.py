@@ -13,6 +13,14 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         ValueError,
         'Dependencies not supported with custom input data generators.',
     ),
+    'input_generator_bad_tmp.yaml': (
+        ValueError,
+        'Input data temporary directory',
+    ),
+    'input_generator_bad_file.yaml': (
+        RuntimeError,
+        'does not exist in the temporary directory',
+    ),
     'input_duplicate_fields.yaml': (
         ValueError,
         'Duplicate output field',
