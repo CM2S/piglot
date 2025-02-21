@@ -179,6 +179,27 @@ class MultiCaseSolver(Solver, ABC):
         """
         return [name for case in self.cases for name in case.get_fields()]
 
+    def get_case_results(self, param_hash: str) -> List[CaseResult]:
+        """Get the results for all cases for a given hash.
+
+        Parameters
+        ----------
+        param_hash : str
+            Hash of the case to load.
+
+        Returns
+        -------
+        List[CaseResult]
+            Results for all cases.
+        """
+        return [
+            CaseResult.read(
+                os.path.join(self.cases_hist, f'{case.name()}-{param_hash}'),
+                self.parameters,
+            )
+            for case in self.cases
+        ]
+
     def get_output_response(self, param_hash: str) -> Dict[str, OutputResult]:
         """Get the responses from all output fields for a given case.
 
@@ -192,16 +213,12 @@ class MultiCaseSolver(Solver, ABC):
         Dict[str, OutputResult]
             Output responses.
         """
-        responses = {}
-        for case in self.cases:
-            # Read the case result
-            result = CaseResult.read(
-                os.path.join(self.cases_hist, f'{case.name()}-{param_hash}'),
-                self.parameters,
-            )
-            for name, response in result.responses.items():
-                responses[name] = response
-        return responses
+        results = self.get_case_results(param_hash)
+        return {
+            name: response
+            for result in results
+            for name, response in result.responses.items()
+        }
 
     def get_case_params(self, param_hash: str) -> Dict[str, float]:
         """Get the parameters for a given hash.
@@ -216,11 +233,8 @@ class MultiCaseSolver(Solver, ABC):
         Dict[str, float]
             Parameters for this hash.
         """
-        case = next(iter(self.cases))
-        result = CaseResult.read(
-            os.path.join(self.cases_hist, f'{case.name()}-{param_hash}'),
-            self.parameters,
-        )
+        # Just pick the first case to get the parameters
+        result = self.get_case_results(param_hash)[0]
         return {param.name: result.values[i] for i, param in enumerate(self.parameters)}
 
     def solve(
