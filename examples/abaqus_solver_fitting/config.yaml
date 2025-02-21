@@ -21,9 +21,8 @@ objective:
           'reaction_x':
             name: FieldsOutput
             set_name: RF_SET
-            field: RF
-            x_field: U
-            direction: x
+            field: RF1
+            x_field: U1
    
   references:
     'reference.txt':

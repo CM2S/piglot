@@ -38,7 +38,7 @@ class SampleOutputField(OutputField):
         OutputResult
             Output data for this field.
         """
-        output_file, _ = os.path.splitext(input_data.input_file)
+        output_file, _ = os.path.splitext(os.path.join(input_data.tmp_dir, input_data.input_file))
         params = np.genfromtxt(f'{output_file}.out')
         grid = np.linspace(0, 1, len(params))
         return OutputResult(grid, params)

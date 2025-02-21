@@ -111,13 +111,13 @@ class DefaultInputDataGenerator(InputDataGenerator):
         for dep in self.substitution_dependencies:
             output_file = os.path.join(tmp_dir, dep)
             write_parameters(param_dict, dep, output_file)
-            dependencies.append(output_file)
+            dependencies.append(os.path.basename(output_file))
         # Copy dependencies
         for dep in self.copy_dependencies:
             output_file = os.path.join(tmp_dir, dep)
             shutil.copy(dep, output_file)
-            dependencies.append(output_file)
-        return InputData(tmp_dir, gen_input_file, dependencies)
+            dependencies.append(os.path.basename(output_file))
+        return InputData(tmp_dir, os.path.basename(gen_input_file), dependencies)
 
 
 class OutputField(ABC):
@@ -271,6 +271,19 @@ class InputFileCase(Case, ABC):
         os.makedirs(tmp_dir, exist_ok=True)
         param_hash = parameters.hash(values)
         input_data = self.generator.generate(parameters, values, tmp_dir)
+        # Ensure the temporary directory is consistent
+        if input_data.tmp_dir != tmp_dir:
+            raise ValueError(
+                f'Input data temporary directory "{input_data.tmp_dir}" does not match '
+                f'the expected temporary directory "{tmp_dir}".'
+            )
+        # Ensure the input file has been generated
+        input_file = os.path.join(input_data.tmp_dir, input_data.input_file)
+        if not os.path.exists(input_file):
+            raise RuntimeError(
+                f'Input file "{input_data.input_file}" does not exist '
+                f'in the temporary directory "{input_data.tmp_dir}".'
+            )
         # Sanitise the input data and output fields
         for field in self.fields.values():
             field.check(input_data)

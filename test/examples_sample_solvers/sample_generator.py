@@ -31,4 +31,4 @@ class SampleInputGenerator(InputDataGenerator):
         input_file = 'input.dat'
         gen_input_file = os.path.join(tmp_dir, input_file)
         write_parameters(param_dict, input_file, gen_input_file)
-        return InputData(tmp_dir, gen_input_file, [])
+        return InputData(tmp_dir, input_file, [])

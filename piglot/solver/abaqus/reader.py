@@ -58,17 +58,15 @@ def file_name_func(set_name, variable_name, inp_name):
     return file_name
 
 
-def field_location(i, variables_array, output_variable, location):
+def field_location(variable, output_variable, location):
     """It gets the node data of the specified node set. Create a variable that refers to the output 
     variable of the node set. If the field is S or E it extrapolates the data to the nodes, if the 
     field is U or RF the data is already on the nodes so it doesn't need extrapolation.
 
     Parameters
     ----------
-    i : int
-        It is an int number that represents the index of the variables_array.
-    variables_array : list
-        It is a list that contains the field variables (S, U, RF, E or LE)
+    variable : str
+        Name of the field variable.
     output_variable : str
         Its the output variable (S, U, RF, E or LE) of the nodes.
     location : str
@@ -79,15 +77,12 @@ def field_location(i, variables_array, output_variable, location):
     location_output_variable
         Location of the output variable.
     """
-    variable = variables_array[i]
     if variable in ['S', 'E', 'LE']:
-        location_output_variable = output_variable.getSubset(
+        return output_variable.getSubset(
             region=location,
             position=ELEMENT_NODAL,
         )
-    else:
-        location_output_variable = output_variable.getSubset(region=location)
-    return location_output_variable
+    return output_variable.getSubset(region=location)
 
 
 def get_nlgeom_setting(inp_name):
@@ -138,7 +133,7 @@ def check_nlgeom(nlgeom, field, x_field):
         Raises an error if the user is trying to extract the logaritmic strain ('LE') when the 
         'nlgeom' is OFF.
     """
-    if nlgeom == 0 and (x_field == 'LE' or field == 'LE'):
+    if nlgeom == 0 and (x_field.startswith('LE') or field.startswith('LE')):
         raise ValueError("'LE' is not allowed when nlgeom is OFF, use 'E' instead.")
 
 def get_node_sets(instance_name, odb):
@@ -164,15 +159,13 @@ def get_node_sets(instance_name, odb):
 
     return odb.rootAssembly.nodeSets.items()
 
-def write_output_file(i, variables_array, variable, step, location, file_name):
+def write_output_file(variable, step, location, file_name):
     """Writes the output file with the nodal data of the specified node set.
 
     Parameters
     ----------
-    i : int
-        It is an int number that represents the index of the variables_array.
-    variables_array : list
-        It is a list that contains two field variables (S, U, RF, E or LE).
+    variable : str
+        Name of the field variable.
     step : str
         It is a string that represents the step of the output database.
     location : str
@@ -181,29 +174,38 @@ def write_output_file(i, variables_array, variable, step, location, file_name):
         It is a string that represents the name of the output file.
     """
     with codecs.open(file_name, 'w', encoding='utf-8') as output_file:
-        output_variable = step.frames[0].fieldOutputs[variable]
-        location_output_variable = field_location(i, variables_array, output_variable, location)
-        component_labels = output_variable.componentLabels
-        # Write the column headers dynamically based on the number of nodes and output
-        # variable components
-        header = "Frame " + " ".join(
-                                    "%s_%d" % (label, v.nodeLabel)
-                                    for v in location_output_variable.values
-                                    for label in component_labels
-                                ) + "\n"
-        output_file.write(header)
-        for frame in step.frames:
-            output_variable = frame.fieldOutputs[variable]
-            location_output_variable = field_location(
-                i,
-                variables_array,
-                output_variable,
-                location,
+        # Find the name of the output variable
+        # This searches for the output name first, then for the component name
+        idx = None
+        var_name = None
+        if variable in step.frames[0].fieldOutputs.keys():
+            var_name = variable
+        else:
+            for name in step.frames[0].fieldOutputs.keys():
+                if variable in step.frames[0].fieldOutputs[name].componentLabels:
+                    var_name = name
+                    idx = step.frames[0].fieldOutputs[name].componentLabels.index(variable)
+                    break
+        if var_name is None:
+            raise ValueError("Variable not found in the output database.")
+        # Search in the first frame for the output variables to write the header
+        output_variable = step.frames[0].fieldOutputs[var_name]
+        location_output_variable = field_location(var_name, output_variable, location)
+        output_file.write(
+            "Frame "
+            + " ".join(
+                "%s_%d" % (variable, v.nodeLabel)
+                for v in location_output_variable.values
             )
+            + "\n"
+        )
+        # Dump each frame to the output file
+        for frame in step.frames:
+            output_variable = frame.fieldOutputs[var_name]
+            location_output_variable = field_location(var_name, output_variable, location)
             output_file.write("%d " % frame.frameId)
             for v in location_output_variable.values:
-                output_file.write(" ".join("%.9f" % value for value in v.data))
-                output_file.write(" ")
+                output_file.write("%.9f " % (v.data if idx is None else v.data[idx].item()))
             output_file.write("\n")
 
 def find_case_insensitive_key(key_name, keys_list):
@@ -292,11 +294,11 @@ def main():
 
     node_sets = get_node_sets(instance_name, odb)
 
-    for i, var in enumerate(variables_array):
+    for variable in variables_array:
         for set_name, location in node_sets:
             if set_name == str(nodeset_name):
-                file_name = file_name_func(set_name, var, variables["input_file"])
-                write_output_file(i, variables_array, var, step, location, file_name)
+                file_name = file_name_func(set_name, variable, variables["input_file"])
+                write_output_file(variable, step, location, file_name)
 
     odb.close()
 
