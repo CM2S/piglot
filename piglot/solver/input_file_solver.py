@@ -165,6 +165,35 @@ class OutputField(ABC):
         """
 
 
+class ScriptOutputField(OutputField):
+    """Class for script-bsaed output fields."""
+
+    def check(self, input_data: InputData) -> None:
+        """Check for validity in the input data before reading.
+
+        Parameters
+        ----------
+        input_data : InputData
+            Input data to check for.
+        """
+
+    @staticmethod
+    def read(config: Dict[str, Any]) -> ScriptOutputField:
+        """Read the output field from the configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Configuration dictionary.
+
+        Returns
+        -------
+        ScriptOutputField
+            Output field to use for this problem.
+        """
+        raise RuntimeError("Cannot read the configuration for a script-based output field.")
+
+
 class InputFileCase(Case, ABC):
     """Base case class for input file-based solvers."""
 
@@ -316,11 +345,14 @@ class InputFileCase(Case, ABC):
             if 'name' not in field_config:
                 raise ValueError(f'No name defined for field "{field_name}" of case "{name}".')
             field_type = field_config['name']
-            # Check if supported
-            if field_type not in supported_fields:
-                raise ValueError(f'Field "{field_config["name"]}" not supported for case "{name}".')
-            # Read field
-            fields[field_name] = supported_fields[field_type].read(field_config)
+            # Check if we are using a script
+            if field_type == 'script':
+                fields[field_name] = read_custom_module(field_config, ScriptOutputField)()
+            else:
+                # Check if supported
+                if field_type not in supported_fields:
+                    raise ValueError(f'Field "{field_type}" not supported for case "{name}".')
+                fields[field_name] = supported_fields[field_type].read(field_config)
         # Check if we are using a custom generator
         if 'generator' in config:
             generator = read_custom_module(config.pop('generator'), InputDataGenerator)()

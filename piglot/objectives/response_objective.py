@@ -518,6 +518,10 @@ class ResponseObjective(GenericObjective):
             append_title = f' ({options["append_title"]})'
         # Load all responses
         responses = self.solver.get_output_response(case_hash)
+        # Extract the parameters
+        params = self.solver.get_case_params(case_hash)
+        if options is not None and 'params' in options:
+            append_title += f' - {params}'
         # Transform responses if necessary
         for name, transformer in self.transformers.items():
             if name in responses:
