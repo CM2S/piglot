@@ -65,6 +65,10 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         ValueError,
         'Missing output field',
     ),
+    'script_empty_response.yaml': (
+        ValueError,
+        'All observed points are equal!',
+    ),
 }
 
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Dict, Any, List, Optional, Tuple, Type, TypeVar
 from abc import ABC, abstractmethod
+import warnings
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
@@ -464,6 +465,16 @@ class ResponseObjective(GenericObjective):
             Objective result.
         """
         raw_responses = self.solver.solve(params, concurrent)
+        # Sanitise responses
+        empty_responses = [name for name, result in raw_responses.items() if len(result.time) == 0]
+        if len(empty_responses) > 0:
+            warnings.warn(
+                f'Solver call returned empty responses for the output fields {empty_responses}. '
+                'Please validate the solver output. Sanitising to zero responses.',
+                RuntimeWarning,
+            )
+            for name in empty_responses:
+                raw_responses[name] = OutputResult(np.zeros(1), np.zeros(1))
         # Transform responses
         for name, transformer in self.transformers.items():
             if name in raw_responses:

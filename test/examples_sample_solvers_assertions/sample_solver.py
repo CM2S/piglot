@@ -31,3 +31,16 @@ class SampleSolverMissingOutput(ScriptSolverCallable):
         return {
             "sine_bad": OutputResult(time, sine),
         }
+
+
+class SampleSolverEmptyResponse(ScriptSolverCallable):
+
+    @staticmethod
+    def get_output_fields() -> list[str]:
+        return ["sine"]
+
+    @staticmethod
+    def solve(values: dict[str, float]) -> dict[str, OutputResult]:
+        return {
+            "sine": OutputResult(np.empty(0), np.empty(0)),
+        }
