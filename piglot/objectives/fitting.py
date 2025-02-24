@@ -248,9 +248,21 @@ class ResponseFittingObjective(ResponseObjective):
     """Class for fitting of response-based objectives."""
 
     def prepare(self):
+        """Prepare the objective for optimisation.
+
+        For curve fitting, this involves preparing the reference data and updating both the
+        flatten utility and the transformer.
+        """
         super().prepare()
-        for objective in self.objectives:
+        objectives: List[FittingSingleObjective] = self.objectives
+        for objective in objectives:
             objective.reference.prepare()
+            # Update the flattening utility and the prediction transformer
+            objective.flatten_utility = FixedFlatteningUtility(objective.reference.get_time())
+            objective.prediction_transform = PointwiseErrors(
+                objective.reference.get_time(),
+                objective.reference.get_data(),
+            )
 
     @classmethod
     def read(

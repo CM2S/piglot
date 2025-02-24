@@ -168,6 +168,21 @@ class Solver(ABC):
         """
 
     @abstractmethod
+    def get_case_params(self, param_hash: str) -> Dict[str, float]:
+        """Get the parameters for a given hash.
+
+        Parameters
+        ----------
+        param_hash : str
+            Hash of the case to load.
+
+        Returns
+        -------
+        Dict[str, float]
+            Parameters for this hash.
+        """
+
+    @abstractmethod
     def get_output_response(self, param_hash: str) -> Dict[str, OutputResult]:
         """Get the responses from all output fields for a given case.
 
@@ -276,6 +291,21 @@ class SingleCaseSolver(Solver, ABC):
         """
         return self.output_fields
 
+    def get_case_result(self, param_hash: str) -> CaseResult:
+        """Get the result for a given case.
+
+        Parameters
+        ----------
+        param_hash : str
+            Hash of the case to load.
+
+        Returns
+        -------
+        CaseResult
+            Result for this hash.
+        """
+        return CaseResult.read(os.path.join(self.cases_hist, param_hash), self.parameters)
+
     def get_case_params(self, param_hash: str) -> Dict[str, float]:
         """Get the parameters for a given hash.
 
@@ -289,11 +319,7 @@ class SingleCaseSolver(Solver, ABC):
         Dict[str, float]
             Parameters for this hash.
         """
-        case = next(iter(self.output_fields))
-        result = CaseResult.read(
-            os.path.join(self.cases_hist, f'{case.name()}-{param_hash}'),
-            self.parameters,
-        )
+        result = self.get_case_result(param_hash)
         return {param.name: result.values[i] for i, param in enumerate(self.parameters)}
 
     def get_output_response(self, param_hash: str) -> Dict[str, OutputResult]:
@@ -309,8 +335,7 @@ class SingleCaseSolver(Solver, ABC):
         Dict[str, OutputResult]
             Output responses.
         """
-        result = CaseResult.read(os.path.join(self.cases_hist, param_hash), self.parameters)
-        return result.responses
+        return self.get_case_result(param_hash).responses
 
     @abstractmethod
     def _solve(self, values: np.ndarray, concurrent: bool) -> Dict[str, OutputResult]:

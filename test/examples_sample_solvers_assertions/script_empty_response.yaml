@@ -10,7 +10,7 @@ objective:
   solver:
     name: script
     script: sample_solver.py
-    class: SampleSolverMissingOutput
+    class: SampleSolverEmptyResponse
   references:
     'sine.txt':
       prediction: ['sine']

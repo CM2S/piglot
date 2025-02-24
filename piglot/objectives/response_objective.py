@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Dict, Any, List, Optional, Tuple, Type, TypeVar
 from abc import ABC, abstractmethod
+import warnings
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
@@ -448,6 +449,35 @@ class ResponseObjective(GenericObjective):
         super().prepare()
         self.solver.prepare()
 
+    def postproc_responses(self, responses: Dict[str, OutputResult]) -> Dict[str, OutputResult]:
+        """Post-process the responses from the solver.
+
+        Parameters
+        ----------
+        responses : Dict[str, OutputResult]
+            Raw responses from the solver.
+
+        Returns
+        -------
+        Dict[str, OutputResult]
+            Post-processed responses.
+        """
+        # Sanitise responses
+        empty_responses = [name for name, result in responses.items() if len(result.time) == 0]
+        if len(empty_responses) > 0:
+            warnings.warn(
+                f'Solver call returned empty responses for the output fields {empty_responses}. '
+                'Please validate the solver output. Sanitising to zero responses.',
+                RuntimeWarning,
+            )
+            for name in empty_responses:
+                responses[name] = OutputResult(np.zeros(1), np.zeros(1))
+        # Transform responses
+        for name, transformer in self.transformers.items():
+            if name in responses:
+                responses[name] = transformer.transform(responses[name])
+        return responses
+
     def _objective(self, params: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
         """Objective computation for design objectives.
 
@@ -464,10 +494,8 @@ class ResponseObjective(GenericObjective):
             Objective result.
         """
         raw_responses = self.solver.solve(params, concurrent)
-        # Transform responses
-        for name, transformer in self.transformers.items():
-            if name in raw_responses:
-                raw_responses[name] = transformer.transform(raw_responses[name])
+        # Sanitise and post-process the responses
+        raw_responses = self.postproc_responses(raw_responses)
         # Compute the objective value and variance from each response objective
         results = [objective.evaluate(params, raw_responses) for objective in self.objectives]
         obj_values = np.array([mean for mean, _ in results])
@@ -516,12 +544,12 @@ class ResponseObjective(GenericObjective):
         append_title = ''
         if options is not None and 'append_title' in options:
             append_title = f' ({options["append_title"]})'
-        # Load all responses
-        responses = self.solver.get_output_response(case_hash)
-        # Transform responses if necessary
-        for name, transformer in self.transformers.items():
-            if name in responses:
-                responses[name] = transformer.transform(responses[name])
+        # Load all responses and post-process them
+        responses = self.postproc_responses(self.solver.get_output_response(case_hash))
+        # Extract the parameters
+        params = self.solver.get_case_params(case_hash)
+        if options is not None and 'params' in options:
+            append_title += f' - {params}'
         # Plot each target
         figures = []
         for objective in self.objectives:
@@ -542,11 +570,7 @@ class ResponseObjective(GenericObjective):
             List of instances of a updatable plots
         """
         # Get current solver data
-        responses = self.solver.get_current_response()
-        # Transform responses if necessary
-        for name, transformer in self.transformers.items():
-            if name in responses:
-                responses[name] = transformer.transform(responses[name])
+        responses = self.postproc_responses(self.solver.get_current_response())
         # Plot each objective
         figures: List[Figure] = []
         mapping: Dict[Line2D, str] = {}

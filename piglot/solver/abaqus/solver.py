@@ -1,7 +1,8 @@
 """Module for Links solver."""
-from typing import Dict, Type, Tuple, List, Any
+from typing import Dict, Type, List, Any
 import os
 import re
+import sys
 import subprocess
 from piglot.solver.input_file_solver import (
     InputDataGenerator,
@@ -10,7 +11,7 @@ from piglot.solver.input_file_solver import (
     InputFileSolver,
     OutputField,
 )
-from piglot.solver.abaqus.fields import Reaction
+from piglot.solver.abaqus.fields import FieldsOutput
 
 
 class AbaqusCase(InputFileCase):
@@ -82,9 +83,7 @@ class AbaqusCase(InputFileCase):
         parameters : ParameterSet
             Parameter set for this problem.
         """
-        cwd = os.getcwd()
-        case_name, ext = os.path.splitext(os.path.basename(input_data.input_file))
-        input_file = os.path.join(cwd, case_name + ext)
+        input_file = os.path.join(input_data.tmp_dir, input_data.input_file)
 
         with open(input_file, 'r', encoding='utf-8') as file:
             data = file.read()
@@ -115,9 +114,8 @@ class AbaqusCase(InputFileCase):
         Dict[str, Any]
             Dictionary with the post processing variables.
         """
-        input_file = os.path.basename(input_data.input_file)
         variables = {
-            'input_file': input_file,
+            'input_file': input_data.input_file,
             'job_name': self.job_name,
             'step_name': self.step_name,
             'instance_name': self.instance_name,
@@ -156,14 +154,14 @@ class AbaqusCase(InputFileCase):
             [
                 self.abaqus_bin,
                 f"job={self.job_name}",
-                f"input={os.path.basename(input_data.input_file)}",
+                f"input={input_data.input_file}",
                 'interactive',
                 'ask_delete=OFF',
             ] + extra_args,
             cwd=tmp_dir,
             shell=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
             check=False
         )
         variables = self._post_proc_variables(input_data)
@@ -191,8 +189,8 @@ class AbaqusCase(InputFileCase):
             ],
             cwd=tmp_dir,
             shell=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
             check=False,
         )
         if run_inp.returncode != 0 or run_odb.returncode != 0:
@@ -209,47 +207,8 @@ class AbaqusCase(InputFileCase):
             Names and supported fields for this input file type.
         """
         return {
-            'Reaction': Reaction,
+            'FieldsOutput': FieldsOutput,
         }
-
-    @classmethod
-    def _get_file_dependencies(cls, input_file: str) -> List[str]:
-        """Get the dependencies for a single given input file.
-
-        Parameters
-        ----------
-        input_file : str
-            Input file to check for dependencies.
-
-        Returns
-        -------
-        List[str]
-            Substitution dependencies for this input file.
-        """
-        if not os.path.exists(input_file):
-            raise ValueError(f'Input file "{input_file}" does not exist.')
-        deps = []
-        return deps
-
-    @classmethod
-    def get_dependencies(cls, input_file: str) -> Tuple[List[str], List[str]]:
-        """Get the dependencies for a given input file.
-
-        Parameters
-        ----------
-        input_file : str
-            Input file to check for dependencies.
-
-        Returns
-        -------
-        Tuple[List[str], List[str]]
-            Substitution and copy dependencies for this input file.
-        """
-        if not os.path.exists(input_file):
-            raise ValueError(f'Input file "{input_file}" does not exist.')
-        # Start with the raw dependencies of the input file
-        deps = cls._get_file_dependencies(input_file)
-        return deps, []
 
 
 class AbaqusSolver(InputFileSolver):

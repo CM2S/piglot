@@ -48,7 +48,7 @@ class Reaction(OutputField):
             If reaction output is not requested in the input file.
         """
         # Is the file available for checking?
-        input_file = input_data.input_file
+        input_file = os.path.join(input_data.tmp_dir, input_data.input_file)
         if not os.path.exists(input_file):
             return
         # Is macroscopic file?
@@ -72,7 +72,7 @@ class Reaction(OutputField):
         array
             2D array with load factor in the first column and reactions in the second.
         """
-        input_file = input_data.input_file
+        input_file = os.path.join(input_data.tmp_dir, input_data.input_file)
         casename = get_case_name(input_file)
         output_dir, _ = os.path.splitext(input_file)
         reac_filename = os.path.join(output_dir, f'{casename}.reac')
@@ -174,7 +174,7 @@ class OutFile(OutputField):
             If the requested element and GP has not been specified in the input file.
         """
         # Is the file available for checking?
-        input_file = input_data.input_file
+        input_file = os.path.join(input_data.tmp_dir, input_data.input_file)
         if not os.path.exists(input_file):
             return
         # Check if appropriate scale
@@ -216,7 +216,7 @@ class OutFile(OutputField):
         DataFrame
             DataFrame with the requested fields.
         """
-        input_file = input_data.input_file
+        input_file = os.path.join(input_data.tmp_dir, input_data.input_file)
         casename = get_case_name(input_file)
         output_dir = os.path.splitext(input_file)[0]
         filename = os.path.join(output_dir, f'{casename}{self.suffix}.out')
