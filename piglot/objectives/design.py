@@ -115,11 +115,11 @@ class ResponseDesignObjective(ResponseObjective):
         """
         # Read the solver
         if 'solver' not in config:
-            raise ValueError("Missing solver for fitting objective.")
+            raise ValueError("Missing solver for design objective.")
         solver = read_solver(config['solver'], parameters, output_dir)
         # Read the targets
         if 'targets' not in config:
-            raise ValueError("Missing targets for fitting objective.")
+            raise ValueError("Missing targets for design objective.")
         objectives = [
             DesignSingleObjective.read(target_name, target_config, output_dir)
             for target_name, target_config in config.pop('targets').items()
