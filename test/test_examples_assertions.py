@@ -162,11 +162,11 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'design_missing_solver.yaml': (
         ValueError,
-        "Missing solver for fitting objective.",
+        "Missing solver for design objective.",
     ),
     'design_missing_targets.yaml': (
         ValueError,
-        "Missing targets for fitting objective.",
+        "Missing targets for design objective.",
     ),
     'unexistent_targets.yaml': (
         ValueError,
