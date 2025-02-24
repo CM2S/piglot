@@ -52,7 +52,7 @@ class CrateCase(InputFileCase):
             self.python_interp,
             self.crate_bin,
             input_data.input_file,
-            self.microstructure_dir,
+            os.path.abspath(self.microstructure_dir),
         ]
         # Run the analysis
         process_result = subprocess.run(
