@@ -187,17 +187,19 @@ class OutFile(OutputField):
                 raise RuntimeError("GP outputs have not been specified in the input file.")
             # Check number of GP outputs and if ours is a valid one
             with open(input_file, 'r', encoding='utf8') as file:
-                line = find_keyword(file, "GAUSS_POINTS_OUTPUT")
+                for line in file:
+                    if line.strip().startswith("GAUSS_POINTS_OUTPUT"):
+                        break
+                else:
+                    raise RuntimeError("GP outputs have not been specified in the input file.")
                 n_points = int(line.split()[1])
-                found = False
                 for _ in range(0, n_points):
                     line_split = file.readline().split()
                     i_elem = int(line_split[0])
                     i_gaus = int(line_split[1])
                     if self.i_elem == i_elem and self.i_gauss == i_gaus:
-                        found = True
                         break
-                if not found:
+                else:
                     raise RuntimeError(f"The specified GP output {self.i_elem} "
                                        f"{self.i_gauss} was not found.")
         # Check if single or double precision output

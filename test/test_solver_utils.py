@@ -54,11 +54,9 @@ class TestExtractParameters(unittest.TestCase):
         self.assertFalse(result)
 
     def test_find_keyword(self):
-
-        with open(INPUT_FILE_1, 'r', encoding='utf8') as file:
-            # Call the function with the test input file and a keyword that is in the file
-            result = find_keyword(file, '<parameter1')
-            self.assertEqual(result.strip(), '<parameter1(1.0, 0.0, 2.0)>')
+        # Call the function with the test input file and a keyword that is in the file
+        result = find_keyword(INPUT_FILE_1, '<parameter1')
+        self.assertEqual(result.strip(), '<parameter1(1.0, 0.0, 2.0)>')
 
     def test_find_keyword_fail(self):
         with self.assertRaises(RuntimeError) as ex:

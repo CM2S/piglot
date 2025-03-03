@@ -119,12 +119,12 @@ def has_parameter(input_file: str, parameter: str) -> bool:
     return False
 
 
-def find_keyword(file: str, keyword: str) -> str:
+def find_keyword(file_path: str, keyword: str) -> str:
     """Finds the first line where a keyword is defined.
 
     Parameters
     ----------
-    file : str
+    file_path : str
         Path for the input file.
     keyword : str
         Keyword to locate.
@@ -139,9 +139,10 @@ def find_keyword(file: str, keyword: str) -> str:
     RuntimeError
         If the keyword is not found.
     """
-    for line in file:
-        if line.lstrip().startswith(keyword):
-            return line
+    with open(file_path, 'r', encoding='utf8') as file:
+        for line in file:
+            if line.strip().startswith(keyword):
+                return line
     raise RuntimeError(f"Keyword {keyword} not found!")
 
 
