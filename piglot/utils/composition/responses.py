@@ -1,12 +1,8 @@
 """Module with utilities for transforming responses under compositions."""
 from typing import List, Tuple
-import warnings
 from abc import ABC, abstractmethod
 import numpy as np
 import torch
-from piglot.objective import Composition, ObjectiveResult
-from piglot.solver.solver import OutputResult
-from piglot.utils.reductions import Reduction
 
 
 class FlattenUtility(ABC):
@@ -314,116 +310,3 @@ class ConcatUtility:
             List of split responses.
         """
         return [res.numpy(force=True) for res in self.split_torch(torch.from_numpy(data))]
-
-
-class ResponseComposition(Composition):
-    """Composition for transforming responses."""
-
-    def __init__(
-        self,
-        scalarise: bool,
-        stochastic: bool,
-        weights: List[float],
-        reductions: List[Reduction],
-        flatten_list: List[FlattenUtility],
-    ) -> None:
-        warnings.warn("ResponseComposition is deprecated", DeprecationWarning)
-        if len(flatten_list) != len(reductions):
-            raise ValueError("Mismatched number of reductions and responses.")
-        self.scalarise = scalarise
-        self.stochastic = stochastic
-        self.weights = weights
-        self.reductions = reductions
-        self.flatten_list = flatten_list
-        self.lenghts = [flatten.length() for flatten in self.flatten_list]
-        self.concat = ConcatUtility(self.lenghts)
-
-    def transform(self, params: np.ndarray, responses: List[List[OutputResult]]) -> ObjectiveResult:
-        """Transform a set of responses into a fixed-size ObjectiveResult for the optimiser.
-
-        Parameters
-        ----------
-        params : np.ndarray
-            Parameters for the given responses.
-        responses : List[List[OutputResult]]
-            List of responses.
-
-        Returns
-        -------
-        ObjectiveResult
-            Transformed responses.
-        """
-        # Sanitise input shape
-        if len(responses) != len(self.flatten_list):
-            raise ValueError("Mismatched number of objectives.")
-        # Build set of responses to concatenate
-        means = []
-        variances = []
-        for i, flatten in enumerate(self.flatten_list):
-            flat_responses = np.array([
-                flatten.flatten(response.get_time(), response.get_data())
-                for response in responses[i]
-            ])
-            # Build stochastic model for this set of responses
-            means.append(np.mean(flat_responses, axis=0))
-            variances.append(np.var(flat_responses, axis=0) / flat_responses.shape[0])
-        # Concatenate the transformed responses
-        return ObjectiveResult(
-            params,
-            self.concat.concat(means),
-            self.concat.concat(variances) if self.stochastic else None,
-        )
-
-    @staticmethod
-    def _expand_params(time: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
-        """Expand the set of parameters to match the time grid.
-
-        Parameters
-        ----------
-        time : torch.Tensor
-            Time grid for the responses.
-        params : torch.Tensor
-            Parameters for the given responses.
-
-        Returns
-        -------
-        torch.Tensor
-            Expanded parameter values.
-        """
-        # Nothing to do when shapes are consistent
-        if len(params.shape) == len(time.shape):
-            return params
-        # Expand the parameters along the first dimensions
-        return params.expand(*([a for a in time.shape[:-1]] + [params.shape[-1]]))
-
-    def composition_torch(self, inner: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
-        """Compute the outer function of the composition with gradients.
-
-        Parameters
-        ----------
-        inner : torch.Tensor
-            Return value from the inner function.
-        params : torch.Tensor
-            Parameters for the given responses.
-
-        Returns
-        -------
-        torch.Tensor
-            Composition result.
-        """
-        # Split the inner responses
-        responses = self.concat.split_torch(inner)
-        # Unflatten each response
-        unflattened = [
-            flatten.unflatten_torch(response)
-            for response, flatten in zip(responses, self.flatten_list)
-        ]
-        # Evaluate and stack the objective for each response
-        objective = torch.stack([
-            reduction.reduce_torch(time, data, self._expand_params(time, params))
-            for (time, data), reduction in zip(unflattened, self.reductions)
-        ], dim=-1)
-        # Apply the weights
-        objective = objective * torch.tensor(self.weights).to(inner.device)
-        # If needed, scalarise the objectives
-        return torch.mean(objective, dim=-1) if self.scalarise else objective

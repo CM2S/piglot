@@ -7,9 +7,33 @@ import torch
 import botorch.test_functions.synthetic
 from botorch.test_functions.synthetic import SyntheticTestFunction
 from piglot.parameter import ParameterSet
-from piglot.objective import GenericObjective, ObjectiveResult
+from piglot.objective import GenericObjective, ObjectiveResult, Composition
 from piglot.utils.reductions import Reduction, read_reduction
-from piglot.utils.composition.responses import ResponseComposition, FixedFlatteningUtility
+
+
+class ScalarComposition(Composition):
+    """Composition for scalar values."""
+
+    def __init__(self, reduction: Reduction) -> None:
+        super().__init__()
+        self.reduction = reduction
+
+    def composition_torch(self, inner: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
+        """Abstract method for computing the outer function of the composition with gradients
+
+        Parameters
+        ----------
+        inner : torch.Tensor
+            Return value from the inner function
+        params : torch.Tensor
+            Parameters for the given responses
+
+        Returns
+        -------
+        torch.Tensor
+            Composition result
+        """
+        return self.reduction.reduce_torch(torch.zeros_like(inner), inner, params)
 
 
 class SyntheticObjective(GenericObjective):
@@ -21,13 +45,13 @@ class SyntheticObjective(GenericObjective):
             name: str,
             output_dir: str,
             transform: str = None,
-            composition: Reduction = None,
+            reduction: Reduction = None,
             **kwargs,
             ) -> None:
         super().__init__(
             parameters,
             stochastic=False,
-            composition=self.__composition(composition) if composition is not None else None,
+            composition=ScalarComposition(reduction) if reduction is not None else None,
             output_dir=output_dir,
         )
         test_functions = self.get_test_functions()
@@ -39,28 +63,6 @@ class SyntheticObjective(GenericObjective):
             self.transform = lambda v, func: torch.square(torch.tensor([v - func.optimal_value]))
         with open(os.path.join(output_dir, 'optimum_value'), 'w', encoding='utf8') as file:
             file.write(f'{self.transform(self.func.optimal_value, self.func)}')
-
-    @staticmethod
-    def __composition(reduction: Reduction) -> ResponseComposition:
-        """Create a response composition from a reduction.
-
-        Parameters
-        ----------
-        reduction : Reduction
-            Reduction to apply.
-
-        Returns
-        -------
-        ResponseComposition
-            Composition to apply.
-        """
-        return ResponseComposition(
-            True,
-            False,
-            [1.0],
-            [reduction],
-            [FixedFlatteningUtility(np.array([0.0]))],
-        )
 
     @staticmethod
     def get_test_functions() -> Dict[str, Type[SyntheticTestFunction]]:
@@ -165,6 +167,6 @@ class SyntheticObjective(GenericObjective):
             parameters,
             function,
             output_dir,
-            composition=composition,
+            reduction=composition,
             **config,
         )
