@@ -44,6 +44,29 @@ class OutputResult:
 
 
 @dataclass
+class FullFieldOutputResult(OutputResult):
+    """Container for full field output results."""
+
+    def __post_init__(self):
+        if len(self.time.shape) != 2:
+            raise ValueError("Coordinate data must have two dimensions: n_points x (n_dims + 1).")
+        if len(self.data.shape) != 2:
+            raise ValueError("Response data must have two dimensions: n_points x n_fields.")
+        if self.time.shape[0] != self.data.shape[0]:
+            raise ValueError("Time and data must have the same number of points.")
+
+    def get_coords(self) -> np.ndarray:
+        """Get the coordinate data of the result (spatial + temporal).
+
+        Returns
+        -------
+        np.ndarray
+            Spatial and temporal coordinates with shape n_points x (n_dims + 1)
+        """
+        return self.time
+
+
+@dataclass
 class CaseResult:
     """Class for case results."""
     begin_time: float

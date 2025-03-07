@@ -124,7 +124,8 @@ class ResponseSingleObjective(IndividualObjective, ABC):
         if len(params.shape) == len(time.shape):
             return params
         # Expand the parameters along the first dimensions
-        return params.expand(*(list(time.shape[:-1]) + [params.shape[-1]]))
+        num_missing = len(time.shape) - len(params.shape)
+        return params.expand(time.shape[:num_missing] + params.shape)
 
     def evaluate(
         self,

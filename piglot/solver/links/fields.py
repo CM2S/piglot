@@ -1,11 +1,12 @@
 """Module for output fields from Links solver."""
 from __future__ import annotations
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Tuple
 import os
 import numpy as np
 import pandas as pd
+import meshio
 from piglot.solver.input_file_solver import InputData, OutputField
-from piglot.solver.solver import OutputResult
+from piglot.solver.solver import OutputResult, FullFieldOutputResult
 from piglot.utils.solver_utils import get_case_name, has_keyword, find_keyword
 
 
@@ -80,6 +81,8 @@ class Reaction(OutputField):
         if not os.path.exists(reac_filename):
             return OutputResult(np.empty(0), np.empty(0))
         data = np.genfromtxt(reac_filename)
+        if len(data.shape) != 2 or data.size == 0:
+            return OutputResult(np.empty(0), np.empty(0))
         # Filter-out the requested group
         data_group = data[data[:, 0] == self.group, 1:]
         return OutputResult(data_group[:, 0], data_group[:, self.field])
@@ -267,3 +270,147 @@ class OutFile(OutputField):
         # Read the x field (if passed)
         x_field = config.get('x_field', 'LoadFactor')
         return cls(field, i_elem, i_gauss, x_field)
+
+
+class VTKFullField(OutputField):
+    """Full-field VTK outputs reader."""
+
+    def __init__(self, fields: list[str], ndim: int = 3):
+        """Constructor for reaction reader
+
+        Parameters
+        ----------
+        fields : list[str]
+            List of fields to read.
+        """
+        super().__init__()
+        self.fields = fields
+        self.ndim = ndim
+
+    def check(self, input_data: InputData) -> None:
+        """Sanity checks on the input file.
+
+        This checks if:
+        - we are reading the reactions of a macroscopic analysis;
+        - the file has NODE_GROUPS outputs.
+
+        Parameters
+        ----------
+        input_data : InputData
+            Input data for this case.
+
+        Raises
+        ------
+        RuntimeError
+            If not reading a macroscopic analysis file.
+        RuntimeError
+            If reaction output is not requested in the input file.
+        """
+        input_file = os.path.join(input_data.tmp_dir, input_data.input_file)
+        if not os.path.exists(input_file):
+            return
+        if not has_keyword(input_file, "VTK_OUTPUT"):
+            raise RuntimeError("VTK output not requested for the input file.")
+        line = find_keyword(input_file, "VTK_OUTPUT")
+        if 'NONE' in line:
+            raise RuntimeError("VTK output not requested for the input file.")
+        if 'BINARY' in line:
+            raise RuntimeError("Binary VTK output not supported.")
+
+    def __read_vtu(self, vtu_path: str) -> Tuple[np.ndarray, np.ndarray]:
+        """Reads a VTU file.
+
+        Parameters
+        ----------
+        vtu_path : str
+            Path to the VTK file.
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            Tuple with the pointwise coordinates and requested data.
+        """
+        mesh = meshio.read(vtu_path)
+        coordinates = mesh.points[:, :self.ndim]
+        data = np.empty((coordinates.shape[0], len(self.fields)))
+        for i, field in enumerate(self.fields):
+            if field in mesh.point_data:
+                raw_data = mesh.point_data[field]
+                if len(raw_data.shape) > 1:
+                    raise ValueError(
+                        f"Attempt to read the vector field '{field}'. "
+                        "Use the notation 'field@0' to read the first component."
+                    )
+            elif '@' in field:
+                field, idx = field.split('@')
+                if field not in mesh.point_data:
+                    raise ValueError(f"Field '{field}' not found in the VTK file.")
+                raw_data = mesh.point_data[field][:, int(idx)]
+            else:
+                raise ValueError(f"Field '{field}' not found in the VTK file.")
+            data[:, i] = raw_data
+        return coordinates, data
+
+    def get(self, input_data: InputData) -> FullFieldOutputResult:
+        """Reads full-field data from Links.
+
+        Parameters
+        ----------
+        input_data : InputData
+            Input data for this case.
+
+        Returns
+        -------
+        FullFieldOutputResult
+            Full-field output result.
+        """
+        input_file = os.path.join(input_data.tmp_dir, input_data.input_file)
+        casename = get_case_name(input_file)
+        output_dir, _ = os.path.splitext(input_file)
+        pvd_filename = os.path.join(output_dir, f'{casename}.pvd')
+        # Ensure the file exists
+        if not os.path.exists(pvd_filename):
+            return FullFieldOutputResult(np.empty(0), np.empty(0))
+        # Read the PVD file to find the timesteps and the VTUs
+        with open(pvd_filename, 'r', encoding='utf8') as f:
+            lines = [line.strip() for line in f if line.strip().startswith('<DataSet')]
+        if len(lines) == 0:
+            return FullFieldOutputResult(np.empty(0), np.empty(0))
+        split_lines = [
+            line.replace('<DataSet timestep="', '').replace('"/>', '').split('" file="')
+            for line in lines
+        ]
+        timesteps_vtus = {float(t): vtu for t, vtu in split_lines}
+        # Read each VTU
+        coordinates = np.empty((0, self.ndim + 1))
+        data = np.empty((0, len(self.fields)))
+        for timestep, vtu in timesteps_vtus.items():
+            vtu_path = os.path.join(output_dir, vtu)
+            coords, fields = self.__read_vtu(vtu_path)
+            coordinates = np.vstack((
+                coordinates,
+                np.hstack((np.ones((coords.shape[0], 1)) * timestep, coords)),
+            ))
+            data = np.vstack((data, fields))
+        return FullFieldOutputResult(coordinates, data)
+
+    @classmethod
+    def read(cls, config: Dict[str, Any]) -> VTKFullField:
+        """Read the output field from the configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Configuration dictionary.
+
+        Returns
+        -------
+        VTKFullField
+            Output field to use for this problem.
+        """
+        # Read the field
+        if 'fields' not in config:
+            raise ValueError("Missing 'fields' in reaction configuration.")
+        fields = config['fields']
+        ndim = int(config.get('ndim', 3))
+        return cls(fields, ndim=ndim)

@@ -10,7 +10,7 @@ from piglot.solver.input_file_solver import (
     InputFileSolver,
     OutputField,
 )
-from piglot.solver.links.fields import Reaction, OutFile
+from piglot.solver.links.fields import Reaction, OutFile, VTKFullField
 from piglot.utils.solver_utils import has_keyword, find_keyword
 
 
@@ -78,6 +78,7 @@ class LinksCase(InputFileCase):
         return {
             'Reaction': Reaction,
             'OutFile': OutFile,
+            'VTK_full_field': VTKFullField,
         }
 
     @classmethod

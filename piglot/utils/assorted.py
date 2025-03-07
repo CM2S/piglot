@@ -1,11 +1,14 @@
 """Assorted utilities."""
 from typing import List, Dict, Tuple, Type, TypeVar, Any
 import os
+import math
+import warnings
 import contextlib
 import importlib
-import numpy as np
 import importlib.util
+import numpy as np
 from scipy.stats import t
+from scipy.spatial import Delaunay  # pylint: disable=E0611
 
 
 def pretty_time(elapsed_sec: float) -> str:
@@ -179,3 +182,83 @@ def read_custom_module(config: Dict[str, Any], cls: Type[T]) -> Type[T]:
     if not issubclass(module_class, cls):
         raise ValueError(f"Custom class '{module_class}' is not a subclass of '{cls}'.")
     return module_class
+
+
+def simplex_volume(vertices: np.ndarray) -> float:
+    """Compute the volume of a simplex from its vertices.
+
+    Parameters
+    ----------
+    vertices : np.ndarray
+        Vertices of the simplex (n_points x n_dim) = (n_dim + 1 x n_dim).
+
+    Returns
+    -------
+    float
+        Volume of the simplex.
+    """
+    vertices_matrix = vertices[1:, :] - vertices[0, :]
+    return np.abs(np.linalg.det(vertices_matrix.T)) / math.factorial(vertices.shape[1])
+
+
+def project_to_full_rank_space(coords: np.ndarray, tol: float = 1e-12) -> Tuple[int, np.ndarray]:
+    """Project a list of coordinates to its full-rank space.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        Coordinates of the points to project (n_points x n_dim).
+    tol : float, optional
+        Tolerance for singular values, by default 1e-12.
+
+    Returns
+    -------
+    Tuple[int, np.ndarray]
+        Rank and full-rank coordinates (n_points x n_dim*).
+    """
+    difference = coords[1:, :] - coords[0, :]
+    _, R = np.linalg.qr(difference)  # pylint: disable=C0103
+    independent_dims = np.abs(np.diag(R)) > tol
+    return np.sum(independent_dims), coords[:, independent_dims]
+
+
+def trapezoidal_integration_weights(coords: np.ndarray, tol: float = 1e-12) -> np.ndarray:
+    """Compute the weights for a multi-dimensional trapezoidal integration.
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        Coordinates of the points to integrate (n_points x n_dim).
+    tol : float, optional
+        Tolerance for rank reduction, by default 1e-12.
+
+    Returns
+    -------
+    np.ndarray
+        Weights for trapezoidal integration (n_points).
+    """
+    # If required, project the points to the full-rank space
+    new_coords = coords
+    rank, tmp = project_to_full_rank_space(coords, tol=tol)
+    if rank < coords.shape[1]:
+        warnings.warn(
+            "Rank-deficient coordinates for triangulation, projected and reduced from "
+            f"{coords.shape[1]} to {rank} dimensions. Integration may be inaccurate."
+        )
+        new_coords = tmp
+    # Check if we have sufficient points to integrate
+    # If not, simply return a vector to average all points
+    n_points = new_coords.shape[0]
+    n_dim = new_coords.shape[1]
+    if n_points <= n_dim + 1:
+        return np.ones(n_points) / n_points
+    # If we fall back to a single dimension, return the trapezoidal weights
+    if n_dim == 1:
+        dx = np.abs(np.diff(new_coords, axis=0).flatten())
+        return np.concatenate([[dx[0] / 2], (dx[:-1] + dx[1:]) / 2, [dx[-1] / 2]])
+    # Compute the Delaunay triangulation and get the weights based on the simplex volume
+    delaunay = Delaunay(new_coords, qhull_options='QJ')  # QJ required to include all points
+    weights = np.zeros(n_points)
+    for simplex in delaunay.simplices:
+        weights[simplex] += simplex_volume(delaunay.points[simplex, :])
+    return weights

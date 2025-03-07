@@ -5,6 +5,7 @@ from piglot.objective import Objective
 from piglot.objectives.analytical import AnalyticalObjective, AnalyticalMultiObjective
 from piglot.objectives.synthetic import SyntheticObjective
 from piglot.objectives.fitting import ResponseFittingObjective
+from piglot.objectives.full_field_fitting import FullFieldFittingObjective
 from piglot.objectives.design import ResponseDesignObjective
 
 
@@ -14,6 +15,7 @@ AVAILABLE_OBJECTIVES: Dict[str, Type[Objective]] = {
     'test_function': SyntheticObjective,
     'fitting': ResponseFittingObjective,
     'design': ResponseDesignObjective,
+    'fitting_full_field': FullFieldFittingObjective,
 }
 
 

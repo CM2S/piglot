@@ -1,9 +1,12 @@
 """Module for defining transformations for responses."""
 from typing import Union, Dict, Any, Type, List, Tuple
 from abc import ABC, abstractmethod
+import warnings
 import numpy as np
+import scipy.spatial
+from scipy.interpolate import LinearNDInterpolator, RBFInterpolator, NearestNDInterpolator
 from piglot.utils.assorted import read_custom_module
-from piglot.solver.solver import OutputResult
+from piglot.solver.solver import OutputResult, FullFieldOutputResult
 from piglot.utils.responses import interpolate_response
 
 
@@ -242,6 +245,50 @@ class PointwiseErrors(ResponseTransformer):
         # Compute normalised error
         factor = np.mean(np.abs(self.reference_data))
         return OutputResult(self.reference_time, (resp_interp - self.reference_data) / factor)
+
+
+class FullFieldErrors(ResponseTransformer):
+    """Compute the pointwise full-field errors between the data and a reference."""
+
+    def __init__(
+        self,
+        reference_coords: np.ndarray,
+        reference_data: np.ndarray,
+        kind: str = 'linear',
+    ) -> None:
+        self.reference_coords = reference_coords
+        self.reference_data = reference_data
+        self.interp_kind = LinearNDInterpolator if kind == 'linear' else NearestNDInterpolator
+        self.norm_factor = np.mean(np.abs(reference_data), axis=0)
+
+    def transform(self, response: OutputResult) -> FullFieldOutputResult:
+        """Transform the input data.
+
+        Parameters
+        ----------
+        response : OutputResult
+            Time and data points of the response.
+
+        Returns
+        -------
+        FullFieldOutputResult
+            Transformed time and data points of the response.
+        """
+        if not isinstance(response, FullFieldOutputResult):
+            raise ValueError('Full-field problems require full-field outputs from the solver.')
+        # Compute normalised error of the spatially and temporally interpolated data
+        try:
+            interpolator = self.interp_kind(response.get_coords(), response.get_data())
+            interpolated_data = interpolator(self.reference_coords)
+        except scipy.spatial._qhull.QhullError:  # pylint: disable=I1101,W0212
+            warnings.warn(
+                'Failed to interpolate the results, returning null response for this call.'
+            )
+            interpolated_data = np.zeros_like(self.reference_data)
+        return FullFieldOutputResult(
+            self.reference_coords,
+            (interpolated_data - self.reference_data) / self.norm_factor,
+        )
 
 
 AVAILABLE_RESPONSE_TRANSFORMERS: Dict[str, Type[ResponseTransformer]] = {

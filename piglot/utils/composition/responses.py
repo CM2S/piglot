@@ -87,8 +87,9 @@ class FlattenUtility(ABC):
 class FixedFlatteningUtility(FlattenUtility):
     """Response flattening utility for fixed time grids."""
 
-    def __init__(self, time_grid: np.ndarray):
+    def __init__(self, time_grid: np.ndarray, data_shape: Tuple[int, ...] = None):
         self.time_grid = time_grid
+        self.data_shape = data_shape or tuple()
 
     def length(self) -> int:
         """Return the length of the flattened vector.
@@ -98,7 +99,7 @@ class FixedFlatteningUtility(FlattenUtility):
         int
             Length of the flattened vector.
         """
-        return len(self.time_grid)
+        return len(self.time_grid) * int(np.prod(self.data_shape))
 
     def flatten_torch(self, time: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
         """Flatten a response into a single vector (with gradients).
@@ -115,11 +116,13 @@ class FixedFlatteningUtility(FlattenUtility):
         torch.Tensor
             Flattened responses.
         """
-        if time.shape[-1] != len(self.time_grid):
-            raise ValueError("Time grid does not match the expected length.")
-        if time.shape != data.shape:
-            raise ValueError("Mismatched time and data shapes are not supported.")
-        return data
+        if time.shape != torch.Size(self.time_grid.shape):
+            raise ValueError("Invalid shape for the time grid.")
+        if len(self.data_shape) > 0 and data.shape[-len(self.data_shape):] != self.data_shape:
+            raise ValueError("Bad data shape for the outputs.")
+        if time.shape[0] != data.shape[0]:
+            raise ValueError("Mismatched number of time points.")
+        return data.flatten()
 
     def unflatten_torch(self, data: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Unflatten a vector containing a response (with gradients).
@@ -134,7 +137,10 @@ class FixedFlatteningUtility(FlattenUtility):
         Tuple[torch.Tensor, torch.Tensor]
             List of responses.
         """
-        return torch.from_numpy(self.time_grid).expand_as(data), data
+        batch_shape = data.shape[:-1]
+        time_shape = torch.Size(batch_shape + self.time_grid.shape)
+        data_shape = torch.Size(batch_shape + self.time_grid.shape[:1] + self.data_shape)
+        return torch.from_numpy(self.time_grid).expand(time_shape), data.reshape(data_shape)
 
 
 class EndpointFlattenUtility(FlattenUtility):

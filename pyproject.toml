@@ -37,6 +37,7 @@ dependencies = [
     "matplotlib>=3.7.2", # https://github.com/matplotlib/matplotlib/pull/25565
     "PyYAML",
     "PyQt5",
+    "meshio",
 ]
 
 [project.optional-dependencies]
