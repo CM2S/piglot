@@ -1,13 +1,10 @@
 """Module for defining transformations for responses."""
 from typing import Union, Dict, Any, Type, List, Tuple
 from abc import ABC, abstractmethod
-import warnings
 import numpy as np
-import scipy.spatial
-from scipy.interpolate import LinearNDInterpolator, RBFInterpolator, NearestNDInterpolator
 from piglot.utils.assorted import read_custom_module
 from piglot.solver.solver import OutputResult, FullFieldOutputResult
-from piglot.utils.responses import interpolate_response
+from piglot.utils.interpolators import Interpolator, OneDimensionalInterpolator
 
 
 class ResponseTransformer(ABC):
@@ -219,9 +216,17 @@ class ClipResponse(ResponseTransformer):
 class PointwiseErrors(ResponseTransformer):
     """Compute the pointwise errors between the response and a reference."""
 
-    def __init__(self, reference_time: np.ndarray, reference_data: np.ndarray) -> None:
+    def __init__(
+        self,
+        reference_time: np.ndarray,
+        reference_data: np.ndarray,
+        interpolator: Interpolator,
+    ) -> None:
+        if not isinstance(interpolator, OneDimensionalInterpolator):
+            raise ValueError('Pointwise errors require a one-dimensional interpolator.')
         self.reference_time = reference_time
         self.reference_data = reference_data
+        self.interpolator = interpolator
 
     def transform(self, response: OutputResult) -> OutputResult:
         """Transform the input data.
@@ -237,10 +242,10 @@ class PointwiseErrors(ResponseTransformer):
             Transformed time and data points of the response.
         """
         # Interpolate response to the reference grid
-        resp_interp = interpolate_response(
+        resp_interp = self.interpolator(
+            self.reference_time,
             response.get_time(),
             response.get_data(),
-            self.reference_time,
         )
         # Compute normalised error
         factor = np.mean(np.abs(self.reference_data))
@@ -254,11 +259,13 @@ class FullFieldErrors(ResponseTransformer):
         self,
         reference_coords: np.ndarray,
         reference_data: np.ndarray,
-        kind: str = 'linear',
+        interpolator: Interpolator,
     ) -> None:
+        if isinstance(interpolator, OneDimensionalInterpolator):
+            raise ValueError('Full-field errors require a spatial interpolator.')
         self.reference_coords = reference_coords
         self.reference_data = reference_data
-        self.interp_kind = LinearNDInterpolator if kind == 'linear' else NearestNDInterpolator
+        self.interpolator = interpolator
         self.norm_factor = np.mean(np.abs(reference_data), axis=0)
 
     def transform(self, response: OutputResult) -> FullFieldOutputResult:
@@ -277,14 +284,11 @@ class FullFieldErrors(ResponseTransformer):
         if not isinstance(response, FullFieldOutputResult):
             raise ValueError('Full-field problems require full-field outputs from the solver.')
         # Compute normalised error of the spatially and temporally interpolated data
-        try:
-            interpolator = self.interp_kind(response.get_coords(), response.get_data())
-            interpolated_data = interpolator(self.reference_coords)
-        except scipy.spatial._qhull.QhullError:  # pylint: disable=I1101,W0212
-            warnings.warn(
-                'Failed to interpolate the results, returning null response for this call.'
-            )
-            interpolated_data = np.zeros_like(self.reference_data)
+        interpolated_data = self.interpolator(
+            self.reference_coords,
+            response.get_coords(),
+            response.get_data(),
+        )
         return FullFieldOutputResult(
             self.reference_coords,
             (interpolated_data - self.reference_data) / self.norm_factor,

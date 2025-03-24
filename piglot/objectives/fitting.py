@@ -9,6 +9,7 @@ from matplotlib.lines import Line2D
 from piglot.parameter import ParameterSet
 from piglot.solver import read_solver
 from piglot.solver.solver import OutputResult
+from piglot.utils.interpolators import Interpolator, read_interpolator
 from piglot.utils.reductions import Reduction, read_reduction
 from piglot.utils.responses import reduce_response
 from piglot.utils.response_transformer import (
@@ -155,6 +156,7 @@ class FittingSingleObjective(ResponseSingleObjective):
         reference: Reference,
         prediction: List[str],
         reduction: Reduction,
+        interpolator: Interpolator,
         weight: float = 1.0,
         bounds: Optional[Tuple[float, float]] = None,
     ) -> None:
@@ -165,7 +167,11 @@ class FittingSingleObjective(ResponseSingleObjective):
             weight=weight,
             bounds=bounds,
             flatten_utility=FixedFlatteningUtility(reference.get_time()),
-            prediction_transform=PointwiseErrors(reference.get_time(), reference.get_data()),
+            prediction_transform=PointwiseErrors(
+                reference.get_time(),
+                reference.get_data(),
+                interpolator,
+            ),
         )
         self.reference = reference
 
@@ -232,6 +238,7 @@ class FittingSingleObjective(ResponseSingleObjective):
         reduction = read_reduction(config.pop('reduction', 'mse'))
         weight = float(config.pop('weight', 1.0))
         bounds = config.pop('bounds', None)
+        interp_config = config.pop('interpolator', 'linear')
         # Read the reference and return the objective
         reference = Reference.read(name, config, output_dir)
         return FittingSingleObjective(
@@ -239,6 +246,7 @@ class FittingSingleObjective(ResponseSingleObjective):
             reference,
             prediction,
             reduction,
+            read_interpolator(interp_config),
             weight=weight,
             bounds=bounds,
         )
@@ -246,23 +254,6 @@ class FittingSingleObjective(ResponseSingleObjective):
 
 class ResponseFittingObjective(ResponseObjective):
     """Class for fitting of response-based objectives."""
-
-    def prepare(self):
-        """Prepare the objective for optimisation.
-
-        For curve fitting, this involves preparing the reference data and updating both the
-        flatten utility and the transformer.
-        """
-        super().prepare()
-        objectives: List[FittingSingleObjective] = self.objectives
-        for objective in objectives:
-            objective.reference.prepare()
-            # Update the flattening utility and the prediction transformer
-            objective.flatten_utility = FixedFlatteningUtility(objective.reference.get_time())
-            objective.prediction_transform = PointwiseErrors(
-                objective.reference.get_time(),
-                objective.reference.get_data(),
-            )
 
     @classmethod
     def read(

@@ -12,6 +12,7 @@ from piglot.objectives.fitting import FittingSingleObjective
 from piglot.solver import read_solver
 from piglot.solver.solver import OutputResult
 from piglot.utils.assorted import trapezoidal_integration_weights
+from piglot.utils.interpolators import Interpolator, read_interpolator
 from piglot.utils.reductions import Reduction
 from piglot.utils.response_transformer import FullFieldErrors
 from piglot.utils.scalarisations import read_scalarisation
@@ -153,9 +154,9 @@ class FullFieldFittingSingleObjective(ResponseSingleObjective):
         reference: FullFieldReference,
         prediction: List[str],
         reduction: Reduction,
+        interpolator: Interpolator,
         weight: float = 1.0,
         bounds: Optional[Tuple[float, float]] = None,
-        interp_kind: str = 'linear',
     ) -> None:
         super().__init__(
             name,
@@ -170,7 +171,7 @@ class FullFieldFittingSingleObjective(ResponseSingleObjective):
             prediction_transform=FullFieldErrors(
                 reference.get_coords(),
                 reference.get_data(),
-                kind=interp_kind,
+                interpolator,
             ),
         )
         self.reference = reference
@@ -227,7 +228,7 @@ class FullFieldFittingSingleObjective(ResponseSingleObjective):
         # Read optional settings
         weight = float(config.pop('weight', 1.0))
         bounds = config.pop('bounds', None)
-        interp_kind = config.pop('interp_kind', 'linear')
+        interp_config = config.pop('interpolator', 'unstructured_linear')
         # Read the reference and return the objective
         reference = FullFieldReference.read(name, config, output_dir)
         return FullFieldFittingSingleObjective(
@@ -235,9 +236,9 @@ class FullFieldFittingSingleObjective(ResponseSingleObjective):
             reference,
             prediction,
             FullFieldReduction(reference, config.pop('reduction', 'mse')),
+            read_interpolator(interp_config),
             weight=weight,
             bounds=bounds,
-            interp_kind=interp_kind,
         )
 
 
