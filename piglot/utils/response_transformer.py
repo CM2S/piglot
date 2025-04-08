@@ -1,10 +1,14 @@
 """Module for defining transformations for responses."""
 from typing import Union, Dict, Any, Type, List, Tuple
 from abc import ABC, abstractmethod
+from functools import partial
+import sys
+import time
 import numpy as np
-from piglot.utils.assorted import read_custom_module
+from piglot.utils.assorted import read_custom_module, trapezoidal_integration_weights
 from piglot.solver.solver import OutputResult, FullFieldOutputResult
-from piglot.utils.interpolators import Interpolator, OneDimensionalInterpolator
+from piglot.utils.interpolators import Interpolator, OneDimensionalInterpolator, read_interpolator
+from piglot.utils.responses import reduce_points, reduce_points_clusters, get_error
 
 
 class ResponseTransformer(ABC):
@@ -213,6 +217,87 @@ class ClipResponse(ResponseTransformer):
         )
 
 
+class ReduceResponse(ResponseTransformer):
+    """Reduce the number of points in the response."""
+
+    def __init__(
+        self,
+        filter_tol: float,
+        method: str = 'clusters',
+        interpolator: Union[str, Dict[str, Any]] = 'unstructured_linear',
+        integral_error: bool = False,
+    ) -> None:
+        if method not in ['clusters', 'global']:
+            raise ValueError('Unknown method for reducing the response.')
+        self.filter_tol = float(filter_tol)
+        self.method = method
+        self.interpolator = read_interpolator(interpolator)
+        self.integral_error = integral_error
+
+    def __progress_callback(self, num_points: int, error: float, orig_points: int) -> bool:
+        """Progress callback for the reduction process."""
+        print(
+            f"\rReducing from {orig_points} to {num_points} points (rel error: {error:6.4e}) ...",
+            end='',
+        )
+        sys.stdout.flush()
+        return False
+
+    def transform(self, response: OutputResult) -> OutputResult:
+        """Transform the input data.
+
+        Parameters
+        ----------
+        response : OutputResult
+            Time and data points of the response.
+
+        Returns
+        -------
+        Output
+            Transformed time and data points of the response.
+        """
+        # Ensure the coordinates are two-dimensional
+        points = response.get_time()
+        if points.ndim == 1:
+            points = points[:, np.newaxis]
+        # And likewise for the values
+        values = response.get_data()
+        if values.ndim == 1:
+            values = values[:, np.newaxis]
+        # Check if we need to compute the weights for the integration
+        weights = 1 / np.sum(np.square(values), axis=0)
+        if self.integral_error:
+            weights = weights * trapezoidal_integration_weights(points).reshape(-1, 1)
+        # Reduce the points
+        self.__progress_callback(points.shape[0], 0.0, points.shape[0])
+        reduce_func = reduce_points_clusters if self.method == 'clusters' else reduce_points
+        elapsed = time.perf_counter()
+        reduced_points, reduced_values = reduce_func(
+            points,
+            values,
+            points,
+            values,
+            self.filter_tol,
+            self.interpolator,
+            weights=weights,
+            progress_callback=partial(self.__progress_callback, orig_points=points.shape[0]),
+        )
+        elapsed = time.perf_counter() - elapsed
+        # Get the reduction error and output for the user
+        error = get_error(
+            reduced_points, reduced_values, points, values, self.interpolator, weights=weights,
+        )
+        print(
+            f'\rReduced from {points.shape[0]} to {reduced_points.shape[0]} points in '
+            f'{elapsed:.2f}s (relative error: {error:6.4e})'
+        )
+        # Return with appropriate dimensions
+        return OutputResult(
+            reduced_points[:, 0] if response.get_time().ndim == 1 else reduced_points,
+            reduced_values[:, 0] if response.get_data().ndim == 1 else reduced_values,
+        )
+
+
 class PointwiseErrors(ResponseTransformer):
     """Compute the pointwise errors between the response and a reference."""
 
@@ -303,6 +388,7 @@ AVAILABLE_RESPONSE_TRANSFORMERS: Dict[str, Type[ResponseTransformer]] = {
     'chain': ChainResponse,
     'clip': ClipResponse,
     'affine': AffineTransformResponse,
+    'reduction': ReduceResponse,
 }
 
 

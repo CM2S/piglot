@@ -2,7 +2,6 @@
 from __future__ import annotations
 from typing import Dict, Any, List, Optional, Tuple
 import os
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
@@ -11,7 +10,6 @@ from piglot.solver import read_solver
 from piglot.solver.solver import OutputResult
 from piglot.utils.interpolators import Interpolator, read_interpolator
 from piglot.utils.reductions import Reduction, read_reduction
-from piglot.utils.responses import reduce_response
 from piglot.utils.response_transformer import (
     ResponseTransformer,
     PointwiseErrors,
@@ -28,71 +26,12 @@ class Reference:
     def __init__(
         self,
         filename: str,
-        output_dir: str,
-        x_col: int = 1,
-        y_col: int = 2,
-        skip_header: int = 0,
-        transformer: ResponseTransformer = None,
-        filter_tol: float = 0.0,
-        show: bool = False,
+        time_data: np.ndarray,
+        data: np.ndarray,
     ) -> None:
         self.filename = filename
-        self.output_dir = output_dir
-        self.transformer = transformer
-        self.filter_tol = filter_tol
-        self.show = show
-        # Load the data right away
-        data = np.genfromtxt(filename, skip_header=skip_header)
-        # Sanitise to ensure it is a 2D array
-        if len(data.shape) == 1:
-            data = data.reshape(1, -1)
-        self.x_data = data[:, x_col - 1]
-        self.y_data = data[:, y_col - 1]
-        # Apply the transformer
-        if self.transformer is not None:
-            self.x_data, self.y_data = self.transformer(self.x_data, self.y_data)
-        self.x_orig = np.copy(self.x_data)
-        self.y_orig = np.copy(self.y_data)
-
-    def prepare(self) -> None:
-        """Prepare the reference data."""
-        if self.has_filtering():
-            # Little progress report: ensure we flush after the initial message
-            print(f"Filtering reference {self.filename} ...", end='')
-            sys.stdout.flush()
-            num, error, (self.x_data, self.y_data) = reduce_response(
-                self.x_data,
-                self.y_data,
-                self.filter_tol,
-            )
-            print(f" done (from {len(self.x_orig)} to {num} points, error = {error:.2e})")
-            if self.show:
-                _, ax = plt.subplots()
-                ax.plot(self.x_orig, self.y_orig, label="Reference")
-                ax.plot(self.x_data, self.y_data, c='r', ls='dashed')
-                ax.scatter(self.x_data, self.y_data, c='r', label="Resampled")
-                ax.legend()
-                plt.show()
-            # Write the filtered reference
-            os.makedirs(os.path.join(self.output_dir, 'filtered_references'), exist_ok=True)
-            np.savetxt(
-                os.path.join(
-                    self.output_dir,
-                    'filtered_references',
-                    os.path.basename(self.filename),
-                ),
-                np.stack((self.x_data, self.y_data), axis=1),
-            )
-
-    def has_filtering(self) -> bool:
-        """Check if the reference has filtering.
-
-        Returns
-        -------
-        bool
-            Whether the reference has filtering.
-        """
-        return self.filter_tol > 0.0
+        self.x_data = time_data
+        self.y_data = data
 
     def get_time(self) -> np.ndarray:
         """Get the time column of the reference.
@@ -132,19 +71,25 @@ class Reference:
         Reference
             Reference to use for this problem.
         """
-        return Reference(
-            filename,
-            output_dir,
-            x_col=int(config.get('x_col', 1)),
-            y_col=int(config.get('y_col', 2)),
-            skip_header=int(config.get('skip_header', 0)),
-            transformer=(
-                read_response_transformer(config['transformer'])
-                if 'transformer' in config else None
-            ),
-            filter_tol=float(config.get('filter_tol', 0.0)),
-            show=bool(config.get('show', False)),
-        )
+        x_col = int(config.pop('x_col', 0))
+        y_col = int(config.pop('y_col', 1))
+        transformer = config.pop('transformer', None)
+        # Check if the processed data already exists
+        output_filename = os.path.join(output_dir, 'references', filename)
+        if os.path.exists(output_filename):
+            data = np.genfromtxt(output_filename)
+            return Reference(filename, data[:, 0], data[:, -1])
+        # Read the data
+        data = np.genfromtxt(filename, **config)
+        points = data[:, x_col]
+        values = data[:, y_col]
+        # Transform the data if necessary
+        if transformer is not None:
+            points, values = read_response_transformer(transformer)(points, values)
+        # Store the reference
+        os.makedirs(os.path.join(output_dir, 'references'), exist_ok=True)
+        np.savetxt(output_filename, np.hstack((points, values)))
+        return Reference(filename, points, values)
 
 
 class FittingSingleObjective(ResponseSingleObjective):

@@ -1,6 +1,7 @@
 """Module for curve fitting objectives"""
 from __future__ import annotations
 from typing import Dict, Any, List, Optional, Tuple
+import os
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
@@ -14,7 +15,7 @@ from piglot.solver.solver import OutputResult
 from piglot.utils.assorted import trapezoidal_integration_weights
 from piglot.utils.interpolators import Interpolator, read_interpolator
 from piglot.utils.reductions import Reduction
-from piglot.utils.response_transformer import FullFieldErrors
+from piglot.utils.response_transformer import FullFieldErrors, read_response_transformer
 from piglot.utils.scalarisations import read_scalarisation
 from piglot.utils.composition.responses import FixedFlatteningUtility
 from piglot.objectives.response_objective import ResponseSingleObjective, ResponseObjective
@@ -92,16 +93,25 @@ class FullFieldReference:
             raise ValueError("Missing list of coordinate indices for reference.")
         if 'fields' not in config:
             raise ValueError("Missing list of field indices for reference.")
-        data = np.genfromtxt(
-             filename,
-             skip_header=config.pop('skip_header', None),
-             delimiter=config.pop('delimiter', None),
-        )
-        return FullFieldReference(
-            filename,
-            data[:, config['coords']],
-            data[:, config['fields']],
-        )
+        coords = config.pop('coords')
+        fields = config.pop('fields')
+        transformer = config.pop('transformer', None)
+        # Check if the processed data already exists
+        output_filename = os.path.join(output_dir, 'references', filename)
+        if os.path.exists(output_filename):
+            data = np.genfromtxt(output_filename)
+            return FullFieldReference(filename, data[:, :len(coords)], data[:, len(coords):])
+        # Read the data
+        data = np.genfromtxt(filename, **config)
+        points = data[:, coords]
+        values = data[:, fields]
+        # Transform the data if necessary
+        if transformer is not None:
+            points, values = read_response_transformer(transformer)(points, values)
+        # Store the reference
+        os.makedirs(os.path.join(output_dir, 'references'), exist_ok=True)
+        np.savetxt(output_filename, np.hstack((points, values)))
+        return FullFieldReference(filename, points, values)
 
 
 class FullFieldReduction(Reduction):
@@ -229,13 +239,14 @@ class FullFieldFittingSingleObjective(ResponseSingleObjective):
         weight = float(config.pop('weight', 1.0))
         bounds = config.pop('bounds', None)
         interp_config = config.pop('interpolator', 'unstructured_linear')
+        reduction = config.pop('reduction', 'mse')
         # Read the reference and return the objective
         reference = FullFieldReference.read(name, config, output_dir)
         return FullFieldFittingSingleObjective(
             name,
             reference,
             prediction,
-            FullFieldReduction(reference, config.pop('reduction', 'mse')),
+            FullFieldReduction(reference, reduction),
             read_interpolator(interp_config),
             weight=weight,
             bounds=bounds,
@@ -278,7 +289,7 @@ class FullFieldFittingObjective(ResponseObjective):
         objectives = [
             (
                 FullFieldFittingSingleObjective.read(target_name, target_config, output_dir)
-                if target_config.get('full_field', True)
+                if target_config.pop('full_field', True)
                 else FittingSingleObjective.read(target_name, target_config, output_dir)
             )
             for target_name, target_config in config.pop('references').items()
