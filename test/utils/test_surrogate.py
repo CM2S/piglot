@@ -12,7 +12,7 @@ class TestGetGPModel(unittest.TestCase):
         self.var_data = np.array([0.1, 0.2, 0.3])
 
     def test_get_model_noisy(self):
-        model = get_model(self.x_data, self.y_data, noisy=True)
+        model = get_model(self.x_data, self.y_data, infer_noise=True)
         self.assertIsInstance(model, SingleTaskGP)
         self.assertEqual(model.train_inputs[0].shape, torch.Size([3, 2]))
         self.assertEqual(model.train_targets.shape, torch.Size([3]))

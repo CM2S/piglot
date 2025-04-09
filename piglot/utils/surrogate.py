@@ -14,7 +14,7 @@ def get_model(
     x_data: np.ndarray,
     y_data: np.ndarray,
     var_data: np.ndarray = None,
-    noisy: bool = False,
+    infer_noise: bool = False,
 ) -> SingleTaskGP:
     """Get a GP regression model for the current data.
 

@@ -1,6 +1,6 @@
 """Main optimiser classes for using BoTorch with piglot"""
-from typing import Tuple, List, Type, Dict
-from multiprocessing.pool import ThreadPool as Pool
+from __future__ import annotations
+from typing import Tuple, List, Union, Dict, Any
 import os
 import warnings
 from dataclasses import dataclass
@@ -8,65 +8,38 @@ from multiprocessing.pool import ThreadPool as Pool
 import numpy as np
 import torch
 from scipy.stats import qmc
-from gpytorch.mlls import ExactMarginalLogLikelihood
-import botorch
-from botorch.fit import fit_gpytorch_mll
-from botorch.optim import optimize_acqf
-from botorch.models import SingleTaskGP
-from botorch.models.model import Model
 from botorch.models.converter import batched_to_model_list
-from botorch.models.transforms import Normalize
-from botorch.acquisition import (
-    AcquisitionFunction,
-    qUpperConfidenceBound,
-    qExpectedImprovement,
-    qProbabilityOfImprovement,
-    qLogExpectedImprovement,
-    qNoisyExpectedImprovement,
-    qLogNoisyExpectedImprovement,
-    qKnowledgeGradient,
-)
-from botorch.acquisition.objective import GenericMCObjective
-from botorch.acquisition.multi_objective import (
-    qExpectedHypervolumeImprovement,
-    qNoisyExpectedHypervolumeImprovement,
-    qHypervolumeKnowledgeGradient,
-)
 from botorch.utils.multi_objective.box_decompositions.non_dominated import (
     FastNondominatedPartitioning,
 )
-from botorch.acquisition.multi_objective.logei import (
-    qLogExpectedHypervolumeImprovement,
-    qLogNoisyExpectedHypervolumeImprovement,
-)
-from botorch.acquisition.multi_objective.objective import GenericMCMultiOutputObjective
-from botorch.sampling import SobolQMCNormalSampler
+from botorch.sampling.qmc import MultivariateNormalQMCEngine
+from piglot.parameter import ParameterSet
 from piglot.objective import (
     Objective,
     GenericObjective,
     ObjectiveResult,
 )
 from piglot.optimiser import Optimiser
+from piglot.optimisers.botorch.acquisitions import (
+    AVAILABLE_ACQUISITIONS,
+    default_acquisition,
+    get_acquisition,
+    optimise_acquisition,
+)
 from piglot.optimisers.botorch.dataset import BayesDataset
-
-
-AVAILABLE_ACQUISITIONS: Dict[str, Type[AcquisitionFunction]] = {
-    # Quasi-Monte Carlo acquisitions
-    'qucb': qUpperConfidenceBound,
-    'qei': qExpectedImprovement,
-    'qlogei': qLogExpectedImprovement,
-    'qpi': qProbabilityOfImprovement,
-    'qkg': qKnowledgeGradient,
-    # Analytical and quasi-Monte Carlo acquisitions for noisy problems
-    'qnei': qNoisyExpectedImprovement,
-    'qlognei': qLogNoisyExpectedImprovement,
-    # Multi-objective acquisitions
-    'qehvi': qExpectedHypervolumeImprovement,
-    'qnehvi': qNoisyExpectedHypervolumeImprovement,
-    'qlogehvi': qLogExpectedHypervolumeImprovement,
-    'qlognehvi': qLogNoisyExpectedHypervolumeImprovement,
-    'qhvkg': qHypervolumeKnowledgeGradient
-}
+from piglot.optimisers.botorch.model import (
+    SingleTaskGPWithNoise,
+    PseudoHeteroskedasticSingleTaskGP,
+    build_gp_model
+)
+from piglot.optimisers.botorch.composition import (
+    BoTorchComposition,
+    RiskComposition,
+)
+from piglot.optimisers.botorch.risk_acquisitions import (
+    AVALIALBE_RISK_MEASURES,
+    get_risk_measure,
+)
 
 
 def get_default_torch_device() -> str:
@@ -78,39 +51,6 @@ def get_default_torch_device() -> str:
         Name of the default PyTorch device.
     """
     return str(torch.tensor([0.0]).device)
-
-
-def default_acquisition(
-    composite: bool,
-    multi_objective: bool,
-    noisy: bool,
-    q: int,
-) -> str:
-    """Return the default acquisition function for the given optimisation problem.
-
-    Parameters
-    ----------
-    composite : bool, optional
-        Whether the optimisation problem is a composition.
-    multi_objective : bool, optional
-        Whether the optimisation problem is multi-objective.
-    noisy : bool, optional
-        Whether the optimisation problem is noisy.
-    q : int, optional
-        Number of candidates to generate.
-
-    Returns
-    -------
-    str
-        Name of the default acquisition function.
-    """
-    if multi_objective:
-        return 'qlognehvi' if noisy else 'qlogehvi'
-    if noisy:
-        return 'qlognei'
-    if composite or q > 1:
-        return 'qlogei'
-    return 'qlogei'
 
 
 def draw_multivariate_samples(
@@ -201,7 +141,9 @@ class BoTorchSettingsData:
                 self.q,
             )
         elif self.acquisition not in AVAILABLE_ACQUISITIONS:
-            raise RuntimeError(f"Unkown acquisition function {self.acquisition}")
+            self.acquisition = 'q' + self.acquisition
+            if self.acquisition not in AVAILABLE_ACQUISITIONS:
+                raise RuntimeError(f"Unkown acquisition function {self.acquisition}")
         if not self.acquisition.startswith('q') and self.q != 1:
             raise RuntimeError("Can only use q != 1 for quasi-Monte Carlo acquisitions")
         if not self.acquisition.startswith('q') and self.objective.composition:
@@ -490,76 +432,11 @@ class BoTorchStateData:
 class BayesianBoTorch(Optimiser):
     """Driver for optimisation using BoTorch."""
 
-    def __init__(
-        self,
-        objective: Objective,
-        n_initial: int = None,
-        n_test: int = 0,
-        acquisition: str = None,
-        beta: float = 1.0,
-        noisy: float = False,
-        q: int = 1,
-        seed: int = 1,
-        load_file: str = None,
-        export: str = None,
-        device: str = None,
-        reference_point: List[float] = None,
-        nadir_scale: float = 0.1,
-        skip_initial: bool = False,
-        pca_variance: float = None,
-        num_restarts: int = None,
-        raw_samples: int = None,
-        mc_samples: int = None,
-        batch_size: int = None,
-        num_fantasies: int = None,
-        sequential: bool = False,
-    ) -> None:
+    def __init__(self, objective: Objective, **kwargs) -> None:
         if not isinstance(objective, GenericObjective):
             raise RuntimeError("Bayesian optimiser requires a GenericObjective")
-        if bool(noisy) and objective.stochastic:
-            warnings.warn("Noisy setting with stochastic objective - ignoring objective variance")
         super().__init__('BoTorch', objective)
-        self.objective = objective
-        self.n_initial = n_initial
-        self.acquisition = acquisition
-        self.beta = beta
-        self.noisy = bool(noisy)
-        self.q = q
-        self.seed = seed
-        self.load_file = load_file
-        self.export = export
-        self.n_test = n_test
-        self.device = get_default_torch_device() if device is None else device
-        self.skip_initial = bool(skip_initial)
-        self.partitioning: FastNondominatedPartitioning = None
-        self.adjusted_ref_point = reference_point is None
-        self.ref_point = None if reference_point is None else -torch.tensor(reference_point)
-        self.nadir_scale = nadir_scale
-        self.pca_variance = pca_variance
-        self.num_restarts = num_restarts
-        self.raw_samples = raw_samples
-        self.mc_samples = mc_samples
-        self.batch_size = batch_size
-        self.sequential = bool(sequential)
-        self.num_fantasies = num_fantasies
-        if acquisition is None:
-            self.acquisition = default_acquisition(
-                objective.composition,
-                objective.multi_objective,
-                bool(noisy) or objective.stochastic,
-                self.q,
-            )
-        else:
-            orig_name = self.acquisition
-            if not self.acquisition.startswith('q'):
-                self.acquisition = 'q' + self.acquisition
-            if self.acquisition not in AVAILABLE_ACQUISITIONS:
-                raise RuntimeError(f"Unkown acquisition function {orig_name}")
-        if self.pca_variance and not (objective.composition or objective.multi_objective):
-            warnings.warn("Ignoring PCA variance for non-composite single-objective problem")
-            self.pca_variance = None
-        elif self.pca_variance is None and objective.composition:
-            self.pca_variance = 1e-6
+        self.settings = BoTorchSettingsData(objective, **kwargs)
         torch.set_num_threads(1)
 
     def _validate_problem(self, objective: Objective) -> None:
@@ -571,69 +448,24 @@ class BayesianBoTorch(Optimiser):
             Objective to optimise
         """
 
-    def _build_model(self, dataset: BayesDataset) -> Model:
-        # Transform outcomes and clamp variances to prevent warnings from GPyTorch
-        values, variances = dataset.transform_outcomes(dataset.values, dataset.covariances)
-        variances = torch.clamp_min(variances, 1e-6)
-        # Initialise model instance depending on noise setting
-        model = SingleTaskGP(
-            dataset.params,
-            values,
-            train_Yvar=None if self.noisy else variances,
-            input_transform=Normalize(d=dataset.params.shape[-1]),
+    def _get_candidates(self, state: BoTorchStateData) -> np.ndarray:
+        acquisition = get_acquisition(
+            self.settings.acquisition,
+            state.model,
+            state.dataset,
+            state.composition,
+            best=-state.best_value,
+            ref_point=state.mo_data.ref_point if state.mo_data else None,
+            partitioning=state.mo_data.partitioning if state.mo_data else None,
+            **self.settings.get_dict(),
         )
-        # Fit the GP (in case of trouble, fall back to an Adam-based optimiser)
-        mll = ExactMarginalLogLikelihood(model.likelihood, model)
-        try:
-            fit_gpytorch_mll(mll)
-        except botorch.exceptions.ModelFittingError:
-            warnings.warn('Optimisation of the MLL failed, falling back to PyTorch optimiser')
-            fit_mll_pytorch_loop(mll)
-        # MOBO requires a model list (except when there is only one output)
-        if self.objective.multi_objective and values.shape[-1] > 1:
-            return batched_to_model_list(model)
-        return model
-
-    def _get_candidates(
-            self,
-            bounds: np.ndarray,
-            dataset: BayesDataset,
-            test_dataset: BayesDataset,
-            ) -> Tuple[np.ndarray, float]:
-
-        # Build model
-        model = self._build_model(dataset)
-
-        # Evaluate GP performance with the test dataset
-        cv_error = None
-        if self.n_test > 0:
-            std_test_values, _ = dataset.transform_outcomes(
-                test_dataset.values,
-                test_dataset.covariances,
-            )
-            with torch.no_grad():
-                posterior = model.posterior(test_dataset.params)
-                cv_error = (posterior.mean - std_test_values).square().mean().item()
-
-        # Build the acquisition function
-        acq = self._acq_func(dataset, model)
-
-        # Optimise acquisition to find next candidate(s)
-        candidates, _ = optimize_acqf(
-            acq,
-            bounds=torch.from_numpy(bounds.T).to(self.device).to(dataset.dtype),
-            q=self.q,
-            num_restarts=self.num_restarts,
-            raw_samples=self.raw_samples,
-            sequential=self.sequential,
-            options={
-                "sample_around_best": True,
-                "seed": self.seed,
-                "init_batch_limit": self.batch_size,
-            },
+        candidates, _ = optimise_acquisition(
+            acquisition,
+            self.parameters,
+            state.dataset,
+            **self.settings.get_dict(),
         )
-
-        return candidates.cpu().numpy(), cv_error
+        return candidates.cpu().numpy()
 
     def _eval_candidates(self, candidates: np.ndarray) -> List[ObjectiveResult]:
         # Single candidate case
@@ -657,175 +489,36 @@ class BayesianBoTorch(Optimiser):
         points = qmc.Sobol(n_dim, seed=seed).random(n_points)
         return [point * (bound[:, 1] - bound[:, 0]) + bound[:, 0] for point in points]
 
-    def _result_to_dataset(self, result: ObjectiveResult) -> Tuple[np.ndarray, np.ndarray]:
-        covariances = (
-            result.covariances
-            if self.objective.stochastic
-            else np.diag(np.zeros_like(result.values))
-        )
-        return result.values, covariances
-
-    def _composition(self, vals: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
-        # Just negate the untransformed outcomes if no composition is available
-        if not self.objective.composition:
-            return -vals.squeeze(-1)
-        # Otherwise, use the composition function
-        return -self.objective.composition.composition_torch(vals, params)
-
-    def _update_mo_data(self, dataset: BayesDataset) -> float:
-        y_points = self._composition(dataset.values, dataset.params)
-        # Compute reference point if needed
-        if self.adjusted_ref_point:
-            nadir = torch.min(y_points, dim=0).values
-            self.ref_point = nadir - self.nadir_scale * (torch.max(y_points, dim=0).values - nadir)
-        # Update partitioning and Pareto front
-        self.partitioning = FastNondominatedPartitioning(self.ref_point, Y=y_points)
-        hypervolume = self.partitioning.compute_hypervolume().item()
-        pareto = self.partitioning.pareto_Y
-        # Map each Pareto point to the original parameter space
-        param_indices = [
-            torch.argmin((y_points - pareto[i, :]).norm(dim=1)).item()
-            for i in range(pareto.shape[0])
-        ]
-        # Dump the Pareto front to a file
-        with open(os.path.join(self.output_dir, "pareto_front"), 'w', encoding='utf8') as file:
-            # Write header
-            num_obj = pareto.shape[1]
-            file.write('\t'.join([f'{"Objective_" + str(i + 1):>15}' for i in range(num_obj)]))
-            file.write('\t' + '\t'.join([f'{param.name:>15}' for param in self.parameters]) + '\n')
-            # Write each point
-            for i, idx in enumerate(param_indices):
-                file.write('\t'.join([f'{-x.item():>15.8f}' for x in pareto[i, :]]) + '\t')
-                file.write('\t'.join([f'{x.item():>15.8f}' for x in dataset.params[idx, :]]) + '\n')
-        return -np.log(hypervolume)
-
-    def _acq_func(
+    def _update_dataset(
         self,
         dataset: BayesDataset,
-        model: Model,
-    ) -> AcquisitionFunction:
-        # Default values for multi-restart optimisation
-        sampler = SobolQMCNormalSampler(torch.Size([self.mc_samples]), seed=self.seed)
-
-        # Find best value for the acquisition
-        best = torch.max(self._composition(dataset.values, dataset.params)).item()
-
-        # Build composite MC objective
-        def mc_objective(vals: torch.Tensor, X: torch.Tensor) -> torch.Tensor:
-            return self._composition(dataset.untransform_outcomes(vals), X)
-
-        # Delegate to the correct acquisition function
-        # The arguments for each acquisition are different, so we group them into families
-        acq_class = AVAILABLE_ACQUISITIONS[self.acquisition]
-        if self.acquisition == 'qucb':
-            acq = acq_class(
-                model,
-                self.beta,
-                sampler=sampler,
-                objective=GenericMCObjective(mc_objective),
-            )
-        elif self.acquisition in ('qei', 'qlogei', 'qpi'):
-            acq = acq_class(
-                model,
-                best,
-                sampler=sampler,
-                objective=GenericMCObjective(mc_objective),
-            )
-        elif self.acquisition in ('qnei', 'qlognei'):
-            acq = acq_class(
-                model,
-                dataset.params,
-                sampler=sampler,
-                objective=GenericMCObjective(mc_objective),
-            )
-        elif self.acquisition == 'qkg':
-            acq = acq_class(
-                model,
-                num_fantasies=self.num_fantasies,
-                inner_sampler=sampler,
-                objective=GenericMCObjective(mc_objective),
-            )
-        # Quasi-Monte Carlo multi-objective acquisitions
-        elif self.acquisition in ('qehvi', 'qlogehvi'):
-            acq = acq_class(
-                model,
-                self.ref_point,
-                self.partitioning,
-                objective=GenericMCMultiOutputObjective(mc_objective),
-                sampler=sampler,
-            )
-        elif self.acquisition in ('qnehvi', 'qlognehvi'):
-            acq = acq_class(
-                model,
-                self.ref_point,
-                dataset.params,
-                objective=GenericMCMultiOutputObjective(mc_objective),
-                sampler=sampler,
-            )
-        elif self.acquisition == 'qhvkg':
-            acq = acq_class(
-                model,
-                self.ref_point,
-                num_fantasies=self.num_fantasies,
-                inner_sampler=sampler,
-                objective=GenericMCMultiOutputObjective(mc_objective),
-            )
-        else:
-            raise RuntimeError(f"Unknown acquisition {self.acquisition}")
-        return acq
-
-    def _init_dataset(self, n_dim: int, bound: np.ndarray, init_shot: np.ndarray) -> BayesDataset:
-        # Can we load straight from the input file?
-        if self.load_file:
-            return BayesDataset.load(self.load_file)
-
-        # Evaluate initial shot and use it to infer number of dimensions
-        if not self.skip_initial:
-            init_result = self.objective(init_shot)
-            init_values, init_covariances = self._result_to_dataset(init_result)
-            n_outputs = len(init_values)
-
-        # If requested, sample some random points before starting (in parallel if possible)
-        random_points = self._get_random_points(self.n_initial, n_dim, self.seed, bound)
-        results = self._eval_candidates(random_points)
-
-        # Infer number of points to store when skipping initial shot
-        if self.skip_initial:
-            values, covariances = self._result_to_dataset(results[0])
-            n_outputs = len(values)
-
-        # Build initial dataset with the initial shot (if available)
-        dataset = BayesDataset(
-            n_dim,
-            n_outputs,  # pylint: disable=E0606
-            export=self.export,
-            device=self.device,
-            pca_variance=self.pca_variance,
-        )
-        if not self.skip_initial:
-            dataset.push(init_shot, init_values, init_covariances, init_result.scalar_value)
-
-        # Add random points to the dataset
+        candidates: List[np.ndarray],
+        results: List[ObjectiveResult],
+        composition: BoTorchComposition = None,
+    ) -> Tuple[np.ndarray, float]:
+        # Update dataset with the new results
+        results_batch = []
         for i, result in enumerate(results):
-            values, covariances = self._result_to_dataset(result)
-            dataset.push(random_points[i], values, covariances, result.scalar_value)
-        return dataset
+            zero_covar = np.zeros_like(np.diag(result.values))
+            dataset.push(
+                candidates[i],
+                result.values,
+                result.covariances if result.covariances is not None else zero_covar,
+                result.scalar_value,
+            )
+            results_batch.append(result.values)
 
-    def _get_extra_info(self, cv_error: float, dataset: BayesDataset) -> str:
-        extra = None
-        if cv_error:
-            extra = f'Val. {cv_error:6.4}'
-            if self.objective.multi_objective:
-                extra += f'  Num Pareto: {self.partitioning.pareto_Y.shape[0]}'
-            if self.pca_variance:
-                extra += f'  Num PCA: {dataset.pca.num_components}'
-        elif self.objective.multi_objective:
-            extra = f'Num Pareto: {self.partitioning.pareto_Y.shape[0]}'
-            if self.pca_variance:
-                extra += f'  Num PCA: {dataset.pca.num_components}'
-        elif self.pca_variance:
-            extra = f'Num PCA: {dataset.pca.num_components}'
-        return extra
+        # Nothing more to do for multi-objective problems or when we don't have a composition
+        if self.settings.objective.multi_objective or composition is None:
+            return None, None
+
+        # For single-objective problems, find the best observation in this batch
+        objectives = composition.from_original_samples(
+            torch.from_numpy(np.array(results_batch)).to(dataset.device),
+            torch.from_numpy(np.array(candidates)).to(dataset.device),
+        )
+        idx_best = torch.argmax(objectives).item()
+        return candidates[idx_best], -objectives[idx_best].item()
 
     def _optimise(
         self,
@@ -857,33 +550,71 @@ class BayesianBoTorch(Optimiser):
             best parameter solution
         """
 
-        # Initialise heuristic variables
-        self.n_initial = self.n_initial or max(8, 2 * n_dim)
-        self.num_restarts = self.num_restarts or 12
-        self.raw_samples = self.raw_samples or max(256, 16 * n_dim * n_dim)
-        self.mc_samples = self.mc_samples or 512
-        self.batch_size = self.batch_size or 128
-        self.num_fantasies = self.num_fantasies or 16
+        # Initialise heuristic variables and state data
+        self.settings.update(n_dim)
+        state = BoTorchStateData(self.settings)
+        if self.objective.multi_objective:
+            state.mo_data = BoTorchMultiObjectiveStateData()
 
-        # Build initial dataset
-        dataset = self._init_dataset(n_dim, bound, init_shot)
+        # Select initial dataset strategy: loading from file or generating random points
+        if self.settings.load_file:
+            state.dataset = BayesDataset.load(self.settings.load_file)
+            n_outputs = state.dataset.n_outputs
+
+            # Sanity check: ensure the loaded dataset has the correct number of dimensions
+            if state.dataset.n_dim != n_dim:
+                raise RuntimeError(
+                    f"Loaded dataset has {state.dataset.n_dim} dimensions, expected {n_dim}"
+                )
+        else:
+            # Build initial dataset: initial shot + random points
+            initial_points = [init_shot] if not self.settings.skip_initial else []
+            if self.settings.n_initial > 1:
+                initial_points += self._get_random_points(
+                    self.settings.n_initial,
+                    n_dim,
+                    self.settings.seed,
+                    bound,
+                )
+            if len(initial_points) == 0:
+                raise RuntimeError("No initial points to evaluate")
+
+            # Evaluate initial dataset (in parallel if possible) and infer number of outputs
+            results = self._eval_candidates(initial_points)
+            n_outputs = results[0].values.size
+
+            # Build dataset and add initial points
+            state.dataset = BayesDataset(
+                n_dim,
+                n_outputs,
+                export=os.path.join(self.output_dir, 'dataset.pt'),
+                device=self.settings.device,
+                pca_variance=self.settings.pca_variance,
+            )
+            self._update_dataset(state.dataset, initial_points, results)
 
         # Build test dataset (in parallel if possible)
-        test_dataset = BayesDataset(n_dim, dataset.n_outputs, device=self.device)
-        if self.n_test > 0:
-            test_points = self._get_random_points(self.n_test, n_dim, self.seed + 1, bound)
+        if self.settings.n_test > 0:
+            state.test_dataset = BayesDataset(n_dim, n_outputs, device=self.settings.device)
+            test_points = self._get_random_points(
+                self.settings.n_test,
+                n_dim,
+                self.settings.seed + 1,
+                bound,
+            )
             test_results = self._eval_candidates(test_points)
-            for i, result in enumerate(test_results):
-                values, covariances = self._result_to_dataset(result)
-                test_dataset.push(test_points[i], values, covariances, result.scalar_value)
+            self._update_dataset(state.test_dataset, test_points, test_results)
 
-        # Find current best point to return to the driver
-        if self.objective.multi_objective:
-            best_value = self._update_mo_data(dataset)
-            best_params = None
-        else:
-            best_params, best_value = dataset.min()
-        self._progress_check(0, best_value, best_params)
+        # Update state data with the latest dataset and get the current best point
+        state.update(self.parameters, self.output_dir)
+        if self._progress_check(
+            0,
+            state.best_value,
+            state.best_params,
+            state.extra_info,
+            state.conf_interval,
+        ):
+            return state.best_params, state.best_value
 
         # Optimisation loop
         for i_iter in range(n_iter):
@@ -891,55 +622,45 @@ class BayesianBoTorch(Optimiser):
             candidates = None
             while candidates is None:
                 try:
-                    candidates, cv_error = self._get_candidates(bound, dataset, test_dataset)
+                    candidates = list(self._get_candidates(state))
                 except torch.cuda.OutOfMemoryError:
-                    if self.batch_size > 1:
+                    if self.settings.batch_size > 1:
+                        self.settings.batch_size //= 2
                         warnings.warn(
-                            f'CUDA out of memory: halving batch size to {self.batch_size // 2}'
+                            f'CUDA out of memory: halving batch size to {self.settings.batch_size}'
                         )
-                        self.batch_size //= 2
                     else:
                         warnings.warn('CUDA out of memory: falling back to CPU')
-                        self.device = 'cpu'
                         torch.set_default_device('cpu')
-                        dataset = dataset.to(self.device)
-                        test_dataset = test_dataset.to(self.device)
-                        if self.objective.multi_objective:
-                            self.ref_point = self.ref_point.to(self.device)
-                            self._update_mo_data(dataset)
+                        self.settings.device = 'cpu'
+                        state = state.to('cpu')
 
             # Evaluate candidates (in parallel if possible)
             results = self._eval_candidates(candidates)
 
-            # Update dataset
-            values_batch = []
-            for i, result in enumerate(results):
-                values, covariances = self._result_to_dataset(result)
-                values_batch.append(result.scalar_value)
-                dataset.push(candidates[i, :], values, covariances, result.scalar_value)
+            # Update dataset and state data with the latest results
+            best_params, best_value = self._update_dataset(
+                state.dataset,
+                candidates,
+                results,
+                composition=state.composition,
+            )
+            state.update(self.parameters, self.output_dir)
 
-            # Find best observation for this batch
-            if self.objective.multi_objective:
-                best_value = self._update_mo_data(dataset)
-                best_params = None
-            else:
-                best_idx = np.argmin(values_batch)
-                best_value = values_batch[best_idx]
-                best_params = candidates[best_idx, :]
+            # Return state best instead of batch best for noisy or multi-objective problems
+            if self.settings.objective.multi_objective or self.settings.objective.stochastic:
+                best_params, best_value = state.best_params, state.best_value
 
-            # Update progress (with extra data if available)
+            # Update progress and check for early stopping
             if self._progress_check(
                 i_iter + 1,
                 best_value,
                 best_params,
-                extra_info=self._get_extra_info(cv_error, dataset),
+                state.extra_info,
+                state.conf_interval,
             ):
                 break
 
         # Return optimisation result
-        if self.objective.multi_objective:
-            best_result = self._update_mo_data(dataset)
-            best_params = None
-        else:
-            best_params, best_result = dataset.min()
-        return best_params, best_result
+        state.update(self.parameters, self.output_dir)
+        return state.best_params, state.best_value
