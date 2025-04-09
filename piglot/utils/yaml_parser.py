@@ -53,8 +53,6 @@ def parse_config_file(config_file: str) -> Dict[str, Any]:
         raise RuntimeError("Missing objective from the config file")
     if 'optimiser' not in config:
         raise RuntimeError("Missing optimiser from the config file")
-    if 'parameters' not in config:
-        raise RuntimeError("Missing parameters from the config file")
     # Add missing optional items
     if 'output' not in config:
         config['output'] = os.path.splitext(config_file)[0]

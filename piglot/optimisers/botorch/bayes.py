@@ -9,7 +9,7 @@ from scipy.stats import qmc
 from gpytorch.mlls import ExactMarginalLogLikelihood
 import botorch
 from botorch.fit import fit_gpytorch_mll
-from botorch.optim import optimize_acqf
+from botorch.optim import optimize_acqf, optimize_acqf_mixed
 from botorch.models import SingleTaskGP
 from botorch.models.model import Model
 from botorch.models.converter import batched_to_model_list
@@ -265,21 +265,41 @@ class BayesianBoTorch(Optimiser):
         # Build the acquisition function
         acq = self._acq_func(dataset, model)
 
-        # Optimise acquisition to find next candidate(s)
-        candidates, _ = optimize_acqf(
+        # Optimise acquisition to find next candidate(s): continuous case
+        if self.parameters.num_discrete() == 0:
+            candidates, _ = optimize_acqf(
+                acq,
+                bounds=torch.from_numpy(bounds.T).to(self.device).to(dataset.dtype),
+                q=self.q,
+                num_restarts=self.num_restarts,
+                raw_samples=self.raw_samples,
+                sequential=self.sequential,
+                options={
+                    "sample_around_best": True,
+                    "seed": self.seed,
+                    "init_batch_limit": self.batch_size,
+                },
+            )
+            return candidates.cpu().numpy(), cv_error
+
+        # Optimise acquisition to find next candidate(s): mixed case
+        combinations = self.parameters.discrete_combinations()
+        candidates, _ = optimize_acqf_mixed(
             acq,
             bounds=torch.from_numpy(bounds.T).to(self.device).to(dataset.dtype),
             q=self.q,
             num_restarts=self.num_restarts,
             raw_samples=self.raw_samples,
-            sequential=self.sequential,
+            fixed_features_list=[
+                dict(enumerate(combination, start=self.parameters.num_continuous()))
+                for combination in combinations
+            ],
             options={
                 "sample_around_best": True,
                 "seed": self.seed,
                 "init_batch_limit": self.batch_size,
             },
         )
-
         return candidates.cpu().numpy(), cv_error
 
     def _eval_candidates(self, candidates: np.ndarray) -> List[ObjectiveResult]:
@@ -290,16 +310,6 @@ class BayesianBoTorch(Optimiser):
         with Pool(self.q) as pool:
             results = pool.map(lambda x: self.objective(x, concurrent=True), candidates)
         return list(results)
-
-    def _get_random_points(
-            self,
-            n_points: int,
-            n_dim: int,
-            seed: int,
-            bound: np.ndarray,
-            ) -> List[np.ndarray]:
-        points = qmc.Sobol(n_dim, seed=seed).random(n_points)
-        return [point * (bound[:, 1] - bound[:, 0]) + bound[:, 0] for point in points]
 
     def _result_to_dataset(self, result: ObjectiveResult) -> Tuple[np.ndarray, np.ndarray]:
         covariances = (
@@ -430,7 +440,7 @@ class BayesianBoTorch(Optimiser):
             n_outputs = len(init_values)
 
         # If requested, sample some random points before starting (in parallel if possible)
-        random_points = self._get_random_points(self.n_initial, n_dim, self.seed, bound)
+        random_points = self.parameters.get_random(self.n_initial, seed=self.seed)
         results = self._eval_candidates(random_points)
 
         # Infer number of points to store when skipping initial shot
@@ -515,7 +525,7 @@ class BayesianBoTorch(Optimiser):
         # Build test dataset (in parallel if possible)
         test_dataset = BayesDataset(n_dim, dataset.n_outputs, device=self.device)
         if self.n_test > 0:
-            test_points = self._get_random_points(self.n_test, n_dim, self.seed + 1, bound)
+            test_points = self.parameters.get_random(self.n_test, seed=self.seed + 1)
             test_results = self._eval_candidates(test_points)
             for i, result in enumerate(test_results):
                 values, covariances = self._result_to_dataset(result)

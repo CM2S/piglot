@@ -9,7 +9,7 @@ from piglot.optimisers.ga import GA
 from piglot.optimisers.lipo_opt import LIPO
 from piglot.optimisers.query import QueryOptimiser
 from piglot.optimisers.pso import PSO
-from piglot.optimisers.random_search import PureRandomSearch
+from piglot.optimisers.random_search import RandomSearch
 from piglot.optimisers.spsa_adam import SPSA_Adam
 from piglot.optimisers.spsa import SPSA
 
@@ -24,7 +24,7 @@ AVAILABLE_OPTIMISERS: Dict[str, Type[Optimiser]] = {
     'lipo': LIPO,
     'pso': PSO,
     'query': QueryOptimiser,
-    'random': PureRandomSearch,
+    'random': RandomSearch,
     'spsa-adam': SPSA_Adam,
     'spsa': SPSA,
 }

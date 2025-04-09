@@ -1,10 +1,13 @@
 """Optimisation parameter module."""
-from typing import Iterator, Dict, Any, List, Callable
+from typing import Iterator, Dict, Any, List, Callable, Tuple
 import os
 from hashlib import sha256
+import random
+from itertools import product, chain
 import numpy as np
 import pandas as pd
 import sympy
+from scipy.stats import qmc
 from piglot.utils.yaml_parser import parse_config_file
 
 
@@ -32,21 +35,6 @@ class Parameter:
         if inital_value > ubound or inital_value < lbound:
             raise RuntimeError("Initial shot outside of bounds")
 
-    def clip(self, value: float) -> float:
-        """Clamp a value to the [lbound,ubound] interval.
-
-        Parameters
-        ----------
-        value : float
-            Value to clip.
-
-        Returns
-        -------
-        float
-            Clamped value.
-        """
-        return min(max(self.lbound, value), self.ubound)
-
 
 class OutputParameter:
     """Base class for output parameters."""
@@ -66,6 +54,28 @@ class OutputParameter:
         self.mapping = mapping
 
 
+class DiscreteParameter:
+    """Base class for discrete parameters."""
+
+    def __init__(self, name: str, initial_value: float, values: List[float]):
+        """Constructor for a discrete parameter.
+
+        Parameters
+        ----------
+        name : str
+            Parameter name.
+        initial_value : float
+            Initial value for the parameter.
+        values : List[float]
+            Possible values for the parameter.
+        """
+        if initial_value not in values:
+            raise RuntimeError("Initial shot not in discrete values")
+        self.name = name
+        self.initial_value = initial_value
+        self.values = values
+
+
 class ParameterSet:
     """Container class for a set of parameters.
 
@@ -76,6 +86,7 @@ class ParameterSet:
     def __init__(self):
         """Constructor for a parameter set."""
         self.parameters: List[Parameter] = []
+        self.discrete_parameters: List[DiscreteParameter] = []
 
     def __iter__(self) -> Iterator[Parameter]:
         """Iterator for a parameter set.
@@ -84,7 +95,7 @@ class ParameterSet:
         -------
         Iterator[Parameter]
             Iterator for a parameter set."""
-        return iter(self.parameters)
+        return chain(iter(self.parameters), iter(self.discrete_parameters))
 
     def __len__(self) -> int:
         """Length of the parameter set.
@@ -93,7 +104,7 @@ class ParameterSet:
         -------
         int
             Length of the parameter set."""
-        return len(self.parameters)
+        return len(self.parameters) + len(self.discrete_parameters)
 
     def __getitem__(self, key: int) -> Parameter:
         """Get a parameter by index.
@@ -107,7 +118,66 @@ class ParameterSet:
         -------
         Parameter
             Parameter with the given index."""
-        return self.parameters[key]
+        return (
+            self.parameters[key] if key < len(self.parameters)
+            else self.discrete_parameters[key - len(self.parameters)]
+        )
+
+    def num_discrete(self) -> int:
+        """Get the number of discrete parameters.
+
+        Returns
+        -------
+        int
+            Number of discrete parameters.
+        """
+        return len(self.discrete_parameters)
+
+    def num_continuous(self) -> int:
+        """Get the number of continuous parameters.
+
+        Returns
+        -------
+        int
+            Number of continuous parameters.
+        """
+        return len(self.parameters)
+
+    def names(self) -> List[str]:
+        """Get the names of the parameters.
+
+        Returns
+        -------
+        List[str]
+            List of parameter names.
+        """
+        return [p.name for p in self.parameters] + [p.name for p in self.discrete_parameters]
+
+    def initial_values(self) -> np.ndarray:
+        """Get the initial values of the parameters.
+
+        Returns
+        -------
+        np.ndarray
+            List of initial values.
+        """
+        return np.array(
+            [p.inital_value for p in self.parameters] +
+            [p.initial_value for p in self.discrete_parameters]
+        )
+
+    def bounds(self) -> np.ndarray:
+        """Get the bounds of the parameters.
+
+        Returns
+        -------
+        np.ndarray
+            List of bounds for each parameter.
+        """
+        return np.array(
+            [(p.lbound, p.ubound) for p in self.parameters] + 
+            [(min(p.values), max(p.values)) for p in self.discrete_parameters]
+        )
 
     def add(self, name: str, inital_value: float, lbound: float, ubound: float) -> None:
         """Add a parameter to this set.
@@ -129,24 +199,31 @@ class ParameterSet:
             If a repeated parameter is given.
         """
         # Sanity checks
-        if name in [p.name for p in self.parameters]:
+        if name in self.names():
             raise RuntimeError(f"Repeated parameter {name} in set!")
         self.parameters.append(Parameter(name, inital_value, lbound, ubound))
 
-    def clip(self, values: np.ndarray) -> np.ndarray:
-        """Clamp the parameter set to the [lbound,ubound] interval.
+    def add_discrete(self, name: str, initial_value: float, values: List[float]) -> None:
+        """Add a discrete parameter to this set.
 
         Parameters
         ----------
-        values : np.ndarray
-            Values to clip. Their order is used for parameter resolution.
+        name : str
+            Parameter name.
+        initial_value : float
+            Initial value for the parameter.
+        values : List[float]
+            Possible values for the parameter.
 
-        Returns
-        -------
-        np.ndarray
-            Clamped parameters.
+        Raises
+        ------
+        RuntimeError
+            If a repeated parameter is given.
         """
-        return np.array([p.clip(values[i]) for i, p in enumerate(self.parameters)])
+        # Sanity checks
+        if name in self.names():
+            raise RuntimeError(f"Repeated parameter {name} in set!")
+        self.discrete_parameters.append(DiscreteParameter(name, initial_value, values))
 
     def to_dict(self, values: np.ndarray) -> Dict[str, float]:
         """Build a dict with name-value pairs given a list of values.
@@ -161,7 +238,47 @@ class ParameterSet:
         Dict[str, float]
             Name-value pair for each parameter.
         """
-        return dict(zip([p.name for p in self.parameters], values))
+        # Sanitise discrete parameters
+        disc_values = values[self.num_continuous():]
+        for par, value in zip(self.discrete_parameters, disc_values):
+            if value not in par.values:
+                raise RuntimeError(f"Discrete parameter {par.name} not in values!")
+        return dict(zip(self.names(), values))
+
+    def discrete_combinations(self) -> List[List[float]]:
+        """Get all combinations of discrete parameters.
+
+        Returns
+        -------
+        List[List[float]]
+            All combinations of discrete parameters.
+        """
+        return list(product(*[p.values for p in self.discrete_parameters]))
+
+    def get_random(self, n_points: int, seed: int = None) -> np.ndarray:
+        """Get a random set of parameters.
+
+        Parameters
+        ----------
+        n_points : int
+            Number of points to generate.
+        seed : int, optional
+            Random seed for reproducibility.
+
+        Returns
+        -------
+        np.ndarray
+            Random set of parameters.
+        """
+        # Continuous parameters
+        bounds = np.array(self.bounds()[:self.num_continuous()])
+        samples = qmc.Sobol(self.num_continuous(), seed=seed).random(n_points)
+        continuous = samples * (bounds[:, 1] - bounds[:, 0]) + bounds[:, 0]
+        if self.num_discrete() == 0:
+            return continuous
+        # Discrete parameters
+        discrete = random.choices(self.discrete_combinations(), k=n_points)
+        return np.hstack((continuous, np.array(discrete)))
 
     @staticmethod
     def hash(values) -> str:
@@ -275,14 +392,24 @@ def read_parameters(config: Dict[str, Any]) -> ParameterSet:
         Parameter set for this problem.
     """
     # Read the parameters
-    if 'parameters' not in config:
+    if 'parameters' not in config and 'discrete_parameters' not in config:
         raise ValueError("Missing parameters from configuration file.")
     parameters = DualParameterSet() if 'output_parameters' in config else ParameterSet()
-    for name, spec in config['parameters'].items():
-        int_spec = [float(s) for s in spec]
-        parameters.add(name, *int_spec)
+    if 'parameters' in config:
+        for name, spec in config['parameters'].items():
+            int_spec = [float(s) for s in spec]
+            parameters.add(name, *int_spec)
+    if 'discrete_parameters' in config:
+        for name, spec in config['discrete_parameters'].items():
+            if 'initial' not in spec:
+                raise ValueError(f"Missing initial value for discrete parameter '{name}'.")
+            if 'values' not in spec:
+                raise ValueError(f"Missing values for discrete parameter '{name}'.")
+            initial = float(spec['initial'])
+            values = [float(s) for s in spec['values']]
+            parameters.add_discrete(name, initial, values)
     if "output_parameters" in config:
-        symbs = sympy.symbols(list(config['parameters'].keys()))
+        symbs = sympy.symbols(parameters.names())
         for name, spec in config["output_parameters"].items():
             parameters.add_output(name, sympy.lambdify(symbs, spec))
     # Fetch initial shot from another run

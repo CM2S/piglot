@@ -255,8 +255,8 @@ class Optimiser(ABC):
         self.iters_no_improv = 0
         # Build initial shot and bounds
         n_dim = len(self.parameters)
-        init_shot = np.array([par.inital_value for par in self.parameters])
-        bounds = np.array([[par.lbound, par.ubound] for par in self.parameters])
+        init_shot = parameters.initial_values()
+        bounds = parameters.bounds()
         # Build best solution
         self.best_value = np.nan
         self.best_solution = None
@@ -536,6 +536,8 @@ class ScalarOptimiser(Optimiser):
         np.ndarray
             Observed optimum of the objective.
         """
+        if self.parameters.num_discrete() > 0:
+            raise RuntimeError('Discrete parameters not supported for this optimiser')
         self.bounds = bound
         # Optimise the scalarised objective
         return self._scalar_optimise(
