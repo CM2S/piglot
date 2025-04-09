@@ -23,4 +23,3 @@ objective:
     'integral_quantity':
       quantity: integral
       prediction: ['case_1']
-      negate: False

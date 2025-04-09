@@ -53,7 +53,7 @@ As you can see, piglot correctly identifies the `a` parameter close to the expec
 Now, we will apply a reference reduction algorithm to reduce the number of points in the reference response and see how it affects the computational cost of the composite strategy.
 
 ## Reduced reference response
-To perform the filtering of the data, the two-stage algorithm proposed in [Cardoso Coelho et al.](https://dx.doi.org/10.2139/ssrn.4674421) is used.
+To perform the filtering of the data, the two-stage algorithm proposed in [Cardoso Coelho et al. (2024)](https://doi.org/10.1016/j.cma.2024.117039) is used.
 This algorithm includes two stages which are briefly described as follows:
 1. Elimination stage: At every iteration, eliminate a single point from the reference response. For every point in the filtered response, we simulate its removal and compute the error between the original response and the filtered response. Then, the point that leads to the smallest error is eliminated. The procedure is repeated until we reach a predefined error threshold, or we run out of inner points to eliminate.
 

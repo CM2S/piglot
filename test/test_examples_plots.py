@@ -90,13 +90,27 @@ def test_input_files(input_dir: str):
         piglot_plot_main([
             'animation',
             input_file,
-            '--save_fig',
-            os.path.join(output_dir, 'animation.png'),
         ])
-        if input_file != 'test_analytical.yaml':
+        if '_mo' in input_file:
+            piglot_plot_main([
+                'pareto',
+                input_file,
+                '--all',
+                '--log',
+                '--save_fig',
+                os.path.join(output_dir, 'pareto.png'),
+            ])
+        if input_file.endswith('random.yaml'):
+            piglot_plot_main([
+                'surrogate',
+                input_file,
+            ])
+        if 'test_analytical' not in input_file:
             piglot_plot_main([
                 'gp',
                 input_file,
+                '--max_calls',
+                '10',
                 '--save_fig',
                 os.path.join(output_dir, 'gp.png'),
             ])

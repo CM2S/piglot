@@ -38,7 +38,6 @@ objective:
 
     cases:
       'sample.inp':
-        job_name: Job-1 # optional field for this case
         step_name: Step-1 # optional field for this case
         instance_name: Part-1-1 # optional field for this case
         fields:
@@ -137,7 +136,6 @@ objective:
 
     cases:
       'sample.inp':
-        job_name: Job-1 # optional field for this case
         step_name: Step-1 # optional field for this case
         instance_name: Part-1-1 # optional field for this case
         fields:

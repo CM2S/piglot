@@ -1,0 +1,32 @@
+iters: 10
+objective:
+  composite: false
+  name: fitting
+  references:
+    reference_curve.txt:
+      prediction:
+      - case_1
+      transformer:
+        x_max: 0.8
+        x_offset: -1
+        x_scale: -1
+        y_offset: -2
+        y_scale: -2
+  solver:
+    cases:
+      case_1:
+        bounds:
+        - -5
+        - 5
+        expression: <a> * x ** 2
+        parametric: x
+        points: 100
+    name: curve
+optimiser: random
+output: dummy_transformer
+parameters:
+  a:
+  - 0
+  - -4
+  - 4
+quiet: false

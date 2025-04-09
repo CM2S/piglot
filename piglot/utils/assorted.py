@@ -1,7 +1,8 @@
 """Assorted utilities."""
-from typing import List, Dict, Tuple, Type, Any, TypeVar
+from typing import List, Dict, Tuple, Type, TypeVar, Any
 import os
 import contextlib
+import importlib
 import numpy as np
 import importlib.util
 from scipy.stats import t

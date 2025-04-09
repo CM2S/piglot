@@ -1,0 +1,25 @@
+iters: 8
+
+optimiser: random
+
+parameters:
+  x1: [1, -2, 2]
+  x2: [1, -2, 2]
+  x3: [1, -2, 2]
+
+objective:
+  name: fitting
+  solver:
+    name: sample_input_file
+    cases:
+      input.dat:
+        fields:
+          sample_output:
+            name: sample
+      input_2.dat:
+        fields:
+          sample_output:
+            name: sample
+  references:
+    'sine.txt':
+      prediction: ['sample_output']

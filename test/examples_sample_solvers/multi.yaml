@@ -1,0 +1,19 @@
+iters: 8
+
+optimiser: random
+
+parameters:
+  x1: [1, -2, 2]
+  x2: [1, -2, 2]
+  x3: [1, -2, 2]
+
+objective:
+  name: fitting
+  solver:
+    name: sample_multi_case
+    cases:
+      sample_output:
+        multiplier: 1.0
+  references:
+    'sine.txt':
+      prediction: ['sample_output']

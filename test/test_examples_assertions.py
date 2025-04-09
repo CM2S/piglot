@@ -8,9 +8,33 @@ from piglot.utils.assorted import change_cwd
 
 
 EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
+    'test_analytical_acq_unknown.yaml': (
+        RuntimeError,
+        'Unkown acquisition function unknown',
+    ),
     'analytical_expression.yaml': (
         RuntimeError,
         'Missing analytical expression to minimise',
+    ),
+    'analytical_mo_missing_expression.yaml': (
+        RuntimeError,
+        'Missing analytical expression to minimise',
+    ),
+    'analytical_random_missing_variance.yaml': (
+        ValueError,
+        'Random evaluations require variance',
+    ),
+    'analytical_negative_variance.yaml': (
+        RuntimeError,
+        'Negative variance not allowed',
+    ),
+    'analytical_composite_no_scalarisation.yaml': (
+        ValueError,
+        'Composite objectives require scalarisation',
+    ),
+    'analytical_missing_objectives.yaml': (
+        RuntimeError,
+        'Missing analytical objectives to optimise for',
     ),
     'composite_bad_optimiser.yaml': (
         InvalidOptimiserException,
@@ -106,11 +130,11 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'missing_pred.yaml': (
         ValueError,
-        "Missing prediction for reference 'reference_curve.txt'.",
+        "Missing prediction for fitting target 'reference_curve.txt'.",
     ),
     'unexistent_reference.yaml': (
         ValueError,
-        "Reference 'reference_curve_2.txt' is not associated to any case.",
+        "Undefined prediction case_2",
     ),
     'design_missing_pred.yaml': (
         ValueError,
@@ -118,7 +142,11 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'design_missing_quantity.yaml': (
         ValueError,
-        "Missing quantity for fitting objective.",
+        "Missing quantity for design target 'maximum_force'.",
+    ),
+    'design_composite_points.yaml': (
+        ValueError,
+        "All objectives must have a number of points specified for the composition.",
     ),
     'design_missing_quantity_name.yaml': (
         ValueError,
@@ -134,31 +162,119 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'design_missing_solver.yaml': (
         ValueError,
-        "Missing solver for fitting objective.",
+        "Missing solver for design objective.",
     ),
     'design_missing_targets.yaml': (
         ValueError,
-        "Missing targets for fitting objective.",
+        "Missing targets for design objective.",
     ),
     'unexistent_targets.yaml': (
         ValueError,
-        "Design target 'integral_quantity' is not associated to any case.",
+        "Undefined prediction case_2",
     ),
     'bo_unkacq.yaml': (
         RuntimeError,
         "Unkown acquisition function ucbb",
-    ),
-    'bo_q.yaml': (
-        RuntimeError,
-        "Can only use q != 1 for quasi-Monte Carlo acquisitions",
     ),
     'duplicated_field.yaml': (
         ValueError,
         "Duplicate output field 'reaction_x'.",
     ),
     'bo_equalbounds.yaml': (
+        ValueError,
+        "All observed points are equal.",
+    ),
+    'query_analytical_composite.yaml': (
+        InvalidOptimiserException,
+        "This optimiser does not support composition",
+    ),
+    'query_analytical_stochastic.yaml': (
+        InvalidOptimiserException,
+        "This optimiser does not support stochasticity",
+    ),
+    'query_analytical_bad_num_params.yaml': (
+        ValueError,
+        "Number of parameters does not match the number of columns",
+    ),
+    'query_analytical_bad_num_iters.yaml': (
+        ValueError,
+        "Number of iterations does not match the number of rows",
+    ),
+    'query_analytical_bad_lbounds.yaml': (
+        ValueError,
+        "Parameter values outside lower bounds",
+    ),
+    'query_analytical_bad_ubounds.yaml': (
+        ValueError,
+        "Parameter values outside upper bounds",
+    ),
+    'curve_bad_composite_scalarisation.yaml': (
+        ValueError,
+        "Multi-objective composite problems require full composition",
+    ),
+    'curve_mo_bad_scalarisation.yaml': (
+        ValueError,
+        'Scalarisation function "missing" is not available.',
+    ),
+    'curve_mo_bad_scalarisation_2.yaml': (
+        ValueError,
+        'Scalarisation function "missing" is not available.',
+    ),
+    'curve_mo_bad_scalarisation_script.yaml': (
+        ValueError,
+        'Need to pass the file path for the "script" scalarisation.',
+    ),
+    'curve_mo_scalarisation_missing_name.yaml': (
+        ValueError,
+        'Need to pass the name of the scalarisation function.',
+    ),
+    'curve_bad_reduction.yaml': (
+        ValueError,
+        'Reduction function "missing" is not available.',
+    ),
+    'curve_bad_reduction_2.yaml': (
+        ValueError,
+        'Reduction function "missing" is not available.',
+    ),
+    'curve_bad_reduction_script.yaml': (
+        ValueError,
+        'Need to pass the file path for the "script" reduction.',
+    ),
+    'curve_reduction_missing_name.yaml': (
+        ValueError,
+        'Need to pass the name of the reduction function.',
+    ),
+    'curve_bad_reduction_grad.yaml': (
+        ValueError,
+        'Gradient check failed',
+    ),
+    'curve_bad_reduction_exception.yaml': (
+        ValueError,
+        'Test failed for reduction',
+    ),
+    'curve_bad_reduction_shape.yaml': (
+        ValueError,
+        'Bad shape after reduction for',
+    ),
+    'transformer_bad_name.yaml': (
+        ValueError,
+        'Response transformer "missing" is not available.',
+    ),
+    'transformer_bad_name_2.yaml': (
+        ValueError,
+        'Response transformer "missing" is not available.',
+    ),
+    'transformer_script.yaml': (
+        ValueError,
+        'Need to pass the file path for the "script" transformer.',
+    ),
+    'transformer_missing_name.yaml': (
+        ValueError,
+        'Need to pass the name of the response transformer.',
+    ),
+    'bad_solver_output_script.yaml': (
         RuntimeError,
-        "All observed points are equal: add more initial samples",
+        'Cannot read the configuration for a script-based output field.',
     ),
 }
 

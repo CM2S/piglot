@@ -1,0 +1,14 @@
+
+iters: 4
+
+optimiser:
+  name: botorch
+  skip_initial: True
+
+parameters:
+  a: [1, -2, 2]
+
+
+objective:
+  name: analytical
+  expression: a ** 2

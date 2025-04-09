@@ -6,6 +6,7 @@ from piglot.utils.reductions import AVAILABLE_REDUCTIONS, Reduction, NegateReduc
 def test_simple_reductions(reduction: Reduction):
     reduction.test_reduction()
 
+
 @pytest.mark.parametrize('reduction', AVAILABLE_REDUCTIONS.values())
 def test_negate_simple_reductions(reduction: Reduction):
     negate_reduction = NegateReduction(reduction)

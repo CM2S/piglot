@@ -133,7 +133,6 @@ dmypy.json
 # Generated files
 *.pdf
 *.vtu
-*.dat
 *.reac
 tmp/
 results/

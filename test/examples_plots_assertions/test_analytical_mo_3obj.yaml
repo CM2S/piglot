@@ -1,0 +1,19 @@
+
+iters: 4
+
+optimiser: botorch
+
+parameters:
+  a: [1, -2, 2]
+
+
+objective:
+  name: analytical_mo
+  objectives:
+    obj1:
+      expression: a ** 2
+    obj2:
+      expression: a
+    obj3:
+      expression: exp(a)
+

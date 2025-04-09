@@ -140,7 +140,7 @@ class QueryOptimiser(Optimiser):
 
         # Initial shot
         result = self.objective(init_shot)
-        best_value = result.values if self.objective.multi_objective else result.scalarise()
+        best_value = result.values if self.objective.multi_objective else result.scalar_value
         best_solution = init_shot
 
         # Build observation datasets
@@ -159,7 +159,7 @@ class QueryOptimiser(Optimiser):
         for i, param_set in enumerate(self.param_list):
             # Evaluate objective and add to dataset
             result = self.objective(param_set)
-            value = result.values if self.objective.multi_objective else result.scalarise()
+            value = result.values if self.objective.multi_objective else result.scalar_value
             param_dataset = np.vstack((param_dataset, param_set))
             objective_dataset = np.vstack((objective_dataset, value))
 

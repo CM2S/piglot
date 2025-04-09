@@ -279,7 +279,7 @@ class BayesDataset:
         BayesDataset
             Dataset loaded from the file.
         """
-        data: T = torch.load(filename)
+        data: T = torch.load(filename, weights_only=False)
         # Rebuild standardiser and PCA
         data.standardiser = Standardiser(data.std_tol)
         data.pca = PCA(data.pca_variance) if data.pca_variance is not None else None

@@ -1,0 +1,18 @@
+
+iters: 1
+
+optimiser:
+  name: botorch
+  acquisition: qnehvi
+
+parameters:
+  a: [1, -2, 2]
+
+
+objective:
+  name: analytical_mo
+  objectives:
+    obj1:
+      expression: a ** 2
+    obj2:
+      expression: a

@@ -1,42 +1,6 @@
 import unittest
 import numpy as np
-from piglot.utils.responses import Transformer, reduce_response, interpolate_response
-
-
-class TestTransformer(unittest.TestCase):
-    def setUp(self):
-        self.transformer = Transformer(
-            x_scale=2.0,
-            y_scale=3.0,
-            x_offset=1.0,
-            y_offset=2.0,
-            x_min=0,
-            x_max=10,
-        )
-
-    def test_call(self):
-        x_old = np.array([0, 1, 2, 3, 4, 5])
-        y_old = np.array([0, 1, 2, 3, 4, 5])
-        x_new, y_new = self.transformer(x_old, y_old)
-        self.assertTrue(np.array_equal(x_new, np.array([1, 3, 5, 7, 9])))
-        self.assertTrue(np.array_equal(y_new, np.array([2, 5, 8, 11, 14])))
-
-    def test_read(self):
-        config = {
-            'x_scale': 2.0,
-            'y_scale': 3.0,
-            'x_offset': 1.0,
-            'y_offset': 2.0,
-            'x_min': 0,
-            'x_max': 10
-        }
-        transformer = Transformer.read(config)
-        self.assertEqual(transformer.x_scale, 2.0)
-        self.assertEqual(transformer.y_scale, 3.0)
-        self.assertEqual(transformer.x_offset, 1.0)
-        self.assertEqual(transformer.y_offset, 2.0)
-        self.assertEqual(transformer.x_min, 0)
-        self.assertEqual(transformer.x_max, 10)
+from piglot.utils.responses import reduce_response, interpolate_response
 
 
 class TestReduceResponse(unittest.TestCase):

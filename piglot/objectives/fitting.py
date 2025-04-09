@@ -10,7 +10,7 @@ from piglot.parameter import ParameterSet
 from piglot.solver import read_solver
 from piglot.solver.solver import OutputResult
 from piglot.utils.reductions import Reduction, read_reduction
-from piglot.utils.responses import Transformer, reduce_response, interpolate_response
+from piglot.utils.responses import reduce_response
 from piglot.utils.response_transformer import (
     ResponseTransformer,
     PointwiseErrors,
@@ -31,7 +31,7 @@ class Reference:
         x_col: int = 1,
         y_col: int = 2,
         skip_header: int = 0,
-        transformer: Transformer = None,
+        transformer: ResponseTransformer = None,
         filter_tol: float = 0.0,
         show: bool = False,
     ) -> None:
@@ -113,49 +113,6 @@ class Reference:
         """
         return self.y_data
 
-    def get_orig_time(self) -> np.ndarray:
-        """Get the original time column of the reference.
-
-        Returns
-        -------
-        np.ndarray
-            Original time column.
-        """
-        return self.x_orig
-
-    def get_orig_data(self) -> np.ndarray:
-        """Get the original data column of the reference.
-
-        Returns
-        -------
-        np.ndarray
-            Original data column.
-        """
-        return self.y_orig
-
-    def compute_errors(self, results: OutputResult) -> OutputResult:
-        """Compute the pointwise normalised errors for the given results.
-
-        Parameters
-        ----------
-        results : OutputResult
-            Results to compute the errors for.
-
-        Returns
-        -------
-        OutputResult
-            Pointwise normalised errors.
-        """
-        # Interpolate response to the reference grid
-        resp_interp = interpolate_response(
-            results.get_time(),
-            results.get_data(),
-            self.get_time(),
-        )
-        # Compute normalised error
-        factor = np.mean(np.abs(self.get_data()))
-        return OutputResult(self.get_time(), (resp_interp - self.get_data()) / factor)
-
     @staticmethod
     def read(filename: str, config: Dict[str, Any], output_dir: str) -> Reference:
         """Read the reference from the configuration dictionary.
@@ -180,7 +137,10 @@ class Reference:
             x_col=int(config.get('x_col', 1)),
             y_col=int(config.get('y_col', 2)),
             skip_header=int(config.get('skip_header', 0)),
-            transformer=Transformer.read(config.get('transformer', {})),
+            transformer=(
+                read_response_transformer(config['transformer'])
+                if 'transformer' in config else None
+            ),
             filter_tol=float(config.get('filter_tol', 0.0)),
             show=bool(config.get('show', False)),
         )
@@ -268,6 +228,8 @@ class FittingSingleObjective(ResponseSingleObjective):
         prediction = config.pop('prediction')
         if isinstance(prediction, str):
             prediction = [prediction]
+        elif not isinstance(prediction, list):
+            raise ValueError(f"Invalid prediction '{prediction}' for reference '{name}'.")
         # Read optional settings
         reduction = read_reduction(config.pop('reduction', 'mse'))
         weight = float(config.pop('weight', 1.0))
@@ -288,6 +250,23 @@ class FittingSingleObjective(ResponseSingleObjective):
 
 class ResponseFittingObjective(ResponseObjective):
     """Class for fitting of response-based objectives."""
+
+    def prepare(self):
+        """Prepare the objective for optimisation.
+
+        For curve fitting, this involves preparing the reference data and updating both the
+        flatten utility and the transformer.
+        """
+        super().prepare()
+        objectives: List[FittingSingleObjective] = self.objectives
+        for objective in objectives:
+            objective.reference.prepare()
+            # Update the flattening utility and the prediction transformer
+            objective.flatten_utility = FixedFlatteningUtility(objective.reference.get_time())
+            objective.prediction_transform = PointwiseErrors(
+                objective.reference.get_time(),
+                objective.reference.get_data(),
+            )
 
     @classmethod
     def read(

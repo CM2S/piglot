@@ -302,9 +302,12 @@ def plot_gp(args):
     x_max = max(par.ubound for par in parameters)
     x = torch.linspace(x_min, x_max, 1000)
     for name, data_dict in data.items():
-        values = data_dict['values']
-        param_values = data_dict['params']
-        variances = data_dict['variances'] if 'variances' in data_dict else None
+        max_calls = len(data_dict['values'])
+        if args.max_calls:
+            max_calls = min(max_calls, args.max_calls)
+        values = data_dict['values'][:max_calls]
+        param_values = data_dict['params'][:max_calls]
+        variances = data_dict['variances'][:max_calls] if 'variances' in data_dict else None
         model = get_model(param_values, values, variances)
         with torch.no_grad():
             posterior = model.posterior(x.unsqueeze(1))
@@ -319,9 +322,11 @@ def plot_gp(args):
             axis.errorbar(param_values, values, yerr=2 * np.sqrt(variances), color='black', fmt='o')
         else:
             axis.scatter(param_values, values, color='black')
-        axis.set_xlim(x_min, x_max)
+    axis.set_xlim(x_min, x_max)
     axis.legend()
     axis.grid()
+    axis.set_xlabel(parameters[0].name)
+    axis.set_ylabel("Objective")
     fig.tight_layout()
     if args.save_fig:
         fig.savefig(args.save_fig)
@@ -469,8 +474,8 @@ def plot_pareto(args):
             nondominated.append((point, variances[i, :] if has_variance else None))
         else:
             dominated.append((point, variances[i, :] if has_variance else None))
-    # Plot the Pareto hull
-    ax.plot(pareto[:, 0], pareto[:, 1], 'r', ls='--')
+    # Sort the Pareto front by the first objective
+    nondominated = sorted(nondominated, key=lambda x: x[0][0])
     # Plot the points
     if has_variance:
         ax.errorbar(
@@ -479,7 +484,7 @@ def plot_pareto(args):
             xerr=np.sqrt([point[1][0] for point in nondominated]),
             yerr=np.sqrt([point[1][0] for point in nondominated]),
             c='r',
-            fmt='o',
+            fmt='-o',
             label='Pareto front',
         )
         if args.all:
@@ -493,10 +498,12 @@ def plot_pareto(args):
                 label='Dominated points',
             )
     else:
-        ax.scatter(
+        ax.plot(
             [point[0][0] for point in nondominated],
             [point[0][1] for point in nondominated],
             c='r',
+            ls='--',
+            marker='o',
             label='Pareto front',
         )
         if args.all:
@@ -514,7 +521,10 @@ def plot_pareto(args):
     ax.legend()
     ax.grid()
     fig.tight_layout()
-    plt.show()
+    if args.save_fig:
+        fig.savefig(args.save_fig)
+    else:
+        plt.show()
 
 
 def make_surrogate(args):
@@ -544,7 +554,7 @@ def make_surrogate(args):
             sliced_variances = variances[:i] if variances is not None else None
             model = get_model(sliced_params, sliced_values, sliced_variances)
             output_data[i - 2, :] = optmise_posterior_mean(model, bounds)
-        np.savetxt(f'{config["output"]}_{name}.csv', output_data)
+        np.savetxt(os.path.join(config['output'], f'{name}.csv'), output_data)
 
 
 def main(passed_args: List[str] = None):
@@ -735,12 +745,6 @@ def main(passed_args: List[str] = None):
         'config',
         type=str,
         help="Path for the used or generated configuration file.",
-    )
-    sp_animation.add_argument(
-        '--save_fig',
-        default=None,
-        type=str,
-        help=("Path to save the generated figure. If used, graphical output is skipped."),
     )
     sp_animation.set_defaults(func=plot_animation)
 

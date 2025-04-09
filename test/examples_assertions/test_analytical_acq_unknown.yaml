@@ -1,0 +1,14 @@
+
+iters: 1
+
+optimiser:
+  name: botorch
+  acquisition: unknown
+
+parameters:
+  a: [1, -2, 2]
+
+
+objective:
+  name: analytical
+  expression: a ** 2

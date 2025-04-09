@@ -8,7 +8,6 @@ import botorch.test_functions.synthetic
 from botorch.test_functions.synthetic import SyntheticTestFunction
 from piglot.parameter import ParameterSet
 from piglot.objective import GenericObjective, ObjectiveResult
-from piglot.solver.solver import OutputResult
 from piglot.utils.reductions import Reduction, read_reduction
 from piglot.utils.composition.responses import ResponseComposition, FixedFlatteningUtility
 
@@ -118,10 +117,18 @@ class SyntheticObjective(GenericObjective):
             value = self.transform(value, self.func)
         value = float(value.item())
         if self.composition is None:
-            return ObjectiveResult(values, [np.array([value])])
-        return self.composition.transform(
+            return ObjectiveResult(
+                values,
+                np.array([value]),
+                np.array([value]),
+                scalar_value=value,
+            )
+        final_value = self.composition.composition(np.array([value]), values)
+        return ObjectiveResult(
             values,
-            [[OutputResult(np.array([0.0]), np.array([value]))]],
+            np.array([value]),
+            np.array([final_value]),
+            scalar_value=final_value.item(),
         )
 
     @staticmethod
