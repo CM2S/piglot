@@ -437,7 +437,6 @@ class BayesianBoTorch(Optimiser):
             raise RuntimeError("Bayesian optimiser requires a GenericObjective")
         super().__init__('BoTorch', objective)
         self.settings = BoTorchSettingsData(objective, **kwargs)
-        torch.set_num_threads(1)
 
     def _validate_problem(self, objective: Objective) -> None:
         """Validate the combination of optimiser and objective

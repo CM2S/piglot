@@ -32,12 +32,18 @@ def parse_args():
         type=str,
         help='Configuration file to use',
     )
-    # PyTorch compute device
+    # PyTorch options
     parser.add_argument(
         '--device',
         type=str,
         default='cpu',
         help='Default device to use with PyTorch',
+    )
+    parser.add_argument(
+        '--torch_num_threads',
+        type=int,
+        default=1,
+        help='Default number of threads to use with PyTorch',
     )
 
     return parser.parse_args()
@@ -48,7 +54,14 @@ def main(config_path: str = None):
     if config_path is None:
         args = parse_args()
         config_path = args.config
-        torch.set_default_device(args.device)
+        device = args.device
+        torch_num_threads = args.torch_num_threads
+    else:
+        device = 'cpu'
+        torch_num_threads = 1
+    # Set up PyTorch before reading the configuration file
+    torch.set_default_device(device)
+    torch.set_num_threads(torch_num_threads)
     config = parse_config_file(config_path)
     # Build output directory with a copy of the configuration file
     output_dir = config["output"]
