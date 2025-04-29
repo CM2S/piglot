@@ -1,15 +1,15 @@
 
-iters: 1
+iters: 4
 
 optimiser:
   name: random
   seed: 1
 
-
 parameters:
-  Young: [200, 100, 300]
+  a: [1, -2, 2]
 
 
 objective:
   name: analytical
-  expression: (Young-150)**2
+  expression: a ** 2
+  stochastic: True

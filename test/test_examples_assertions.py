@@ -48,14 +48,6 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         RuntimeError,
         "Missing optimiser name.",
     ),
-    'optimiser_random_invalid_kwargs.yaml': (
-        TypeError,
-        'dimension',
-    ),
-    'optimiser_random_sampling_typo.yaml': (
-        ValueError,
-        'Invalid sampling soboll!',
-    ),
     'parameter_double_parameter.yaml': (
         ValueError,
         "Duplicate 'Young' key found in YAML.",
@@ -97,8 +89,8 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         "Missing optimiser from the config file",
     ),
     'missing_parameters.yaml': (
-        RuntimeError,
-        "Missing parameters from the config file",
+        ValueError,
+        "Missing parameters from configuration file.",
     ),
     'invalid_syntax.yaml': (
         RuntimeError,
@@ -207,6 +199,10 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     'query_analytical_bad_ubounds.yaml': (
         ValueError,
         "Parameter values outside upper bounds",
+    ),
+    'random_analytical_stochastic.yaml': (
+        InvalidOptimiserException,
+        "This optimiser does not support stochasticity",
     ),
     'curve_bad_composite_scalarisation.yaml': (
         ValueError,

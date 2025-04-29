@@ -1,0 +1,21 @@
+
+iters: 1
+
+optimiser:
+  name: botorch
+  seed: 1
+
+
+parameters:
+  Young: [200, 100, 300]
+
+
+discrete_parameters:
+  mult:
+    initial: 2
+    values: [1, 2, 3]
+
+
+objective:
+  name: analytical
+  expression: (Young * mult - 150)**2

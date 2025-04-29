@@ -3,7 +3,6 @@ iters: 4
 
 optimiser:
   name: random
-  sampling: sobol
   seed: 1
 
 

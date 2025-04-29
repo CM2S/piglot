@@ -4,7 +4,6 @@ max_func_calls: 1
 
 optimiser:
   name: random
-  sampling: sobol
   seed: 1
 
 

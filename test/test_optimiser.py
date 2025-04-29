@@ -1,10 +1,13 @@
 from __future__ import annotations
 from typing import Any, Callable, Optional, Tuple, Type, Dict
+import os
 import unittest
 import numpy as np
 from piglot.parameter import ParameterSet
 from piglot.optimiser import missing_method, ScalarOptimiser, InvalidOptimiserException
 from piglot.objective import Objective, GenericObjective, ObjectiveResult
+from piglot.optimisers.query import QueryOptimiser
+from piglot.optimisers.random_search import RandomSearch
 
 
 class DummyObjective(Objective):
@@ -87,3 +90,27 @@ class TestScalarOptimiser(unittest.TestCase):
             optimiser._validate_problem(objective)
         self.assertEqual(ex.exception.args[0],
                          'This optimiser does not support stochasticity')
+
+
+class TestQueryOptimiser(unittest.TestCase):
+
+    def test_query_optimiser(self):
+        objective = DummyObjective()
+        np.savetxt('test_param_list.txt', np.array([[1, 2], [3, 4]]))
+        optimiser = QueryOptimiser(objective, 'test_param_list.txt')
+        os.remove('test_param_list.txt')
+        with self.assertRaises(InvalidOptimiserException) as ex:
+            optimiser._validate_problem(objective)
+        self.assertEqual(ex.exception.args[0],
+                         'Generic objective required for this optimiser')
+
+
+class TestRandomOptimiser(unittest.TestCase):
+
+    def test_random_optimiser(self):
+        objective = DummyObjective()
+        optimiser = RandomSearch(objective)
+        with self.assertRaises(InvalidOptimiserException) as ex:
+            optimiser._validate_problem(objective)
+        self.assertEqual(ex.exception.args[0],
+                         'Generic objective required for this optimiser')

@@ -3,7 +3,6 @@ iters: 50
 
 optimiser:
   name: random
-  sampling: soboll
   dimension: 2
   seed: 1
 

@@ -1,6 +1,12 @@
 import unittest
 import numpy as np
-from piglot.parameter import Parameter, ParameterSet, DualParameterSet, read_parameters
+from piglot.parameter import (
+    Parameter,
+    DiscreteParameter,
+    ParameterSet,
+    DualParameterSet,
+    read_parameters,
+)
 
 
 class TestParameter(unittest.TestCase):
@@ -11,11 +17,14 @@ class TestParameter(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             Parameter("test", 5, 10, 0)
 
-    def test_clip(self):
-        self.assertEqual(self.parameter.clip(5), 5)
-        self.assertEqual(self.parameter.clip(11), 10)
-        self.assertEqual(self.parameter.clip(-1), 0)
 
+class TestDiscreteParameter(unittest.TestCase):
+    def setUp(self):
+        self.parameter = DiscreteParameter("test", 1.0, [0.0, 1.0, 2.0])
+
+    def test_bounds(self):
+        with self.assertRaises(RuntimeError):
+            DiscreteParameter("test", 3.0, [0.0, 1.0, 2.0])
 
 class TestParameterSet(unittest.TestCase):
     def setUp(self):
@@ -25,6 +34,8 @@ class TestParameterSet(unittest.TestCase):
     def test_add(self):
         with self.assertRaises(RuntimeError):
             self.parameter_set.add("test", 5, 0, 10)
+        with self.assertRaises(RuntimeError):
+            self.parameter_set.add_discrete("test", 1.0, [0.0, 1.0, 2.0])
 
     def test_hash(self):
         self.parameter_set.hash([5])
@@ -38,11 +49,6 @@ class TestParameterSet(unittest.TestCase):
             self.assertEqual(parameter.inital_value, target[i].inital_value)
         self.assertEqual(len(self.parameter_set), len(target))
         self.assertEqual(self.parameter_set[0].name, 'test')
-
-    def test_clip(self):
-        self.assertEqual(self.parameter_set.clip([5]), [5])
-        self.assertEqual(self.parameter_set.clip([11]), [10])
-        self.assertEqual(self.parameter_set.clip([-1]), [0])
 
 
 class TestDualParameterSet(unittest.TestCase):
