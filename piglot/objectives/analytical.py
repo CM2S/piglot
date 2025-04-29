@@ -36,7 +36,7 @@ class AnalyticalSingleObjective(IndividualObjective):
         if random_evals > 0 and variance is None:
             raise ValueError("Random evaluations require variance.")
         # Generate a dummy set of parameters (to ensure proper handling of output parameters)
-        values = np.array([parameter.inital_value for parameter in parameters])
+        values = parameters.initial_values()
         symbs = sympy.symbols(list(parameters.to_dict(values).keys()))
         self.parameters = parameters
         self.expression = sympy.lambdify(symbs, expression)
