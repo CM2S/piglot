@@ -23,7 +23,9 @@ else:
     stdout, stderr = popen.communicate()
     if popen.returncode == 0:
         __new_version__ = stdout.decode('utf-8').strip()
-        # The Git tag format is expected to start with 'v' followed by the version number (e.g., 'v0.5.1').
-        # This ensures that the tag corresponds to the current version defined in __version__.
+
+        # The Git tag format is expected to start with 'v' followed by the version number
+        # (e.g., 'v0.5.1'). This ensures that the tag corresponds to the current version defined
+        # in __version__.
         if __new_version__.startswith(f'v{__version__}'):
             __version__ = __new_version__[1:]
