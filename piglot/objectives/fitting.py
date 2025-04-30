@@ -88,7 +88,7 @@ class Reference:
             points, values = read_response_transformer(transformer)(points, values)
         # Store the reference
         os.makedirs(os.path.join(output_dir, 'references'), exist_ok=True)
-        np.savetxt(output_filename, np.hstack((points, values)))
+        np.savetxt(output_filename, np.stack((points, values), axis=1))
         return Reference(filename, points, values)
 
 
