@@ -38,6 +38,10 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install -e .[test]
+      - name: Test version commands
+        run: |
+          piglot --version
+          piglot-plot --version
       - name: Lint with flake8
         run: |
           flake8 piglot test

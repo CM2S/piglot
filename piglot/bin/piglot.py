@@ -5,6 +5,7 @@ import argparse
 import shutil
 from yaml import safe_dump
 import torch
+from piglot import __version__
 from piglot.objectives import read_objective
 from piglot.optimisers import read_optimiser
 from piglot.parameter import read_parameters
@@ -38,6 +39,11 @@ def parse_args():
         type=str,
         default='cpu',
         help='Default device to use with PyTorch',
+    )
+    parser.add_argument(
+        '--version',
+        action='version',
+        version='%(prog)s ' + __version__,
     )
 
     return parser.parse_args()
