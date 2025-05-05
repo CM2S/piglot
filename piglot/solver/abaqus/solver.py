@@ -11,7 +11,7 @@ from piglot.solver.input_file_solver import (
     InputFileSolver,
     OutputField,
 )
-from piglot.solver.abaqus.fields import FieldsOutput
+from piglot.solver.abaqus.fields import FieldsOutput, ODBFullField
 
 
 class AbaqusCase(InputFileCase):
@@ -208,6 +208,7 @@ class AbaqusCase(InputFileCase):
         """
         return {
             'FieldsOutput': FieldsOutput,
+            'ODBFullField': ODBFullField,
         }
 
 

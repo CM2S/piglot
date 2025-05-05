@@ -6,6 +6,7 @@ import os
 import sys
 import codecs
 import numpy as np
+import ast
 from odbAccess import *
 
 
@@ -251,11 +252,24 @@ def main():
     """Main function to extract the nodal data from the output database (.odb) file.
     """
     variables = input_variables()
-
+    try:
+        # Try to parse it as a list-like string
+        parsed = ast.literal_eval(variables["x_field"])
+        if isinstance(parsed, list):
+            variables["x_field"] = parsed
+    except (ValueError, SyntaxError):
+        # If it fails, keep it as a string
+        pass
     nlgeom = get_nlgeom_setting(variables["input_file"])
-    check_nlgeom(nlgeom, variables["field"], variables["x_field"])
+    # Check if the 'x_field' variable is a list
+    if isinstance(variables["x_field"], str):
+        check_nlgeom(nlgeom, variables["field"], variables["x_field"])
 
-    variables_array = np.array([variables["field"], variables["x_field"]])
+        variables_array = np.array([variables["field"], variables["x_field"]])
+    else:
+        for value in variables["x_field"]:
+            check_nlgeom(nlgeom, variables["field"], value)
+        variables_array = np.array([variables["field"]] + variables["x_field"])
 
     # Open the output database
     odb_name = variables["job_name"] + ".odb"
