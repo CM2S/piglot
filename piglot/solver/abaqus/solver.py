@@ -101,7 +101,7 @@ class AbaqusCase(InputFileCase):
             step_list = re.findall(r'\*Step, name=([^,]+)', data)
             self.step_name = self.__sanitize_field(self.step_name, step_list, "step")
 
-    def _post_proc_variables(self, input_data: InputData) -> Dict[str, Any]:
+    def _post_proc_variables(self, input_data: InputData, field) -> Dict[str, Any]:
         """Generate the post-processing variables.
 
         Parameters
@@ -122,7 +122,6 @@ class AbaqusCase(InputFileCase):
         }
 
         # Accessing set_name, field, and x_field from the fields dictionary
-        field = next(iter(self.fields.values()), None)
         if field:
             variables['set_name'] = getattr(field, 'set_name', None)
             variables['field'] = getattr(field, 'field', None)
@@ -164,37 +163,39 @@ class AbaqusCase(InputFileCase):
             stderr=sys.stderr,
             check=False
         )
-        variables = self._post_proc_variables(input_data)
+        
         python_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reader.py')
 
-        run_odb = subprocess.run(
-            [
-                self.abaqus_bin,
-                'viewer',
-                f"noGUI={python_script}",
-                "--",
-                f"input_file={variables['input_file']}",
-                "--",
-                f"job_name={variables['job_name']}",
-                "--",
-                f"step_name={variables['step_name']}",
-                "--",
-                f"instance_name={variables['instance_name']}",
-                "--",
-                f"set_name={variables['set_name']}",
-                "--",
-                f"field={variables['field']}",
-                "--",
-                f"x_field={variables['x_field']}"
-            ],
-            cwd=tmp_dir,
-            shell=False,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
-            check=False,
-        )
-        if run_inp.returncode != 0 or run_odb.returncode != 0:
-            return False
+        for field in self.fields.values():
+            variables = self._post_proc_variables(input_data, field)
+            run_odb = subprocess.run(
+                [
+                    self.abaqus_bin,
+                    'viewer',
+                    f"noGUI={python_script}",
+                    "--",
+                    f"input_file={variables['input_file']}",
+                    "--",
+                    f"job_name={variables['job_name']}",
+                    "--",
+                    f"step_name={variables['step_name']}",
+                    "--",
+                    f"instance_name={variables['instance_name']}",
+                    "--",
+                    f"set_name={variables['set_name']}",
+                    "--",
+                    f"field={variables['field']}",
+                    "--",
+                    f"x_field={variables['x_field']}"
+                ],
+                cwd=tmp_dir,
+                shell=False,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                check=False,
+            )
+            if run_inp.returncode != 0 or run_odb.returncode != 0:
+                return False
         return True
 
     @classmethod
