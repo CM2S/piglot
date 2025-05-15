@@ -204,7 +204,7 @@ def write_output_file(variable, step, location, file_name):
         for frame in step.frames:
             output_variable = frame.fieldOutputs[var_name]
             location_output_variable = field_location(var_name, output_variable, location)
-            output_file.write("%d " % frame.frameValue)
+            output_file.write("%.6f " % frame.frameValue)
             for v in location_output_variable.values:
                 output_file.write("%.9f " % (v.data if idx is None else v.data[idx].item()))
             output_file.write("\n")
