@@ -42,6 +42,16 @@ class OutputResult:
         """
         return self.data
 
+    def write(self, filename: str) -> None:
+        """Write the result to a file.
+
+        Parameters
+        ----------
+        filename : str
+            Path to write the file to.
+        """
+        np.savez(filename, time=self.time, data=self.data, full_field=False)
+
 
 @dataclass
 class FullFieldOutputResult(OutputResult):
@@ -64,6 +74,34 @@ class FullFieldOutputResult(OutputResult):
             Spatial and temporal coordinates with shape n_points x (n_dims + 1)
         """
         return self.time
+
+    def write(self, filename: str) -> None:
+        """Write the result to a file.
+
+        Parameters
+        ----------
+        filename : str
+            Path to write the file to.
+        """
+        np.savez(filename, time=self.time, data=self.data, full_field=True)
+
+
+def read_output_result(filename: str) -> OutputResult:
+    """Read an output result from a file.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the output result file.
+
+    Returns
+    -------
+    OutputResult
+        Output result.
+    """
+    data = np.load(filename)
+    cls = FullFieldOutputResult if data.get('full_field', False) else OutputResult
+    return cls(data['time'], data['data'])
 
 
 @dataclass
@@ -96,11 +134,12 @@ class CaseResult:
             "success": "true" if self.success else "false",
             "param_hash": self.param_hash,
         }
-        # Build response data
-        responses = {
-            name: list(zip(result.get_time().tolist(), result.get_data().tolist()))
-            for name, result in self.responses.items()
-        }
+        # Build response data and store responses
+        responses = {}
+        output_dir = os.path.dirname(filename)
+        for name, result in self.responses.items():
+            responses[name] = f"{name}_{self.param_hash}.npz"
+            result.write(os.path.join(output_dir, responses[name]))
         # Dump all data to file
         with open(filename, 'w', encoding='utf8') as file:
             safe_dump_all((metadata, responses), file)
@@ -125,9 +164,10 @@ class CaseResult:
         with open(filename, 'r', encoding='utf8') as file:
             metadata, responses_raw = safe_load_all(file)
         # Parse the responses
+        output_dir = os.path.dirname(filename)
         responses = {
-            name: OutputResult(np.array([a[0] for a in data]), np.array([a[1] for a in data]))
-            for name, data in responses_raw.items()
+            name: read_output_result(os.path.join(output_dir, path))
+            for name, path in responses_raw.items()
         }
         return CaseResult(
             metadata["begin_time"],
