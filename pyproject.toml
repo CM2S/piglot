@@ -32,7 +32,7 @@ dependencies = [
     "sympy",
     "scipy>=1.7", # For scipy.stats.qmc
     "torch",
-    "botorch<=0.13",
+    "botorch<=0.13", # To allow using deprecated model converters
     "Pillow",
     "matplotlib>=3.7.2", # https://github.com/matplotlib/matplotlib/pull/25565
     "PyYAML",
