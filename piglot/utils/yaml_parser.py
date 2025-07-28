@@ -63,3 +63,32 @@ def parse_config_file(config_file: str) -> Dict[str, Any]:
     elif config['quiet']:
         config["quiet"] = True
     return config
+
+
+def parse_solver_file(config_file: str) -> Dict[str, Any]:
+    """Parses the YAML configuration file (in solver mode).
+
+    Parameters
+    ----------
+    config_file : str
+        Path to the configuration file.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Dictionary with the YAML data.
+    """
+    try:
+        with open(config_file, 'r', encoding='utf8') as file:
+            config = yaml.load(file, Loader=UniqueKeyLoader)  # nosec B506
+    except (ParserError, ScannerError) as exc:
+        raise RuntimeError("Failed to parse the config file: YAML syntax seems invalid.") from exc
+    # Check required terms
+    if 'solver' not in config:
+        raise RuntimeError("Missing solver from the config file")
+    if 'parameters' not in config:
+        raise RuntimeError("Missing parameters from the config file")
+    # Add missing optional items
+    if 'output' not in config:
+        config['output'] = os.path.splitext(config_file)[0]
+    return config

@@ -55,7 +55,9 @@ test = ["pytest", "pytest-cov", "flake8", "coverage"]
 
 [project.scripts]
 piglot = "piglot.bin.piglot:main"
+piglot-eval = "piglot.bin.piglot_eval:main"
 piglot-plot = "piglot.bin.piglot_plot:main"
+piglot-solve = "piglot.bin.piglot_solve:main"
 
 [build-system]
 requires = ["setuptools>=61.0.0", "wheel"] # Needed for dynamic version

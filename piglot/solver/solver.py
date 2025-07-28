@@ -42,6 +42,33 @@ class OutputResult:
         """
         return self.data
 
+    def write(self, filename: str) -> None:
+        """Write the result to a file.
+
+        Parameters
+        ----------
+        filename : str
+            Path to write the file to.
+        """
+        np.savez(filename, time=self.time, data=self.data)
+
+    @staticmethod
+    def read(filename: str) -> OutputResult:
+        """Read the output result from a file.
+
+        Parameters
+        ----------
+        filename : str
+            Path to the output result file.
+
+        Returns
+        -------
+        OutputResult
+            Output result instance.
+        """
+        data = np.load(filename)
+        return OutputResult(data['time'], data['data'])
+
 
 @dataclass
 class CaseResult:

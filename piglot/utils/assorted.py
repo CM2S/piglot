@@ -139,7 +139,7 @@ def change_cwd(path: str):
         New working directory.
     """
     old = os.getcwd()
-    os.chdir(path)
+    os.chdir(os.path.abspath(path))
     try:
         yield
     finally:
