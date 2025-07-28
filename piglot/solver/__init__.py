@@ -2,20 +2,6 @@
 from typing import Any, Dict, Type
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import Solver
-from piglot.solver.links.solver import LinksSolver
-from piglot.solver.abaqus.solver import AbaqusSolver
-from piglot.solver.curve.solver import CurveSolver
-from piglot.solver.crate.solver import CrateSolver
-from piglot.solver.script_solver import ScriptSolver
-
-
-AVAILABLE_SOLVERS: Dict[str, Type[Solver]] = {
-    'links': LinksSolver,
-    'abaqus': AbaqusSolver,
-    'curve': CurveSolver,
-    'crate': CrateSolver,
-    'script': ScriptSolver,
-}
 
 
 def read_solver(config: Dict[str, Any], parameters: ParameterSet, output_dir: str) -> Solver:
@@ -35,6 +21,25 @@ def read_solver(config: Dict[str, Any], parameters: ParameterSet, output_dir: st
     Solver
         Solver to use for this problem.
     """
+
+    # Import the solvers dynamically
+    # We need to import them here to avoid circular imports
+    from piglot.solver.links.solver import LinksSolver  # pylint: disable=C0415
+    from piglot.solver.abaqus.solver import AbaqusSolver  # pylint: disable=C0415
+    from piglot.solver.curve.solver import CurveSolver  # pylint: disable=C0415
+    from piglot.solver.crate.solver import CrateSolver  # pylint: disable=C0415
+    from piglot.solver.script_solver import ScriptSolver  # pylint: disable=C0415
+    from piglot.solver.remote import RemoteSolver  # pylint: disable=C0415
+
+    AVAILABLE_SOLVERS: Dict[str, Type[Solver]] = {
+        'links': LinksSolver,
+        'abaqus': AbaqusSolver,
+        'curve': CurveSolver,
+        'crate': CrateSolver,
+        'script': ScriptSolver,
+        'remote': RemoteSolver,
+    }
+
     # Read the solver name (and pop it from the dictionary)
     if 'name' not in config:
         raise ValueError("Missing name for solver.")
