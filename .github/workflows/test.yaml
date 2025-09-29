@@ -6,6 +6,8 @@ on:
     branches: [ "main", "test" ]
   pull_request:
     branches: [ "main" ]
+  schedule:
+    - cron: "0 8 * * 2"
 
 jobs:
   build:
