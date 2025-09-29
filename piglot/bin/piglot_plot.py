@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from scipy.integrate import trapezoid
 from PIL import Image
 import torch
+from piglot import __version__
 from piglot.parameter import read_parameters
 from piglot.objectives import read_objective
 from piglot.utils.surrogate import get_model, optmise_posterior_mean
@@ -445,6 +446,11 @@ def main(passed_args: List[str] = None):
     parser = argparse.ArgumentParser(
         prog='piglot-plot',
         description='Plotting utility for piglot',
+    )
+    parser.add_argument(
+        '--version',
+        action='version',
+        version='%(prog)s ' + __version__,
     )
     subparsers = parser.add_subparsers(
         title='Available modes',
