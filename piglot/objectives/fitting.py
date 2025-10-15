@@ -32,6 +32,17 @@ class Reference:
         self.filename = filename
         self.x_data = time_data
         self.y_data = data
+        # Sanity check on the data
+        if self.x_data.ndim != 1:
+            raise ValueError(f"Reference '{filename}' time data must be 1D.")
+        if self.y_data.ndim != 1:
+            raise ValueError(f"Reference '{filename}' data must be 1D.")
+        if self.x_data.shape[0] != self.y_data.shape[0]:
+            raise ValueError(f"Reference '{filename}' time and data must have the same length.")
+        if self.x_data.shape[0] < 1:
+            raise ValueError(f"Reference '{filename}' must have at least one data point.")
+        if np.any(np.isnan(self.x_data)) or np.any(np.isnan(self.y_data)):
+            raise ValueError(f"Reference '{filename}' contains NaNs.")
 
     def get_time(self) -> np.ndarray:
         """Get the time column of the reference.

@@ -3,13 +3,15 @@ from typing import Any, Dict, Union, Type, TypeVar
 from abc import ABC, abstractmethod
 import numpy as np
 import scipy.spatial
-from scipy.spatial import KDTree
+from scipy.spatial import KDTree, Delaunay  # pylint: disable=E0611
 from scipy.interpolate import (
+    RegularGridInterpolator,
     LinearNDInterpolator,
     make_interp_spline,
     NearestNDInterpolator,
     RBFInterpolator as ScipyRBFInterpolator,
 )
+from piglot.utils.caching import LRUCache
 
 
 T = TypeVar('T')
@@ -221,12 +223,109 @@ class LinearInterpolator(SplineInterpolator):
         )
 
 
-class UnstructuredLinearInterpolator(Interpolator):
-    """Linear interpolator for n-dimensional unstructured data.
+class StructuredLinearInterpolator(Interpolator):
+    """Linear interpolator for n-dimensional structured data.
 
     This class does not perform extrapolation. Points outside the convex hull of the reference
     points will be assigned NaN values.
     """
+
+    def __call__(self, x_new: np.ndarray, x_ref: np.ndarray, y_ref: np.ndarray) -> np.ndarray:
+        """Interpolate the response at the given points.
+
+        Parameters
+        ----------
+        x_new : np.ndarray
+            Points to interpolate at (n_points x n_dim).
+        x_ref : np.ndarray
+            Reference points (n_ref x n_dim).
+        y_ref : np.ndarray
+            Reference values (n_ref x n_values).
+
+        Returns
+        -------
+        np.ndarray
+            Interpolated values (n_points x n_values).
+        """
+        # Sanity checks on the input data
+        if any(len(a.shape) != 2 for a in (x_new, x_ref, y_ref)):
+            raise ValueError('Invalid data shape for interpolation. All arrays must be 2D.')
+        if x_new.shape[-1] != x_ref.shape[-1] or x_ref.shape[0] != y_ref.shape[0]:
+            raise ValueError('Incompatible dimensions for interpolation.')
+        _, n_dim = x_new.shape
+
+        # Find unique values for each dimension
+        unique_values = [np.sort(np.unique(x_ref[:, i])) for i in range(n_dim)]
+
+        # Sort the points
+        idx = np.lexsort(x_ref.T[::-1])
+        x_ref = x_ref[idx, :]
+        y_ref = y_ref[idx, :]
+
+        # Build the meshgrid and check if the points are structured
+        mesh = np.meshgrid(*unique_values, indexing='ij')
+        grid = np.stack([m.flatten() for m in mesh], axis=-1)
+        if not np.array_equal(x_ref, grid):
+            raise ValueError('The reference points are not structured.')
+
+        # n-dimensional interpolation
+        interpolator = RegularGridInterpolator(
+            unique_values,
+            y_ref.reshape([len(v) for v in unique_values]),
+            method='linear',
+            bounds_error=False,
+            fill_value=np.nan
+        )
+        return interpolator(x_new)
+
+    @classmethod
+    def read(cls: Type[T], config: Dict[str, Any]) -> T:
+        """Read the interpolator from a configuration dictionary.
+
+        Parameters
+        ----------
+        config : Dict[str, Any]
+            Terms from the configuration dictionary.
+
+        Returns
+        -------
+        Interpolator
+            Interpolator instance.
+        """
+        return cls()
+
+
+class UnstructuredLinearInterpolator(Interpolator):
+    """Linear interpolator for n-dimensional unstructured data.
+
+    This class does not perform extrapolation. Points outside the convex hull of the reference
+    points will be assigned NaN values. Triangulations are cached between calls to speed up
+    interpolations on the same grid.
+    """
+
+    def __init__(self, cache_size: int = 16) -> None:
+        self.cache = LRUCache(cache_size, self.__triangulate)
+
+    def __triangulate(self, x_ref: np.ndarray) -> Delaunay:
+        """Compute the triangulation for the given reference points.
+
+        Parameters
+        ----------
+        x_ref : np.ndarray
+            Reference points (n_ref x n_dim).
+
+        Returns
+        -------
+        Delaunay
+            Triangulation object.
+        """
+        try:
+            return Delaunay(x_ref)
+        except scipy.spatial.QhullError as ex:  # pylint: disable=E1101
+            raise ValueError(
+                'Triangulation failed for n-dimensional interpolation. This usually happens '
+                'when the points are collinear or too close to each other.'
+            ) from ex
 
     def __call__(self, x_new: np.ndarray, x_ref: np.ndarray, y_ref: np.ndarray) -> np.ndarray:
         """Interpolate the response at the given points.
@@ -257,14 +356,9 @@ class UnstructuredLinearInterpolator(Interpolator):
             interpolator = LinearInterpolator(left=np.nan, right=np.nan, extrapolate=False)
             return interpolator(x_new, x_ref, y_ref)
 
-        # n-dimensional interpolation: construct the triangulation using scipy
-        try:
-            interpolator = LinearNDInterpolator(x_ref, y_ref)
-        except scipy.spatial.QhullError as ex:  # pylint: disable=E1101
-            raise ValueError(
-                'Triangulation failed for n-dimensional interpolation. This usually happens '
-                'when the points are collinear or too close to each other.'
-            ) from ex
+        # n-dimensional interpolation
+        tri = self.cache.get(x_ref)
+        interpolator = LinearNDInterpolator(tri, y_ref)
         return interpolator(x_new)
 
     @classmethod
@@ -281,7 +375,7 @@ class UnstructuredLinearInterpolator(Interpolator):
         Interpolator
             Interpolator instance.
         """
-        return cls()
+        return cls(config.get('cache_size', 16))
 
 
 class FastUnstructuredLinearInterpolator(Interpolator):
@@ -524,6 +618,7 @@ class RBFInterpolator(Interpolator):
 AVAILABLE_INTERPOLATORS: Dict[str, Interpolator] = {
     'spline': SplineInterpolator,
     'linear': LinearInterpolator,
+    'structured_linear': StructuredLinearInterpolator,
     'unstructured_linear': UnstructuredLinearInterpolator,
     'fast_unstructured_linear': FastUnstructuredLinearInterpolator,
     'unstructured_nearest': UnstructuredNearestInterpolator,

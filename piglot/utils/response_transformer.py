@@ -8,7 +8,7 @@ import numpy as np
 from piglot.utils.assorted import read_custom_module, trapezoidal_integration_weights
 from piglot.solver.solver import OutputResult, FullFieldOutputResult
 from piglot.utils.interpolators import Interpolator, OneDimensionalInterpolator, read_interpolator
-from piglot.utils.responses import reduce_points, reduce_points_clusters, get_error
+from piglot.utils.responses import reduce_points_simplices_mc, get_error
 
 
 class ResponseTransformer(ABC):
@@ -234,12 +234,31 @@ class ReduceResponse(ResponseTransformer):
         self.interpolator = read_interpolator(interpolator)
         self.integral_error = integral_error
 
-    def __progress_callback(self, num_points: int, error: float, orig_points: int) -> bool:
+    def __progress_callback(
+        self,
+        num_points: int,
+        error: float,
+        message: str = None,
+        orig_points: int = None,
+    ) -> bool:
         """Progress callback for the reduction process."""
-        print(
-            f"\rReducing from {orig_points} to {num_points} points (rel error: {error:6.4e}) ...",
-            end='',
-        )
+        # _, width = os.get_terminal_size(0)
+        if message is not None:
+            print(
+                (
+                    f"\rReducing from {orig_points} to {num_points} "
+                    f"points (rel error: {error:6.4e}, {message}) ..."
+                ),
+                end='',
+            )
+        else:
+            print(
+                (
+                    f"\rReducing from {orig_points} to {num_points} "
+                    f"points (rel error: {error:6.4e}) ..."
+                ),
+                end='',
+            )
         sys.stdout.flush()
         return False
 
@@ -270,7 +289,7 @@ class ReduceResponse(ResponseTransformer):
             weights = weights * trapezoidal_integration_weights(points).reshape(-1, 1)
         # Reduce the points
         self.__progress_callback(points.shape[0], 0.0, points.shape[0])
-        reduce_func = reduce_points_clusters if self.method == 'clusters' else reduce_points
+        reduce_func = reduce_points_simplices_mc
         elapsed = time.perf_counter()
         reduced_points, reduced_values = reduce_func(
             points,
