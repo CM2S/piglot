@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from scipy.integrate import trapezoid
 from PIL import Image
 import torch
-from botorch.utils.sampling import draw_sobol_normal_samples
+from botorch.sampling.qmc import MultivariateNormalQMCEngine
 from piglot.parameter import read_parameters
 from piglot.objectives import read_objective
 from piglot.utils.surrogate import get_model, optmise_posterior_mean
@@ -376,7 +376,6 @@ def plot_mcgp(args):
         dataset,
         parameters,
         composition,
-        objective.noisy,
         **options,
     )
 
