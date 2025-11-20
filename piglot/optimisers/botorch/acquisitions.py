@@ -258,7 +258,10 @@ class FantasyThompsonSampling(ThompsonSampling):
                 curr_samples,
                 noise=noise[i].unsqueeze(0).expand_as(curr_samples),
             )
-            fantasy_posterior = fantasy_model.posterior(X_curr, observation_noise=noise[i])
+            fantasy_posterior = fantasy_model.posterior(
+                X_curr.unsqueeze(0),
+                observation_noise=noise[i],
+            )
             fantasies.append(self.inner_sampler(fantasy_posterior))
         fantasy_samples = torch.stack(fantasies, dim=-2)
 
