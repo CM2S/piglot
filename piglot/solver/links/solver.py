@@ -46,7 +46,7 @@ class LinksCase(InputFileCase):
         """
         command = [self.links_bin, input_data.input_file]
         # Check for a coupled analysis and add MPI command if so
-        if has_keyword(input_data.input_file, "NUMBER_OF_RVE"):
+        if has_keyword(os.path.join(tmp_dir, input_data.input_file), "NUMBER_OF_RVE"):
             if self.mpi_command is None:
                 raise RuntimeError('Need to pass the "mpi_command" option for coupled analyses')
             command = self.mpi_command.split() + command
