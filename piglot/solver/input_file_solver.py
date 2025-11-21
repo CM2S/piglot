@@ -368,7 +368,12 @@ class InputFileCase(Case, ABC):
                 fields[field_name] = supported_fields[field_type].read(field_config)
         # Check if we are using a custom generator
         if 'generator' in config:
-            generator = read_custom_module(config.pop('generator'), InputDataGenerator)()
+            generator_config = config.pop('generator')
+            generator_cls = read_custom_module(generator_config, InputDataGenerator)
+            if generator_config.get('pass_case_name', False):
+                generator = generator_cls(name)
+            else:
+                generator = generator_cls()
             # Ensure we don't have dependencies with a custom generator
             if 'substitution_dependencies' in config or 'copy_dependencies' in config:
                 raise ValueError('Dependencies not supported with custom input data generators.')
