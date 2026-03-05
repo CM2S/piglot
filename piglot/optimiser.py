@@ -3,67 +3,18 @@ from __future__ import annotations
 from typing import Dict, Any, Tuple, Callable, Optional
 import os
 import time
+from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import numpy as np
 from tqdm import tqdm
 from piglot.parameter import ParameterSet
 from piglot.utils.assorted import pretty_time
-from piglot.objective import Objective, GenericObjective
+from piglot.objective import Objective
 
 
-def boundary_check(arg, bounds):
-    """Check if the values are within the bounds and correct them if not.
-
-    Parameters
-    ----------
-    arg : array
-        Values to check.
-    bounds : array
-        Lower and upper bounds.
-
-    Returns
-    -------
-    array
-        Corrected values.
-    """
-    arg = np.where(arg > bounds[:, 1], bounds[:, 1], arg)
-    arg = np.where(arg < bounds[:, 0], bounds[:, 0], arg)
-    return arg
-
-
-def missing_method(name, package):
-    """Class generator for missing packages.
-
-    Parameters
-    ----------
-    name : str
-        Name of the missing method.
-    package : str
-        Name of the package to install.
-    """
-    def err_func(name, package):
-        """Raise an error for this missing method.
-
-        Parameters
-        ----------
-        name : str
-            Name of the missing method.
-        package : str
-            Name of the package to install.
-
-        Raises
-        ------
-        ImportError
-            Every time it is called.
-        """
-        raise ImportError(f"{name} is not available. You need to install package {package}!")
-
-    return type(f'Missing_{package}', (),
-                {
-                    'name': name,
-                    'package': package,
-                    '__init__': (lambda *args, **kwargs: err_func(name, package))
-                })
+@dataclass
+class OptimisationResult:
+    pass
 
 
 class StoppingCriteria:
@@ -87,14 +38,13 @@ class StoppingCriteria:
         check the status of the stopping criteria.
     """
     def __init__(
-            self,
-            conv_tol: float = None,
-            max_iters_no_improv: int = None,
-            max_func_calls: int = None,
-            max_timeout: float = None,
-            ):
-        """
-        Constructs all the necessary attributes for the stopping criteria.
+        self,
+        conv_tol: float = None,
+        max_iters_no_improv: int = None,
+        max_func_calls: int = None,
+        max_timeout: float = None,
+    ) -> None:
+        """Constructs all the necessary attributes for the stopping criteria.
 
         Parameters
         ----------
@@ -113,12 +63,12 @@ class StoppingCriteria:
         self.max_timeout = max_timeout
 
     def check_criteria(
-            self,
-            loss_value: float,
-            iters_no_improv: int,
-            func_calls: int,
-            elapsed: float,
-            ) -> bool:
+        self,
+        loss_value: float,
+        iters_no_improv: int,
+        func_calls: int,
+        elapsed: float,
+    ) -> bool:
         """
         Check the status of the stopping criteria.
 
@@ -201,6 +151,7 @@ class Optimiser(ABC):
         self.best_value = None
         self.best_solution = None
         self.begin_time = None
+        self.conf_interval = (None, None)
 
     @abstractmethod
     def _validate_problem(self, objective: Objective) -> None:
@@ -213,13 +164,13 @@ class Optimiser(ABC):
         """
 
     def optimise(
-            self,
-            n_iter: int,
-            parameters: ParameterSet,
-            output_dir: str,
-            stop_criteria: StoppingCriteria = StoppingCriteria(),
-            verbose: bool = True,
-            ) -> Tuple[float, np.ndarray]:
+        self,
+        n_iter: int,
+        parameters: ParameterSet,
+        output_dir: str,
+        stop_criteria: StoppingCriteria = StoppingCriteria(),
+        verbose: bool = True,
+    ) -> Tuple[float, np.ndarray]:
         """
         Optimiser for the outside world.
 
@@ -264,8 +215,13 @@ class Optimiser(ABC):
         with open(os.path.join(self.output_dir, "history"), 'w', encoding='utf8') as file:
             file.write(f'{"Iteration":>10}\t')
             file.write(f'{"Time /s":>15}\t')
-            file.write(f'{"Best Loss":>15}\t')
-            file.write(f'{"Current Loss":>15}\t')
+            if self.objective.has_variance():
+                file.write(f'{"Current Loss":>15}\t')
+                file.write(f'{"Lower CI":>15}\t')
+                file.write(f'{"Upper CI":>15}\t')
+            else:
+                file.write(f'{"Best Loss":>15}\t')
+                file.write(f'{"Current Loss":>15}\t')
             for par in self.parameters:
                 file.write(f'{par.name:>15}\t')
             file.write('\tOptimiser info')
@@ -321,12 +277,12 @@ class Optimiser(ABC):
         """
 
     def __update_progress_files(
-            self,
-            i_iter: int,
-            curr_solution: np.ndarray,
-            curr_value: float,
-            extra_info: str,
-            ) -> None:
+        self,
+        i_iter: int,
+        curr_solution: np.ndarray,
+        curr_value: float,
+        extra_info: str,
+    ) -> None:
         """Update progress on output files.
 
         Parameters
@@ -345,8 +301,13 @@ class Optimiser(ABC):
         # Update progress file
         with open(os.path.join(self.output_dir, "progress"), 'w', encoding='utf8') as file:
             file.write(f'Iteration: {i_iter}\n')
-            file.write(f'Function calls: {self.objective.func_calls}\n')
+            file.write(f'Function calls: {self.objective.num_calls}\n')
             file.write(f'Best loss: {self.best_value}\n')
+            if self.objective.has_variance() and self.conf_interval and all(self.conf_interval):
+                file.write(
+                    'Confidence interval (95%): '
+                    f'[{self.conf_interval[0]}, {self.conf_interval[1]}]\n'
+                )
             if extra_info is not None:
                 file.write(f'Optimiser info: {extra_info}\n')
             if not skip_pars:
@@ -358,20 +319,30 @@ class Optimiser(ABC):
         with open(os.path.join(self.output_dir, "history"), 'a', encoding='utf8') as file:
             file.write(f'{i_iter:>10}\t')
             file.write(f'{elapsed:>15.8e}\t')
-            file.write(f'{self.best_value:>15.8e}\t')
-            file.write(f'{curr_value:>15.8e}\t')
+            if self.objective.has_variance():
+                file.write(f'{curr_value:>15.8e}\t')
+                if self.conf_interval and all(self.conf_interval):
+                    file.write(f'{self.conf_interval[0]:>15.8e}\t')
+                    file.write(f'{self.conf_interval[1]:>15.8e}\t')
+                else:
+                    file.write(''.rjust(15) + '\t')
+                    file.write(''.rjust(15) + '\t')
+            else:
+                file.write(f'{self.best_value:>15.8e}\t')
+                file.write(f'{curr_value:>15.8e}\t')
             for i, par in enumerate(self.parameters):
                 file.write('None\t'.rjust(16) if skip_pars else f'{curr_solution[i]:>15.8f}\t')
             file.write(f"\t{'-' if extra_info is None else extra_info}")
             file.write('\n')
 
     def _progress_check(
-            self,
-            i_iter: int,
-            curr_value: float,
-            curr_solution: np.ndarray,
-            extra_info: str = None,
-            ) -> bool:
+        self,
+        i_iter: int,
+        curr_value: float,
+        curr_solution: np.ndarray,
+        extra_info: Dict[str, str] = None,
+        conf_interval: Tuple[float, float] = (None, None),
+    ) -> bool:
         """
         Report the optimiser progress and check for termination.
 
@@ -383,26 +354,41 @@ class Optimiser(ABC):
             Current objective value.
         curr_solution : np.ndarray
             Current objective minimiser.
-        extra_info : str
+        extra_info : Dict[str, str]
             Additional information to pass to user.
+        conf_interval : Tuple[float, float]
+            Confidence interval for the current value (if available).
 
         Returns
         -------
         bool
             Whether any of the stopping criteria is satisfied.
         """
-        # Update new value to best value
         self.i_iter = i_iter
-        if curr_value >= self.best_value:
-            self.iters_no_improv += 1
-        else:
-            self.best_value = curr_value
-            self.best_solution = curr_solution
+        # Update new value to best value (when using exact objectives)
+        if self.objective.has_variance():
             self.iters_no_improv = 0
+            self.best_value = curr_value
+            self.conf_interval = conf_interval
+            self.best_solution = curr_solution
+        else:
+            if curr_value >= self.best_value:
+                self.iters_no_improv += 1
+            else:
+                self.best_value = curr_value
+                self.best_solution = curr_solution
+                self.iters_no_improv = 0
+                self.conf_interval = conf_interval
+        # Parse extra info
+        if extra_info is not None and len(extra_info) > 0:
+            extra_info = ', '.join(f'{key}: {value}' for key, value in extra_info.items())
         # Update progress bar
         if self.pbar is not None:
-            info = f'Loss: {self.best_value:6.4e}' + (f' ({extra_info})' if extra_info else '')
-            self.pbar.set_postfix_str(info)
+            info = f'Loss: {self.best_value:6.3e}'
+            if self.objective.has_variance() and self.conf_interval and all(self.conf_interval):
+                info += f' ± {(self.conf_interval[1] - self.conf_interval[0]) / 2:6.3e}'
+                # info += f' [{self.conf_interval[0]:5.2e}, {self.conf_interval[1]:5.2e}] (95%)'
+            self.pbar.set_postfix_str(info + (f' ({extra_info})' if extra_info else ''))
             if i_iter > 0:
                 self.pbar.update()
         # Update progress in output files
@@ -411,7 +397,7 @@ class Optimiser(ABC):
         return i_iter > self.n_iter or self.stop_criteria.check_criteria(
             curr_value,
             self.iters_no_improv,
-            self.objective.func_calls,
+            self.objective.num_calls,
             time.perf_counter() - self.begin_time,
         )
 
@@ -436,11 +422,9 @@ class ScalarOptimiser(Optimiser):
         InvalidOptimiserException
             With an invalid combination of optimiser and objective function.
         """
-        if not isinstance(objective, GenericObjective):
-            raise InvalidOptimiserException('Generic objective required for this optimiser')
         if objective.composition is not None:
             raise InvalidOptimiserException('This optimiser does not support composition')
-        if objective.stochastic:
+        if objective.has_variance():
             raise InvalidOptimiserException('This optimiser does not support stochasticity')
 
     @abstractmethod

@@ -1,74 +1,56 @@
 """Provide synthetic test functions"""
 from __future__ import annotations
-from typing import Dict, Type, Any
+from typing import Any, TypeVar
 import os.path
 import numpy as np
 import torch
 import botorch.test_functions.synthetic
 from botorch.test_functions.synthetic import SyntheticTestFunction
-from piglot.parameter import ParameterSet
-from piglot.objective import GenericObjective, ObjectiveResult
-from piglot.utils.reductions import Reduction, read_reduction
-from piglot.utils.composition.responses import ResponseComposition, FixedFlatteningUtility
+from piglot.settings import Settings
+from piglot.objective import IndividualObjectiveResult
+from piglot.objectives.simple_objective import SimpleObjective, SimpleIndividualObjective
 
 
-class SyntheticObjective(GenericObjective):
-    """Objective function derived from a synthetic test function."""
+IndividualT = TypeVar('IndividualT', bound='SyntheticIndividualObjective')
+
+
+class SyntheticIndividualObjective(SimpleIndividualObjective):
+    """Individual objective function derived from a synthetic test function."""
 
     def __init__(
-            self,
-            parameters: ParameterSet,
-            name: str,
-            output_dir: str,
-            transform: str = None,
-            composition: Reduction = None,
-            **kwargs,
-            ) -> None:
+        self,
+        name: str,
+        settings: Settings,
+        weight: float = 1.0,
+        maximise: bool = False,
+        variance: bool = False,
+        bounds: tuple[float, float] = None,
+        **kwargs,
+    ) -> None:
         super().__init__(
-            parameters,
-            stochastic=False,
-            composition=self.__composition(composition) if composition is not None else None,
-            output_dir=output_dir,
+            name,
+            weight=weight,
+            maximise=maximise,
+            variance=variance,
+            composite=False,
+            bounds=bounds,
         )
         test_functions = self.get_test_functions()
         if name not in test_functions:
-            raise RuntimeError(f'Unknown function {name}. Must be in {list(test_functions.keys())}')
+            raise RuntimeError(
+                f'Unknown function {name}. Must be one of {list(test_functions.keys())}'
+            )
         self.func = test_functions[name](**kwargs)
-        self.transform = lambda x, y: x
-        if transform == 'mse_composition':
-            self.transform = lambda v, func: torch.square(torch.tensor([v - func.optimal_value]))
-        with open(os.path.join(output_dir, 'optimum_value'), 'w', encoding='utf8') as file:
-            file.write(f'{self.transform(self.func.optimal_value, self.func)}')
+        with open(os.path.join(settings.output_dir, 'optimum_value'), 'w', encoding='utf8') as file:
+            file.write(f'{self.func.optimal_value}')
 
     @staticmethod
-    def __composition(reduction: Reduction) -> ResponseComposition:
-        """Create a response composition from a reduction.
-
-        Parameters
-        ----------
-        reduction : Reduction
-            Reduction to apply.
-
-        Returns
-        -------
-        ResponseComposition
-            Composition to apply.
-        """
-        return ResponseComposition(
-            True,
-            False,
-            [1.0],
-            [reduction],
-            [FixedFlatteningUtility(np.array([0.0]))],
-        )
-
-    @staticmethod
-    def get_test_functions() -> Dict[str, Type[SyntheticTestFunction]]:
+    def get_test_functions() -> dict[str, type[SyntheticTestFunction]]:
         """Return available test functions.
 
         Returns
         -------
-        Dict[str, Type[SyntheticTestFunction]]
+        dict[str, type[SyntheticTestFunction]]
             Available test functions.
         """
         return {
@@ -94,63 +76,41 @@ class SyntheticObjective(GenericObjective):
             'three_hump_camel': botorch.test_functions.synthetic.ThreeHumpCamel,
         }
 
-    def _objective(self, values: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
-        """Objective computation for analytical functions.
+    def evaluate(self, params: np.ndarray, concurrent: bool) -> IndividualObjectiveResult:
+        """Evaluate objective value for the given results.
 
         Parameters
         ----------
-        values : np.ndarray
-            Set of parameters to evaluate the objective for.
-        parallel : bool, optional
-            Whether this call may be concurrent to others, by default False.
+        params : np.ndarray
+            Parameter values for this evaluation.
+        concurrent : bool
+            Whether this call may be concurrent to others.
 
         Returns
         -------
-        ObjectiveResult
-            Objective value.
+        IndividualObjectiveResult
+            Objective value and variance for the given parameters.
         """
-        params = torch.from_numpy(values)
-        value = self.func.evaluate_true(params)
-        if self.composition is not None:
-            value -= self.func.optimal_value
-        elif self.transform is not None:
-            value = self.transform(value, self.func)
-        value = float(value.item())
-        if self.composition is None:
-            return ObjectiveResult(
-                values,
-                np.array([value]),
-                np.array([value]),
-                scalar_value=value,
-            )
-        final_value = self.composition.composition(np.array([value]), values)
-        return ObjectiveResult(
-            values,
-            np.array([value]),
-            np.array([final_value]),
-            scalar_value=final_value.item(),
-        )
+        params = torch.from_numpy(params)
+        value = self.func.evaluate_true(params).item()
+        return IndividualObjectiveResult(value=value, variance=0 if not self.variance else None)
 
-    @staticmethod
+    @classmethod
     def read(
-            config: Dict[str, Any],
-            parameters: ParameterSet,
-            output_dir: str,
-            ) -> SyntheticObjective:
+        cls: type[IndividualT], config: dict[str, Any], settings: Settings
+    ) -> IndividualT:
         """Read the objective from a configuration dictionary.
 
         Parameters
         ----------
-        config : Dict[str, Any]
+        config : dict[str, Any]
             Terms from the configuration dictionary.
-        parameters : ParameterSet
-            Set of parameters for this problem.
-        output_dir : str
-            Path to the output directory.
+        settings : Settings
+            Settings for this problem.
 
         Returns
         -------
-        SyntheticObjective
+        IndividualT
             Objective function to optimise.
         """
         # Check for mandatory arguments
@@ -158,13 +118,31 @@ class SyntheticObjective(GenericObjective):
             raise RuntimeError("Missing test function")
         function = config.pop('function')
         # Optional arguments
-        composition = None
-        if 'composition' in config:
-            composition = read_reduction(config.pop('composition'))
-        return SyntheticObjective(
-            parameters,
+        weight = float(config.pop('weight', 1.0))
+        maximise = bool(config.pop('maximise', False))
+        variance = config.pop('variance', None)
+        bounds = config.pop('bounds', None)
+        return cls(
             function,
-            output_dir,
-            composition=composition,
+            settings,
+            weight=weight,
+            maximise=maximise,
+            variance=variance,
+            bounds=bounds,
             **config,
         )
+
+
+class SyntheticObjective(SimpleObjective[SyntheticIndividualObjective]):
+    """Objective function derived from a synthetic test function."""
+
+    @classmethod
+    def individual_objective_type(cls) -> type[SyntheticIndividualObjective]:
+        """Return the type of the individual objective for this simple objective.
+
+        Returns
+        -------
+        type[SyntheticIndividualObjective]
+            Type of the individual objective for this simple objective.
+        """
+        return SyntheticIndividualObjective

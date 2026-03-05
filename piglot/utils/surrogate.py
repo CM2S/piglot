@@ -14,7 +14,7 @@ def get_model(
     x_data: np.ndarray,
     y_data: np.ndarray,
     var_data: np.ndarray = None,
-    noisy: bool = False,
+    infer_noise: bool = False,
 ) -> SingleTaskGP:
     """Get a GP regression model for the current data.
 
@@ -26,7 +26,7 @@ def get_model(
         Output outcomes.
     var_data : np.ndarray, optional
         Observation variance, by default None
-    noisy : bool, optional
+    infer_noise : bool, optional
         Whether to use a noise-infering GPs or fixed noise ones, by default False
 
     Returns
@@ -43,7 +43,7 @@ def get_model(
     gp = SingleTaskGP(
         x,
         y,
-        train_Yvar=None if noisy else var,
+        train_Yvar=None if infer_noise else var,
         input_transform=Normalize(d=x.shape[-1]),
         outcome_transform=Standardize(m=y.shape[-1]),
     )

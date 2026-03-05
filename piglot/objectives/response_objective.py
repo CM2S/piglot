@@ -1,6 +1,6 @@
 """Module for generic response-based objectives."""
 from __future__ import annotations
-from typing import Dict, Any, List, Optional, Tuple, Type, TypeVar
+from typing import Any, Optional, TypeVar
 from abc import ABC, abstractmethod
 import warnings
 import numpy as np
@@ -8,61 +8,20 @@ import torch
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.figure import Figure
-from piglot.parameter import ParameterSet
+from piglot.settings import Settings
 from piglot.solver.solver import Solver, OutputResult
 from piglot.objective import (
-    Composition,
-    GenericObjective,
-    ObjectiveResult,
-    DynamicPlotter,
+    Objective,
     IndividualObjective,
+    IndividualObjectiveResult,
 )
-from piglot.utils.reductions import Reduction, NegateReduction
+from piglot.utils.composition import LatentTransformer
+from piglot.utils.reductions import Reduction
 from piglot.utils.response_transformer import ResponseTransformer
-from piglot.utils.composition.responses import FlattenUtility, ConcatUtility
-from piglot.utils.scalarisations import Scalarisation, SumScalarisation
+from piglot.utils.scalarisations import Scalarisation
 
 
 T = TypeVar('T', bound='ResponseSingleObjective')
-
-
-class DynamicResponsePlotter(DynamicPlotter):
-    """Dynamic plotter for response-based objectives."""
-
-    def __init__(
-        self,
-        figures: List[Figure],
-        solver: Solver,
-        mapping: Dict[Line2D, str],
-        transformers: Dict[str, ResponseTransformer],
-    ) -> None:
-        self.figures = figures
-        self.solver = solver
-        self.mapping = mapping
-        self.transformers = transformers
-
-    def update(self) -> None:
-        """Update the plot with new results."""
-        try:
-            result = self.solver.get_current_response()
-        except (FileNotFoundError, IndexError):
-            return
-        # Update the lines
-        for line, name in self.mapping.items():
-            if name not in result:
-                continue
-            response = result[name]
-            if name in self.transformers:
-                response = self.transformers[name].transform(response)
-            line.set_xdata(response.get_time())
-            line.set_ydata(response.get_data())
-        # Redraw the plot
-        for fig in self.figures:
-            for ax in fig.axes:
-                ax.relim()
-                ax.autoscale_view()
-            fig.canvas.draw()
-            fig.canvas.flush_events()
 
 
 class ResponseSingleObjective(IndividualObjective, ABC):
@@ -71,33 +30,44 @@ class ResponseSingleObjective(IndividualObjective, ABC):
     def __init__(
         self,
         name: str,
-        prediction: List[str],
+        prediction: list[str],
         quantity: Reduction,
-        maximise: bool = False,
+        mean_dist: bool = False,
         weight: float = 1.0,
-        bounds: Optional[Tuple[float, float]] = None,
-        flatten_utility: Optional[FlattenUtility] = None,
+        maximise: bool = False,
+        variance: bool = False,
+        composite: bool = False,
+        bounds: Optional[tuple[float, float]] = None,
+        latent_transformer: Optional[LatentTransformer] = None,
         prediction_transform: Optional[ResponseTransformer] = None,
     ) -> None:
-        super().__init__(maximise=maximise, weight=weight, bounds=bounds)
+        super().__init__(
+            name,
+            weight=weight,
+            maximise=maximise,
+            variance=variance,
+            composite=composite,
+            bounds=bounds,
+        )
         self.name = name
+        self.mean_dist = mean_dist
         self.prediction = prediction
-        self.quantity = NegateReduction(quantity) if maximise else quantity
-        self.flatten_utility = flatten_utility
+        self.quantity = quantity
+        self.latent_transformer = latent_transformer
         self.prediction_transform = prediction_transform
 
-    def _extract_responses(self, raw_results: Dict[str, OutputResult]) -> List[OutputResult]:
+    def _extract_responses(self, raw_results: dict[str, OutputResult]) -> list[OutputResult]:
         """Extract responses of interest from the results and compute any required transformation.
 
         Parameters
         ----------
-        raw_results : Dict[str, OutputResult]
+        raw_results : dict[str, OutputResult]
             Raw responses from the solver
 
         Returns
         -------
-        List[OutputResult]
-            List of transformed results.
+        list[OutputResult]
+            list of transformed results.
         """
         results = [raw_results[name] for name in self.prediction]
         if self.prediction_transform is None:
@@ -127,113 +97,126 @@ class ResponseSingleObjective(IndividualObjective, ABC):
         return params.expand(*(list(time.shape[:-1]) + [params.shape[-1]]))
 
     def evaluate(
-        self,
-        params: np.ndarray,
-        raw_results: Dict[str, OutputResult],
-    ) -> Tuple[float, float]:
+        self, params: np.ndarray, raw_results: dict[str, OutputResult]
+    ) -> IndividualObjectiveResult:
         """Evaluate objective value for the given results.
 
         Parameters
         ----------
         params : np.ndarray
             Parameter values for this evaluation.
-        raw_results : Dict[str, OutputResult]
+        raw_results : dict[str, OutputResult]
             Raw responses from the solver.
 
         Returns
         -------
-        Tuple[float, float]
-            Mean and variance of the objective.
+        IndividualObjectiveResult
+            Result of the objective evaluation.
         """
-        values = [
-            self.quantity.reduce(result.time, result.data, params)
-            for result in self._extract_responses(raw_results)
-        ]
-        # Only compute the variance if we have more than one response
-        # TODO: add different stochastic models
-        return (
-            np.mean(values),
-            np.var(values) / len(values) if len(values) > 1 else 0.0,
+        # Extract the responses of interest and compute the objective value and variance
+        results = self._extract_responses(raw_results)
+        obj_values = [self.quantity.reduce(result.time, result.data, params) for result in results]
+
+        # Mean objective value
+        value = np.mean(obj_values).item()
+
+        # Variance when requested
+        variance = None
+        if self.has_variance():
+            # Only compute the variance if we have more than one response
+            numel = len(obj_values) if self.mean_dist else 1
+            variance = np.var(obj_values, ddof=1) / numel if len(obj_values) > 1 else 0.0
+
+        # Composition: evaluate the latent space representation
+        latent_values, latent_covar = None, None
+        if self.is_composite():
+            # Latent space representation for all responses
+            latent_space = np.array([
+                self.latent_transformer.latent_space(result.time, result.data) for result in results
+            ])
+
+            # Mean of the latent space representation
+            latent_values = np.mean(latent_space, axis=0)
+
+            # Covariance of the latent space representation when requested
+            if self.has_variance():
+                latent_covar = (
+                    np.cov(latent_space.T, ddof=1) / len(latent_space)
+                    if latent_space.shape[0] > 1
+                    else np.zeros((latent_space.shape[1], latent_space.shape[1]))
+                )
+
+        return IndividualObjectiveResult(
+            value=value,
+            variance=variance,
+            latent_values=latent_values,
+            latent_covariances=latent_covar,
         )
 
-    def latent_space(self, raw_results: Dict[str, OutputResult]) -> Tuple[np.ndarray, np.ndarray]:
-        """Compute latent space representation of the given results (for composite objectives).
+    def composition(self, latent: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
+        """Composition function for this objective, if supported.
 
         Parameters
         ----------
-        raw_results : Dict[str, OutputResult]
-            Raw responses from the solver.
-
-        Returns
-        -------
-        Tuple[np.ndarray, np.ndarray]
-            Mean and variance of the latent space representation.
-        """
-        latent_space = np.array([
-            self.flatten_utility.flatten(result.time, result.data)
-            for result in self._extract_responses(raw_results)
-        ])
-        # Only compute the covariance if we have more than one response
-        # TODO: add different stochastic models
-        covariance = (
-            np.cov(latent_space.T) / latent_space.shape[0]
-            if latent_space.shape[0] > 1
-            else np.zeros((latent_space.shape[1], latent_space.shape[1]))
-        )
-        return np.mean(latent_space, axis=0), covariance
-
-    def evaluate_from_latent_space(
-        self,
-        params: torch.Tensor,
-        latent_responses: torch.Tensor,
-    ) -> torch.Tensor:
-        """Evaluate the objective value(s) from the latent space representation.
-
-        Parameters
-        ----------
+        latent : torch.Tensor
+            Latent space values from the inner function.
         params : torch.Tensor
-            Parameter values for these results.
-        latent_responses : torch.Tensor
-            Response(s) in the latent space representation.
+            Parameters for the given result.
 
         Returns
         -------
         torch.Tensor
-            Objective value(s) for the response(s).
+            Composition result.
         """
-        time, data = self.flatten_utility.unflatten_torch(latent_responses)
+        if not self.is_composite():
+            raise ValueError("Composition function is not supported for non-composite objectives.")
+
+        # We need to reconstruct the time and data from the latent space representation, and then
+        # compute the quantity reduction to get the objective value
+        time, data = self.latent_transformer.inverse_transform(latent)
         return self.quantity.reduce_torch(time, data, self._expand_params(time, params))
 
+    def latent_size(self) -> int:
+        """Return the size of the latent space for this objective.
+
+        Returns
+        -------
+        int
+            Size of the latent space.
+        """
+        # Under non-composite objectives, assume a size of 1 for the scalar value of the objective
+        return self.latent_transformer.length() if self.is_composite() else 1
+
     @abstractmethod
-    def plot(self, axis: plt.Axes, raw_results: Dict[str, OutputResult]) -> Dict[Line2D, str]:
+    def plot(self, axis: plt.Axes, raw_results: dict[str, OutputResult]) -> dict[Line2D, str]:
         """Plot the response for this objective.
 
         Parameters
         ----------
         axis : plt.Axes
             Axis to plot the response on.
-        raw_results : Dict[str, OutputResult]
+        raw_results : dict[str, OutputResult]
             Raw responses from the solver.
 
         Returns
         -------
-        Dict[Line2D, str]
+        dict[Line2D, str]
             Mapping of lines to response names (for dynamically updating plots).
         """
 
     @classmethod
     @abstractmethod
-    def read(cls: Type[T], name: str, config: Dict[str, Any], output_dir: str) -> T:
+    def read(cls: type[T], name: str, config: dict[str, Any], settings: Settings) -> T:
         """Read the objective spec from the configuration dictionary.
 
         Parameters
         ----------
         name : str
             Name of the objective.
-        config : Dict[str, Any]
+        config : dict[str, Any]
             Configuration dictionary.
-        output_dir: str
-            Output directory.
+        settings : Settings
+            Global settings for the optimisation.
 
         Returns
         -------
@@ -242,202 +225,28 @@ class ResponseSingleObjective(IndividualObjective, ABC):
         """
 
 
-class ResponseComposition(Composition, ABC):
-    """Generic class for compositions to use for response-based objectives."""
-
-    def __init__(
-        self,
-        objectives: List[ResponseSingleObjective],
-        scalarisation: Optional[Scalarisation] = None,
-    ) -> None:
-        super().__init__()
-        self.objectives = objectives
-        self.scalarisation = scalarisation
-        self.concat = ConcatUtility([obj.flatten_utility.length() for obj in self.objectives])
-
-    @abstractmethod
-    def composition_torch(self, inner: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
-        """Compute the composition for all objectives.
-
-        Parameters
-        ----------
-        inner : torch.Tensor
-            Return value from the inner function.
-        params : torch.Tensor
-            Paratemers for the given responses.
-
-        Returns
-        -------
-        torch.Tensor
-            Composition results.
-        """
-
-    @abstractmethod
-    def get_latent_space(
-        self,
-        params: np.ndarray,
-        raw_responses: Dict[str, OutputResult],
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Compute the latent space representation of the given results.
-
-        Parameters
-        ----------
-        params : np.ndarray
-            Parameter values for these results.
-        raw_responses : Dict[str, OutputResult]
-            Raw responses from the solver.
-
-        Returns
-        -------
-        Tuple[np.ndarray, np.ndarray]
-            Latent space representation of the results: mean and covariance.
-        """
-
-
-class FullComposition(ResponseComposition):
-    """Container for the outer composition of composite response-based objectives."""
-
-    def composition_torch(self, inner: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
-        """Compute the composition for all objectives.
-
-        Parameters
-        ----------
-        inner : torch.Tensor
-            Return value from the inner function.
-        params : torch.Tensor
-            Paratemers for the given responses.
-
-        Returns
-        -------
-        torch.Tensor
-            Composition results.
-        """
-        # Split the inner responses and compute the objective values
-        latent_responses = self.concat.split_torch(inner)
-        objectives = torch.stack([
-            objective.evaluate_from_latent_space(params, latent_response)
-            for latent_response, objective in zip(latent_responses, self.objectives)
-        ], dim=-1)
-        # Scalarise the objectives if necessary
-        if self.scalarisation is not None:
-            objectives, _ = self.scalarisation.scalarise_torch(objectives)
-        return objectives
-
-    def get_latent_space(
-        self,
-        params: np.ndarray,
-        raw_responses: Dict[str, OutputResult],
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Compute the latent space representation of the given results.
-
-        Parameters
-        ----------
-        params : np.ndarray
-            Parameter values for these results.
-        raw_responses : Dict[str, OutputResult]
-            Raw responses from the solver.
-
-        Returns
-        -------
-        Tuple[np.ndarray, np.ndarray]
-            Latent space representation of the results: mean and covariance.
-        """
-        latent_space = [
-            objective.latent_space(raw_responses)
-            for objective in self.objectives
-        ]
-        return (
-            self.concat.concat([mean for mean, _ in latent_space]),
-            self.concat.concat_covar([var for _, var in latent_space]),
-        )
-
-
-class ScalarisationComposition(ResponseComposition):
-    """Composition for scalarisation of non-composite response objectives."""
-
-    def composition_torch(self, inner: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
-        """Compute the composition for all objectives.
-
-        Parameters
-        ----------
-        inner : torch.Tensor
-            Return value from the inner function.
-        params : torch.Tensor
-            Paratemers for the given responses.
-
-        Returns
-        -------
-        torch.Tensor
-            Composition results.
-        """
-        return self.scalarisation.scalarise_torch(inner)[0]
-
-    def get_latent_space(
-        self,
-        params: np.ndarray,
-        raw_responses: Dict[str, OutputResult],
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Compute the latent space representation of the given results.
-
-        Parameters
-        ----------
-        params : np.ndarray
-            Parameter values for these results.
-        raw_responses : Dict[str, OutputResult]
-            Raw responses from the solver.
-
-        Returns
-        -------
-        Tuple[np.ndarray, np.ndarray]
-            Latent space representation of the results: mean and covariance.
-        """
-        objectives = [
-            objective.evaluate(params, raw_responses)
-            for objective in self.objectives
-        ]
-        return (
-            self.concat.concat([np.array([mean]) for mean, _ in objectives]),
-            self.concat.concat_covar([np.array([var]) for _, var in objectives]),
-        )
-
-
-class ResponseObjective(GenericObjective):
+class ResponseObjective(Objective):
     """Objective for generic response-based objectives."""
 
     def __init__(
         self,
-        parameters: ParameterSet,
+        settings: Settings,
         solver: Solver,
-        objectives: List[ResponseSingleObjective],
-        output_dir: str,
+        objectives: list[ResponseSingleObjective],
         scalarisation: Scalarisation = None,
-        stochastic: bool = False,
         composite: bool = False,
-        full_composite: bool = True,
-        transformers: Dict[str, ResponseTransformer] = None,
+        transformers: dict[str, ResponseTransformer] = None,
     ) -> None:
-        # Sanitise the scalarisation
-        if scalarisation is None:
-            # Everything fine if we just have a single objective: use a sum scalarisation
-            if len(objectives) == 1:
-                scalarisation = SumScalarisation(objectives)
-            elif composite and not full_composite:
-                raise ValueError('Multi-objective composite problems require full composition')
-        # Get the type of composition to use
-        composite_type = FullComposition if full_composite else ScalarisationComposition
         super().__init__(
-            parameters,
-            stochastic=stochastic,
-            composition=composite_type(objectives, scalarisation) if composite else None,
-            scalarisation=None if composite else scalarisation,
-            num_objectives=len(objectives),
-            multi_objective=len(objectives) > 1 and scalarisation is None,
-            output_dir=output_dir,
+            settings,
+            objectives=objectives,
+            scalarisation=scalarisation,
+            composite=composite,
         )
-        self.composition: Optional[ResponseComposition] = self.composition
         self.solver = solver
-        self.objectives = objectives
         self.transformers = transformers if transformers is not None else {}
+        # Update type hint for the objectives
+        self.objectives: list[ResponseSingleObjective]
         # Sanitise predictions
         for objective in self.objectives:
             for name in objective.prediction:
@@ -449,17 +258,17 @@ class ResponseObjective(GenericObjective):
         super().prepare()
         self.solver.prepare()
 
-    def postproc_responses(self, responses: Dict[str, OutputResult]) -> Dict[str, OutputResult]:
+    def postproc_responses(self, responses: dict[str, OutputResult]) -> dict[str, OutputResult]:
         """Post-process the responses from the solver.
 
         Parameters
         ----------
-        responses : Dict[str, OutputResult]
+        responses : dict[str, OutputResult]
             Raw responses from the solver.
 
         Returns
         -------
-        Dict[str, OutputResult]
+        dict[str, OutputResult]
             Post-processed responses.
         """
         # Sanitise responses
@@ -478,8 +287,10 @@ class ResponseObjective(GenericObjective):
                 responses[name] = transformer.transform(responses[name])
         return responses
 
-    def _objective(self, params: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
-        """Objective computation for design objectives.
+    def _objective(
+        self, params: np.ndarray, concurrent: bool = False
+    ) -> list[IndividualObjectiveResult]:
+        """Abstract method for objective computation.
 
         Parameters
         ----------
@@ -490,56 +301,31 @@ class ResponseObjective(GenericObjective):
 
         Returns
         -------
-        ObjectiveResult
-            Objective result.
+        list[IndividualObjectiveResult]
+            list of individual objective results.
         """
         raw_responses = self.solver.solve(params, concurrent)
+
         # Sanitise and post-process the responses
         raw_responses = self.postproc_responses(raw_responses)
-        # Compute the objective value and variance from each response objective
-        results = [objective.evaluate(params, raw_responses) for objective in self.objectives]
-        obj_values = np.array([mean for mean, _ in results])
-        obj_variances = np.array([var for _, var in results])
-        # Under single-objective, compute the scalar objective value
-        scalar_value, scalar_variance = None, None
-        if not self.multi_objective:
-            scalarisation = self.scalarisation or self.composition.scalarisation
-            scalar_value, scalar_variance = scalarisation.scalarise(obj_values, obj_variances)
-        # Get the values to return to the optimiser. Three scenarios:
-        # (i) under composition, return the latent space
-        # (ii) non-composite multi-objective, return the objective values
-        # (iii) non-composite single-objective, return the scalarised objective
-        if self.composition is not None:
-            optim_values, optim_covar = self.composition.get_latent_space(params, raw_responses)
-        elif self.multi_objective:
-            optim_values, optim_covar = obj_values, np.diag(obj_variances)
-        else:
-            optim_values, optim_covar = np.array([scalar_value]), np.array([[scalar_variance]])
-        # Return the objective result: only return the variances if we are stochastic
-        return ObjectiveResult(
-            params,
-            optim_values,
-            obj_values,
-            scalar_value=scalar_value,
-            covariances=optim_covar if self.stochastic else None,
-            obj_variances=obj_variances if self.stochastic else None,
-            scalar_variance=scalar_variance if self.stochastic else None,
-        )
 
-    def plot_case(self, case_hash: str, options: Dict[str, Any] = None) -> List[Figure]:
+        # Compute the individual objective results
+        return [objective.evaluate(params, raw_responses) for objective in self.objectives]
+
+    def plot_case(self, case_hash: str, options: dict[str, Any] = None) -> list[Figure]:
         """Plot a given function call given the parameter hash
 
         Parameters
         ----------
         case_hash : str, optional
             Parameter hash for the case to plot
-        options : Dict[str, Any], optional
+        options : dict[str, Any], optional
             Options to pass to the plotting function, by default None
 
         Returns
         -------
-        List[Figure]
-            List of figures with the plot
+        list[Figure]
+            list of figures with the plot
         """
         append_title = ''
         if options is not None and 'append_title' in options:
@@ -561,30 +347,30 @@ class ResponseObjective(GenericObjective):
             figures.append(fig)
         return figures
 
-    def plot_current(self) -> List[DynamicPlotter]:
-        """Plot the currently running function call
+    # def plot_current(self) -> list[DynamicPlotter]:
+    #     """Plot the currently running function call
 
-        Returns
-        -------
-        List[DynamicPlotter]
-            List of instances of a updatable plots
-        """
-        # Get current solver data
-        responses = self.postproc_responses(self.solver.get_current_response())
-        # Plot each objective
-        figures: List[Figure] = []
-        mapping: Dict[Line2D, str] = {}
-        for objective in self.objectives:
-            fig, axis = plt.subplots()
-            line, = objective.plot(axis, responses)
-            axis.set_title(objective.name)
-            axis.legend()
-            # Store the line and figure
-            mapping[line] = objective.name
-            figures.append(fig)
-        # Show the plot
-        plt.show()
-        for fig in figures:
-            fig.canvas.draw()
-            fig.canvas.flush_events()
-        return [DynamicResponsePlotter(figures, self.solver, mapping, self.transformers)]
+    #     Returns
+    #     -------
+    #     list[DynamicPlotter]
+    #         list of instances of a updatable plots
+    #     """
+    #     # Get current solver data
+    #     responses = self.postproc_responses(self.solver.get_current_response())
+    #     # Plot each objective
+    #     figures: list[Figure] = []
+    #     mapping: dict[Line2D, str] = {}
+    #     for objective in self.objectives:
+    #         fig, axis = plt.subplots()
+    #         line, = objective.plot(axis, responses)
+    #         axis.set_title(objective.name)
+    #         axis.legend()
+    #         # Store the line and figure
+    #         mapping[line] = objective.name
+    #         figures.append(fig)
+    #     # Show the plot
+    #     plt.show()
+    #     for fig in figures:
+    #         fig.canvas.draw()
+    #         fig.canvas.flush_events()
+    #     return [DynamicResponsePlotter(figures, self.solver, mapping, self.transformers)]

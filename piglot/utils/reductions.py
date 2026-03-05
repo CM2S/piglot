@@ -119,6 +119,40 @@ class NegateReduction(Reduction):
         return -self.reduction.reduce_torch(time, data, params)
 
 
+class ParameterReduction(Reduction):
+    """Simply output one of the parameters as the reduction.
+
+    Useful for multi-objective when a parameter is also an objective.
+    """
+
+    def __init__(self, param_index: int) -> None:
+        self.param_index = param_index
+
+    def reduce_torch(
+        self,
+        time: torch.Tensor,
+        data: torch.Tensor,
+        params: torch.Tensor,
+    ) -> torch.Tensor:
+        """Reduce the input data to a single value.
+
+        Parameters
+        ----------
+        time : np.ndarray
+            Time points of the response.
+        data : np.ndarray
+            Data points of the response.
+        params : np.ndarray
+            Parameters for the given responses.
+
+        Returns
+        -------
+        np.ndarray
+            Reduced value of the data.
+        """
+        return params[..., self.param_index]
+
+
 class SimpleReduction(Reduction):
     """Reduction function defined from a lambda function (without using the parameters)."""
 
@@ -171,7 +205,7 @@ AVAILABLE_REDUCTIONS: Dict[str, Reduction] = {
         lambda time, data: torch.trapz(torch.abs(data), time, dim=-1),
     ),
 }
-# TODO: Add test for non-existing 'script' reduction
+# TODO: Add test for non-existing 'script' and 'parameter' reductions
 
 
 def read_reduction(config: Union[str, Dict[str, Any]]) -> Reduction:
@@ -206,6 +240,11 @@ def read_reduction(config: Union[str, Dict[str, Any]]) -> Reduction:
         if not bool(config.get('skip_test', False)):
             instance.test_reduction()
         return instance
+    # Read parameter "reduction"
+    if name == 'parameter':
+        if 'index' not in config:
+            raise ValueError("Missing index for the parameter reduction.")
+        return ParameterReduction(int(config['index']))
     if name not in AVAILABLE_REDUCTIONS:
         raise ValueError(f'Reduction function "{name}" is not available.')
     return AVAILABLE_REDUCTIONS[name]

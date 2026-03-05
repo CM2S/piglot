@@ -11,10 +11,15 @@ import matplotlib.pyplot as plt
 from scipy.integrate import trapezoid
 from PIL import Image
 import torch
+from botorch.sampling.qmc import MultivariateNormalQMCEngine
 from piglot.parameter import read_parameters
 from piglot.objectives import read_objective
 from piglot.utils.surrogate import get_model, optmise_posterior_mean
 from piglot.utils.yaml_parser import parse_config_file
+from piglot.optimisers.botorch.dataset import BayesDataset
+from piglot.optimisers.botorch.model import build_gp_model
+from piglot.optimisers.botorch.composition import BoTorchComposition
+from piglot.optimisers.botorch.acquisitions import build_and_optimise_acquisition
 
 
 def cumulative_regret(values: np.ndarray, x_grid: np.ndarray) -> np.ndarray:
@@ -307,12 +312,14 @@ def plot_gp(args):
         with torch.no_grad():
             posterior = model.posterior(x.unsqueeze(1))
             mean = posterior.mean.squeeze()
-            variance = posterior.variance.squeeze()
+            f_lb, f_ub = posterior.mvn.confidence_region()
+            noise_posterior = model.posterior(x.unsqueeze(1), observation_noise=True)
+            y_lb, y_ub = noise_posterior.mvn.confidence_region()
         axis.plot(x, mean, label=f'{name}: Mean')
-        axis.fill_between(x, mean - variance.sqrt(), mean + variance.sqrt(), alpha=0.5,
-                          label=f'{name}: Std. dev.')
+        axis.fill_between(x, f_lb, f_ub, alpha=0.5, label=f'{name}: f CI 95%')
+        axis.fill_between(x, y_lb, y_ub, alpha=0.5, label=f'{name}: y CI 95%')
         if 'variances' in data_dict:
-            axis.errorbar(param_values, values, yerr=np.sqrt(variances), color='black', fmt='o')
+            axis.errorbar(param_values, values, yerr=2 * np.sqrt(variances), color='black', fmt='o')
         else:
             axis.scatter(param_values, values, color='black')
     axis.set_xlim(x_min, x_max)
@@ -320,6 +327,116 @@ def plot_gp(args):
     axis.grid()
     axis.set_xlabel(parameters[0].name)
     axis.set_ylabel("Objective")
+    fig.tight_layout()
+    if args.save_fig:
+        fig.savefig(args.save_fig)
+    else:
+        plt.show()
+    plt.close()
+
+
+def plot_mcgp(args):
+    """Driver for plotting a Gaussian process regression with Monte Carlo samplers.
+
+    Parameters
+    ----------
+    args : dict
+        Passed arguments.
+    """
+    # Build piglot problem
+    config = parse_config_file(args.config)
+    parameters = read_parameters(config)
+    if len(parameters) != 1:
+        raise ValueError("Can only plot a Gaussian process regression for a single parameter.")
+    objective = read_objective(config["objective"], parameters, config["output"])
+    data = objective.get_history()
+    fig, axis = plt.subplots()
+    axis: plt.Axes = axis
+    x_min = min(par.lbound for par in parameters)
+    x_max = max(par.ubound for par in parameters)
+
+    # Load objective data
+    data_dict = data[list(data.keys())[0]]
+    values = data_dict['values']
+    param_values = data_dict['params']
+    variances = data_dict['variances'] if 'variances' in data_dict else None
+
+    # Load dataset
+    dataset = BayesDataset.load(os.path.join(config["output"], 'dataset.pt'))
+    noise_model = config['optimiser'].get('noise_model', 'homoscedastic')
+    model = build_gp_model(dataset, objective.infer_noise, noise_model)
+    composition = BoTorchComposition(model, dataset, objective)
+
+    # Build the acquisition function for the best value
+    options = config['optimiser']
+    options.pop('name')
+    _, best = build_and_optimise_acquisition(
+        'qsr',
+        model,
+        dataset,
+        parameters,
+        composition,
+        **options,
+    )
+
+    # Evaluate the model
+    x = torch.linspace(x_min, x_max, 256, dtype=dataset.dtype, device=dataset.device)
+    with torch.no_grad():
+        x_joint = x.view(-1, 1, 1)
+        # Posterior for f
+        f_samples = -composition.from_inputs(x_joint, args.num_samples, seed=0).squeeze()
+        f_mean = f_samples.mean(dim=0)
+        f_lb, f_ub = f_samples.quantile(0.025, dim=0), f_samples.quantile(0.975, dim=0)
+
+        # Posterior for y
+        y_samples = -composition.from_inputs(
+            x_joint,
+            args.num_samples,
+            seed=0,
+            observation_noise=True,
+        ).squeeze()
+        y_lb, y_ub = y_samples.quantile(0.025, dim=0), y_samples.quantile(0.975, dim=0)
+
+        # Observations
+        phat_mean, phat_covs = dataset.transform_outcomes(diagonalise=False)
+        phat_samples = torch.stack([
+            MultivariateNormalQMCEngine(mean, covs, seed=0).draw(args.num_samples)
+            for mean, covs in zip(phat_mean, phat_covs)
+        ], dim=1)
+        obs_samples = -composition.from_model_samples(phat_samples, dataset.params)
+        obs_mean = obs_samples.mean(dim=0)
+        obs_lb, obs_ub = obs_samples.quantile(0.025, dim=0), obs_samples.quantile(0.975, dim=0)
+        obs_bounds = torch.stack([obs_mean - obs_lb, obs_ub - obs_mean], dim=0).clamp_min(0)
+
+    p, = axis.plot(x, f_mean, label='Mean')
+    axis.fill_between(x, f_lb, f_ub, alpha=0.6, color=p.get_color(), label='f CI 95%')
+    axis.fill_between(x, y_lb, y_ub, alpha=0.3, color=p.get_color(), label='y CI 95%')
+    axis.axhline(-best.item(), color='black', linestyle='--', label='Best')
+    if variances is not None:
+        axis.errorbar(
+            dataset.params[:, 0],
+            obs_mean,
+            yerr=obs_bounds,
+            fmt='o',
+            capsize=6.0,
+            elinewidth=2.0,
+            label='MC Posterior',
+        )
+        axis.errorbar(
+            param_values,
+            values,
+            yerr=2 * np.sqrt(variances),
+            fmt='+',
+            capsize=6.0,
+            elinewidth=1.0,
+            label='Observations',
+        )
+    else:
+        axis.scatter(dataset.params[:, 0], obs_mean, marker='o', label='MC Posterior')
+        axis.scatter(param_values, values, marker='+', label='Observations')
+    axis.set_xlim(x_min, x_max)
+    axis.legend()
+    axis.grid()
     fig.tight_layout()
     if args.save_fig:
         fig.savefig(args.save_fig)
@@ -655,6 +772,38 @@ def main(passed_args: List[str] = None):
         help=("Max number of calls to plot."),
     )
     sp_gp.set_defaults(func=plot_gp)
+
+    # Gaussian process with Monte Carlo plotting
+    sp_mcgp = subparsers.add_parser(
+        'mcgp',
+        help='plot a Gaussian process regression with Monte Carlo sampling',
+        description=("Plot a Gaussian process regression with Monte Carlo sampling. This must be "
+                     "executed in the same path as the running piglot instance."),
+    )
+    sp_mcgp.add_argument(
+        'config',
+        type=str,
+        help="Path for the used or generated configuration file.",
+    )
+    sp_mcgp.add_argument(
+        '--save_fig',
+        default=None,
+        type=str,
+        help=("Path to save the generated figure. If used, graphical output is skipped."),
+    )
+    sp_mcgp.add_argument(
+        '--max_calls',
+        default=None,
+        type=int,
+        help=("Max number of calls to plot."),
+    )
+    sp_mcgp.add_argument(
+        '--num_samples',
+        default=512,
+        type=int,
+        help=("Number of samples for the Monte Carlo integration."),
+    )
+    sp_mcgp.set_defaults(func=plot_mcgp)
 
     # Pareto front plotting
     sp_pareto = subparsers.add_parser(

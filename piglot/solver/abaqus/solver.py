@@ -108,6 +108,8 @@ class AbaqusCase(InputFileCase):
         ----------
         input_data : AbaqusInputData
             Input data for the simulation.
+        field_data : FieldsOutput
+            Field data for the simulation.
 
         Returns
         -------

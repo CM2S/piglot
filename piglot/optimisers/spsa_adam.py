@@ -3,7 +3,8 @@ from typing import Tuple, Callable, Optional
 import numpy as np
 from scipy.stats import bernoulli
 from piglot.objective import Objective
-from piglot.optimiser import ScalarOptimiser, boundary_check
+from piglot.optimiser import ScalarOptimiser
+from piglot.optimisers.spsa import boundary_check
 
 
 class SPSA_Adam(ScalarOptimiser):

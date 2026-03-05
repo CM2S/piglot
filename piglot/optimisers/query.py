@@ -7,7 +7,7 @@ from botorch.utils.multi_objective.box_decompositions.non_dominated import (
     FastNondominatedPartitioning,
 )
 from piglot.optimiser import Optimiser, InvalidOptimiserException
-from piglot.objective import Objective, GenericObjective
+from piglot.objective import Objective
 
 
 class QueryOptimiser(Optimiser):
@@ -48,11 +48,9 @@ class QueryOptimiser(Optimiser):
         objective : Objective
             Objective to optimise.
         """
-        if not isinstance(objective, GenericObjective):
-            raise InvalidOptimiserException('Generic objective required for this optimiser')
         if objective.composition is not None:
             raise InvalidOptimiserException('This optimiser does not support composition')
-        if objective.stochastic:
+        if objective.has_variance():
             raise InvalidOptimiserException('This optimiser does not support stochasticity')
 
     def update_mo_data(self, parameters: np.ndarray, observations: np.ndarray) -> Tuple[float, int]:

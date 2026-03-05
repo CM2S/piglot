@@ -1,11 +1,13 @@
 """Assorted utilities."""
 from typing import List, Dict, Tuple, Type, TypeVar, Any
 import os
+import copy
 import contextlib
 import importlib
-import numpy as np
 import importlib.util
+import numpy as np
 from scipy.stats import t
+import torch
 
 
 def pretty_time(elapsed_sec: float) -> str:
@@ -65,6 +67,44 @@ def reverse_pretty_time(time_str: str) -> float:
             left, time_str = time_str.split(suffix)
             value += float(left) * factor
     return value
+
+
+def missing_method(name, package):
+    """Class generator for missing packages.
+
+    Parameters
+    ----------
+    name : str
+        Name of the missing method.
+    package : str
+        Name of the package to install.
+    """
+    def err_func(name, package):
+        """Raise an error for this missing method.
+
+        Parameters
+        ----------
+        name : str
+            Name of the missing method.
+        package : str
+            Name of the package to install.
+
+        Raises
+        ------
+        ImportError
+            Every time it is called.
+        """
+        raise ImportError(f"{name} is not available. You need to install package {package}!")
+
+    return type(
+        f'Missing_{package}',
+        (),
+        {
+            'name': name,
+            'package': package,
+            '__init__': (lambda *args, **kwargs: err_func(name, package))
+        },
+    )
 
 
 def filter_close_points(data: np.ndarray, tol: float) -> np.ndarray:
@@ -179,3 +219,28 @@ def read_custom_module(config: Dict[str, Any], cls: Type[T]) -> Type[T]:
     if not issubclass(module_class, cls):
         raise ValueError(f"Custom class '{module_class}' is not a subclass of '{cls}'.")
     return module_class
+
+
+class TorchContainer:
+    """Mixin for objects containing torch tensors."""
+
+    def to(self: T, device: torch.device, dtype: torch.dtype = None) -> T:
+        """Move the object to a given device/dtype.
+
+        Parameters
+        ----------
+        device : torch.device
+            Device to move the object to.
+        dtype : torch.dtype, optional
+            Dtype to move the object to, by default None.
+
+        Returns
+        -------
+        T
+            The object in the new device/dtype.
+        """
+        new_object = copy.deepcopy(self)
+        for name, attr in new_object.__dict__.items():
+            if isinstance(attr, (torch._C._TensorBase, TorchContainer)):  # pylint: disable=W0212
+                setattr(new_object, name, attr.to(device, dtype=dtype))
+        return new_object

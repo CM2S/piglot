@@ -41,7 +41,6 @@ from botorch.acquisition.multi_objective.objective import GenericMCMultiOutputOb
 from botorch.sampling import SobolQMCNormalSampler
 from piglot.objective import (
     Objective,
-    GenericObjective,
     ObjectiveResult,
 )
 from piglot.optimiser import Optimiser
@@ -161,10 +160,8 @@ class BayesianBoTorch(Optimiser):
         num_fantasies: int = None,
         sequential: bool = False,
     ) -> None:
-        if not isinstance(objective, GenericObjective):
-            raise RuntimeError("Bayesian optimiser requires a GenericObjective")
-        if bool(noisy) and objective.stochastic:
-            warnings.warn("Noisy setting with stochastic objective - ignoring objective variance")
+        if bool(noisy) and objective.has_variance():
+            warnings.warn("Noisy setting: ignoring objective variance")
         super().__init__('BoTorch', objective)
         self.objective = objective
         self.n_initial = n_initial
@@ -191,9 +188,9 @@ class BayesianBoTorch(Optimiser):
         self.num_fantasies = num_fantasies
         if acquisition is None:
             self.acquisition = default_acquisition(
-                objective.composition,
-                objective.multi_objective,
-                bool(noisy) or objective.stochastic,
+                objective.is_composite(),
+                objective.is_multi_objective(),
+                bool(noisy) or objective.has_variance(),
                 self.q,
             )
         else:
@@ -202,10 +199,10 @@ class BayesianBoTorch(Optimiser):
                 self.acquisition = 'q' + self.acquisition
             if self.acquisition not in AVAILABLE_ACQUISITIONS:
                 raise RuntimeError(f"Unkown acquisition function {orig_name}")
-        if self.pca_variance and not (objective.composition or objective.multi_objective):
+        if self.pca_variance and not (objective.is_composite() or objective.is_multi_objective()):
             warnings.warn("Ignoring PCA variance for non-composite single-objective problem")
             self.pca_variance = None
-        elif self.pca_variance is None and objective.composition:
+        elif self.pca_variance is None and objective.is_composite():
             self.pca_variance = 1e-6
         torch.set_num_threads(1)
 
@@ -237,7 +234,7 @@ class BayesianBoTorch(Optimiser):
             warnings.warn('Optimisation of the MLL failed, falling back to PyTorch optimiser')
             fit_mll_pytorch_loop(mll)
         # MOBO requires a model list (except when there is only one output)
-        if self.objective.multi_objective and values.shape[-1] > 1:
+        if self.objective.is_multi_objective() and values.shape[-1] > 1:
             return batched_to_model_list(model)
         return model
 
@@ -301,20 +298,30 @@ class BayesianBoTorch(Optimiser):
         points = qmc.Sobol(n_dim, seed=seed).random(n_points)
         return [point * (bound[:, 1] - bound[:, 0]) + bound[:, 0] for point in points]
 
-    def _result_to_dataset(self, result: ObjectiveResult) -> Tuple[np.ndarray, np.ndarray]:
+    def _result_to_dataset(self, result: ObjectiveResult) -> Tuple[np.ndarray, np.ndarray, float]:
+        values = result.latent_values if self.objective.is_composite() else result.obj_values
         covariances = (
-            result.covariances
-            if self.objective.stochastic
-            else np.diag(np.zeros_like(result.values))
+            (result.latent_covariances if self.objective.is_composite() else result.obj_variances)
+            if self.objective.has_variance()
+            else np.diag(np.zeros_like(values))
         )
-        return result.values, covariances
+
+        # No scalar value for multi-objective problems
+        if self.objective.is_multi_objective():
+            return values, covariances, None
+
+        # For single-objective problems, select the appropriate scalar value
+        scalar_value = (
+            result.obj_values[0] if self.objective.scalarisation is None else result.scalar_value
+        )
+        return values, covariances, scalar_value
 
     def _composition(self, vals: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
         # Just negate the untransformed outcomes if no composition is available
-        if not self.objective.composition:
+        if not self.objective.is_composite():
             return -vals.squeeze(-1)
         # Otherwise, use the composition function
-        return -self.objective.composition.composition_torch(vals, params)
+        return -self.objective.composition(vals, params)
 
     def _update_mo_data(self, dataset: BayesDataset) -> float:
         y_points = self._composition(dataset.values, dataset.params)
@@ -426,7 +433,7 @@ class BayesianBoTorch(Optimiser):
         # Evaluate initial shot and use it to infer number of dimensions
         if not self.skip_initial:
             init_result = self.objective(init_shot)
-            init_values, init_covariances = self._result_to_dataset(init_result)
+            init_values, init_covariances, init_scalar_value = self._result_to_dataset(init_result)
             n_outputs = len(init_values)
 
         # If requested, sample some random points before starting (in parallel if possible)
@@ -435,7 +442,7 @@ class BayesianBoTorch(Optimiser):
 
         # Infer number of points to store when skipping initial shot
         if self.skip_initial:
-            values, covariances = self._result_to_dataset(results[0])
+            values, _, _ = self._result_to_dataset(results[0])
             n_outputs = len(values)
 
         # Build initial dataset with the initial shot (if available)
@@ -447,28 +454,22 @@ class BayesianBoTorch(Optimiser):
             pca_variance=self.pca_variance,
         )
         if not self.skip_initial:
-            dataset.push(init_shot, init_values, init_covariances, init_result.scalar_value)
+            dataset.push(init_shot, init_values, init_covariances, init_scalar_value)
 
         # Add random points to the dataset
         for i, result in enumerate(results):
-            values, covariances = self._result_to_dataset(result)
-            dataset.push(random_points[i], values, covariances, result.scalar_value)
+            values, covariances, scalar_value = self._result_to_dataset(result)
+            dataset.push(random_points[i], values, covariances, scalar_value)
         return dataset
 
     def _get_extra_info(self, cv_error: float, dataset: BayesDataset) -> str:
-        extra = None
+        extra = {}
         if cv_error:
-            extra = f'Val. {cv_error:6.4}'
-            if self.objective.multi_objective:
-                extra += f'  Num Pareto: {self.partitioning.pareto_Y.shape[0]}'
-            if self.pca_variance:
-                extra += f'  Num PCA: {dataset.pca.num_components}'
-        elif self.objective.multi_objective:
-            extra = f'Num Pareto: {self.partitioning.pareto_Y.shape[0]}'
-            if self.pca_variance:
-                extra += f'  Num PCA: {dataset.pca.num_components}'
-        elif self.pca_variance:
-            extra = f'Num PCA: {dataset.pca.num_components}'
+            extra['Val'] = f'{cv_error:6.4}'
+        if self.objective.is_multi_objective():
+            extra['Num Pareto'] = f'{self.partitioning.pareto_Y.shape[0]}'
+        if self.pca_variance:
+            extra['Num PCA'] = f'{dataset.pca.num_components}'
         return extra
 
     def _optimise(
@@ -518,11 +519,11 @@ class BayesianBoTorch(Optimiser):
             test_points = self._get_random_points(self.n_test, n_dim, self.seed + 1, bound)
             test_results = self._eval_candidates(test_points)
             for i, result in enumerate(test_results):
-                values, covariances = self._result_to_dataset(result)
-                test_dataset.push(test_points[i], values, covariances, result.scalar_value)
+                values, covariances, scalar_value = self._result_to_dataset(result)
+                test_dataset.push(test_points[i], values, covariances, scalar_value)
 
         # Find current best point to return to the driver
-        if self.objective.multi_objective:
+        if self.objective.is_multi_objective():
             best_value = self._update_mo_data(dataset)
             best_params = None
         else:
@@ -548,7 +549,7 @@ class BayesianBoTorch(Optimiser):
                         torch.set_default_device('cpu')
                         dataset = dataset.to(self.device)
                         test_dataset = test_dataset.to(self.device)
-                        if self.objective.multi_objective:
+                        if self.objective.is_multi_objective():
                             self.ref_point = self.ref_point.to(self.device)
                             self._update_mo_data(dataset)
 
@@ -558,12 +559,12 @@ class BayesianBoTorch(Optimiser):
             # Update dataset
             values_batch = []
             for i, result in enumerate(results):
-                values, covariances = self._result_to_dataset(result)
-                values_batch.append(result.scalar_value)
-                dataset.push(candidates[i, :], values, covariances, result.scalar_value)
+                values, covariances, scalar_value = self._result_to_dataset(result)
+                values_batch.append(scalar_value)
+                dataset.push(candidates[i, :], values, covariances, scalar_value)
 
             # Find best observation for this batch
-            if self.objective.multi_objective:
+            if self.objective.is_multi_objective():
                 best_value = self._update_mo_data(dataset)
                 best_params = None
             else:
@@ -581,7 +582,7 @@ class BayesianBoTorch(Optimiser):
                 break
 
         # Return optimisation result
-        if self.objective.multi_objective:
+        if self.objective.is_multi_objective():
             best_result = self._update_mo_data(dataset)
             best_params = None
         else:

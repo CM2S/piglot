@@ -56,8 +56,8 @@ def parse_config_file(config_file: str) -> Dict[str, Any]:
     if 'parameters' not in config:
         raise RuntimeError("Missing parameters from the config file")
     # Add missing optional items
-    if 'output' not in config:
-        config['output'] = os.path.splitext(config_file)[0]
+    if 'output_dir' not in config:
+        config['output_dir'] = os.path.splitext(config_file)[0]
     if 'quiet' not in config:
         config["quiet"] = False
     elif config['quiet']:

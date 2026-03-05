@@ -1,6 +1,6 @@
 """Module for Curve solver."""
 from __future__ import annotations
-from typing import Dict, Any, List, Tuple, Type
+from typing import Dict, Any, List, Tuple, Type, Optional
 import re
 import time
 import numpy as np
@@ -20,12 +20,18 @@ class CurveCase(Case):
         parametric: str,
         bounds: Tuple[float, float],
         points: int,
+        variance: Optional[str] = None,
+        lengthscale: Optional[float] = None,
+        seed: Optional[int] = None,
     ) -> None:
         self.case_name = name
         self.expression = expression
         self.parametric = parametric
         self.bounds = bounds
         self.points = points
+        self.variance = variance
+        self.lengthscale = lengthscale
+        self.seed = seed
 
     def name(self) -> str:
         """Return the name of the case.
@@ -47,11 +53,13 @@ class CurveCase(Case):
         """
         return [self.case_name]
 
-    def get_expression(self, parameters: ParameterSet, values: np.ndarray) -> str:
+    def get_expression(self, expression: str, parameters: ParameterSet, values: np.ndarray) -> str:
         """Get the expression for this case.
 
         Parameters
         ----------
+        expression : str
+            Expression template for this case.
         parameters : ParameterSet
             Parameter set for this problem.
         values : np.ndarray
@@ -62,7 +70,6 @@ class CurveCase(Case):
         str
             Expression for this case.
         """
-        expression = self.expression
         param_value = parameters.to_dict(values)
         for parameter, value in param_value.items():
             expression = re.sub(r'\<' + parameter + r'\>', str(value), expression)
@@ -93,11 +100,30 @@ class CurveCase(Case):
         begin_time = time.time()
         # Prepare symbols
         symbs = sympy.symbols([self.parametric] + [p.name for p in parameters])
-        expression = sympy.lambdify(symbs, self.get_expression(parameters, values))
+        expression = sympy.lambdify(symbs, self.get_expression(self.expression, parameters, values))
         param_values = parameters.to_dict(values)
         # Evaluate the expression on the grid
         grid = np.linspace(self.bounds[0], self.bounds[1], self.points)
         curve = np.array([expression(**param_values, **{self.parametric: x}) for x in grid])
+        # Check if this is a stochastic curve
+        if self.variance is not None:
+            var_expression = self.get_expression(self.variance, parameters, values)
+            var_func = sympy.lambdify(symbs, var_expression)
+            variances = np.array([var_func(**param_values, **{self.parametric: x}) for x in grid])
+            # Check if variances are valid
+            if not np.all(variances > 0) or not np.all(np.isfinite(variances)):
+                raise ValueError("Invalid variances computed.")
+            # Generate noise
+            rnd = np.random.RandomState(self.seed)  # pylint: disable=E1101
+            if self.lengthscale is not None:
+                # Use a multivariate normal with a squared exponential kernel
+                kernel = np.exp(-np.square(np.subtract.outer(grid, grid) / self.lengthscale))
+                covar = kernel * variances[:, None] * variances[None, :]
+                noise = rnd.multivariate_normal(np.zeros(self.points), covar)
+            else:
+                # Gaussian i.i.d. noise
+                noise = rnd.normal(0.0, np.sqrt(variances))
+            curve += noise
         # Return the result
         run_time = time.time() - begin_time
         return CaseResult(
@@ -136,7 +162,16 @@ class CurveCase(Case):
         if 'bounds' not in config:
             raise ValueError("Missing 'bounds' in solver configuration.")
         points = int(config['points']) if 'points' in config else 100
-        return cls(name, config['expression'], config['parametric'], config['bounds'], points)
+        return cls(
+            name,
+            config['expression'],
+            config['parametric'],
+            config['bounds'],
+            points,
+            config.get('variance', None),
+            config.get('lengthscale', None),
+            config.get('seed', None),
+        )
 
 
 class CurveSolver(MultiCaseSolver):

@@ -1,12 +1,12 @@
 """Module for curve fitting objectives"""
 from __future__ import annotations
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Optional, TypeVar
 import os
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-from piglot.parameter import ParameterSet
+from piglot.settings import Settings
 from piglot.solver import read_solver
 from piglot.solver.solver import OutputResult
 from piglot.utils.reductions import Reduction, read_reduction
@@ -17,8 +17,13 @@ from piglot.utils.response_transformer import (
     read_response_transformer,
 )
 from piglot.utils.scalarisations import read_scalarisation
-from piglot.utils.composition.responses import FixedFlatteningUtility
+from piglot.utils.composition import FixedTimeLatentTransformer
 from piglot.objectives.response_objective import ResponseSingleObjective, ResponseObjective
+
+
+ReferenceT = TypeVar('ReferenceT', bound='Reference')
+SingleObjT = TypeVar('SingleObjT', bound='FittingSingleObjective')
+ObjectiveT = TypeVar('ObjectiveT', bound='ResponseFittingObjective')
 
 
 class Reference:
@@ -113,25 +118,27 @@ class Reference:
         """
         return self.y_data
 
-    @staticmethod
-    def read(filename: str, config: Dict[str, Any], output_dir: str) -> Reference:
+    @classmethod
+    def read(
+        cls: type[ReferenceT], filename: str, config: dict[str, Any], output_dir: str
+    ) -> ReferenceT:
         """Read the reference from the configuration dictionary.
 
         Parameters
         ----------
         filename : str
             Path to the reference file.
-        config : Dict[str, Any]
+        config : dict[str, Any]
             Configuration dictionary.
         output_dir: str
             Output directory.
 
         Returns
         -------
-        Reference
+        ReferenceT
             Reference to use for this problem.
         """
-        return Reference(
+        return cls(
             filename,
             output_dir,
             x_col=int(config.get('x_col', 1)),
@@ -153,35 +160,42 @@ class FittingSingleObjective(ResponseSingleObjective):
         self,
         name: str,
         reference: Reference,
-        prediction: List[str],
+        prediction: list[str],
         reduction: Reduction,
+        mean_dist: bool = False,
         weight: float = 1.0,
-        bounds: Optional[Tuple[float, float]] = None,
+        variance: bool = False,
+        composite: bool = False,
+        bounds: Optional[tuple[float, float]] = None,
     ) -> None:
         super().__init__(
             name,
             prediction,
             reduction,
             weight=weight,
+            maximise=False,
+            variance=variance,
+            composite=composite,
             bounds=bounds,
-            flatten_utility=FixedFlatteningUtility(reference.get_time()),
+            mean_dist=mean_dist,
+            latent_transformer=FixedTimeLatentTransformer(reference.get_time()),
             prediction_transform=PointwiseErrors(reference.get_time(), reference.get_data()),
         )
         self.reference = reference
 
-    def plot(self, axis: plt.Axes, raw_results: Dict[str, OutputResult]) -> Dict[Line2D, str]:
+    def plot(self, axis: plt.Axes, raw_results: dict[str, OutputResult]) -> dict[Line2D, str]:
         """Plot the response for this objective.
 
         Parameters
         ----------
         axis : plt.Axes
             Axis to plot the response on.
-        raw_results : Dict[str, OutputResult]
+        raw_results : dict[str, OutputResult]
             Raw responses from the solver.
 
         Returns
         -------
-        Dict[Line2D, str]
+        dict[Line2D, str]
             Mapping of lines to response names (for dynamically updating plots).
         """
         # Plot the reference
@@ -194,7 +208,7 @@ class FittingSingleObjective(ResponseSingleObjective):
             c='k',
         )
         # Plot the response
-        lines: Dict[Line2D, str] = {}
+        lines: dict[Line2D, str] = {}
         for prediction in self.prediction:
             response = raw_results[prediction]
             line, = axis.plot(response.get_time(), response.get_data(), label=prediction)
@@ -202,21 +216,23 @@ class FittingSingleObjective(ResponseSingleObjective):
         return lines
 
     @classmethod
-    def read(cls, name: str, config: Dict[str, Any], output_dir: str) -> FittingSingleObjective:
+    def read(
+        cls: type[SingleObjT], name: str, config: dict[str, Any], settings: Settings
+    ) -> SingleObjT:
         """Read the objective spec from the configuration dictionary.
 
         Parameters
         ----------
         name : str
             Name of the objective.
-        config : Dict[str, Any]
+        config : dict[str, Any]
             Configuration dictionary.
-        output_dir: str
-            Output directory.
+        settings : Settings
+            Global settings for the optimisation.
 
         Returns
         -------
-        ResponseSingleObjective
+        SingleObjT
             Single objective to use.
         """
         # Prediction parsing
@@ -232,14 +248,18 @@ class FittingSingleObjective(ResponseSingleObjective):
         reduction = read_reduction(config.pop('reduction', 'mse'))
         weight = float(config.pop('weight', 1.0))
         bounds = config.pop('bounds', None)
+        mean_dist = bool(config.pop('mean_dist', False))
+        composite = bool(config.get('composite', False))
         # Read the reference and return the objective
-        reference = Reference.read(name, config, output_dir)
-        return FittingSingleObjective(
+        reference = Reference.read(name, config, settings.output_dir)
+        return cls(
             name,
             reference,
             prediction,
             reduction,
+            mean_dist=mean_dist,
             weight=weight,
+            composite=composite,
             bounds=bounds,
         )
 
@@ -254,11 +274,13 @@ class ResponseFittingObjective(ResponseObjective):
         flatten utility and the transformer.
         """
         super().prepare()
-        objectives: List[FittingSingleObjective] = self.objectives
+        objectives: list[FittingSingleObjective] = self.objectives
         for objective in objectives:
             objective.reference.prepare()
-            # Update the flattening utility and the prediction transformer
-            objective.flatten_utility = FixedFlatteningUtility(objective.reference.get_time())
+            # Update the latent transformer and the prediction transformer
+            objective.latent_transformer = FixedTimeLatentTransformer(
+                objective.reference.get_time()
+            )
             objective.prediction_transform = PointwiseErrors(
                 objective.reference.get_time(),
                 objective.reference.get_data(),
@@ -266,54 +288,52 @@ class ResponseFittingObjective(ResponseObjective):
 
     @classmethod
     def read(
-        cls,
-        config: Dict[str, Any],
-        parameters: ParameterSet,
-        output_dir: str,
-    ) -> ResponseFittingObjective:
+        cls: type[ObjectiveT],
+        config: dict[str, Any],
+        settings: Settings,
+    ) -> ObjectiveT:
         """Read the objective from a configuration dictionary.
 
         Parameters
         ----------
-        config : Dict[str, Any]
+        config : dict[str, Any]
             Terms from the configuration dictionary.
-        parameters : ParameterSet
-            Set of parameters for this problem.
-        output_dir : str
-            Path to the output directory.
+        settings : Settings
+            Global settings for the optimisation.
 
         Returns
         -------
-        ResponseFittingObjective
+        ObjectiveT
             Objective function to optimise.
         """
         # Read the solver
         if 'solver' not in config:
             raise ValueError("Missing solver for fitting objective.")
-        solver = read_solver(config['solver'], parameters, output_dir)
-        # Read the references
-        if 'references' not in config:
-            raise ValueError("Missing references for fitting objective.")
-        objectives = [
-            FittingSingleObjective.read(target_name, target_config, output_dir)
-            for target_name, target_config in config.pop('references').items()
-        ]
+        solver = read_solver(config.pop('solver'), settings.parameters, settings.output_dir)
         # Read transformers
-        transformers: Dict[str, ResponseTransformer] = {}
+        transformers: dict[str, ResponseTransformer] = {}
         if 'transformers' in config:
             for name, transformer_config in config.pop('transformers').items():
                 transformers[name] = read_response_transformer(transformer_config)
-        return ResponseFittingObjective(
-            parameters,
+        # Pop the scalarisation flag
+        scalarisation_conf = config.pop('scalarisation', None)
+        # Pop the references
+        if 'references' not in config:
+            raise ValueError("Missing references for fitting objective.")
+        references_config = config.pop('references')
+        # Read the references and inject any additional configuration into the objectives
+        objectives = [
+            FittingSingleObjective.read(target_name, target_config | config, settings)
+            for target_name, target_config in references_config.items()
+        ]
+        return cls(
+            settings,
             solver,
             objectives,
-            output_dir,
             scalarisation=(
-                read_scalarisation(config['scalarisation'], objectives)
-                if 'scalarisation' in config else None
+                read_scalarisation(scalarisation_conf, objectives)
+                if scalarisation_conf is not None else None
             ),
-            stochastic=bool(config.get('stochastic', False)),
             composite=bool(config.get('composite', False)),
-            full_composite=bool(config.get('full_composite', True)),
             transformers=transformers,
         )

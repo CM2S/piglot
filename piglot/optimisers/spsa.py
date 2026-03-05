@@ -3,7 +3,27 @@ from typing import Tuple, Callable, Optional
 import numpy as np
 from scipy.stats import bernoulli
 from piglot.objective import Objective
-from piglot.optimiser import ScalarOptimiser, boundary_check
+from piglot.optimiser import ScalarOptimiser
+
+
+def boundary_check(arg: np.ndarray, bounds: np.ndarray) -> np.ndarray:
+    """Check if the values are within the bounds and correct them if not.
+
+    Parameters
+    ----------
+    arg : np.ndarray
+        Values to check.
+    bounds : np.ndarray
+        Lower and upper bounds.
+
+    Returns
+    -------
+    np.ndarray
+        Corrected values.
+    """
+    arg = np.where(arg > bounds[:, 1], bounds[:, 1], arg)
+    arg = np.where(arg < bounds[:, 0], bounds[:, 0], arg)
+    return arg
 
 
 class SPSA(ScalarOptimiser):

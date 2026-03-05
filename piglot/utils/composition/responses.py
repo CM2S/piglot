@@ -369,7 +369,6 @@ class ResponseComposition(Composition):
             variances.append(np.var(flat_responses, axis=0) / flat_responses.shape[0])
         # Concatenate the transformed responses
         return ObjectiveResult(
-            params,
             self.concat.concat(means),
             self.concat.concat(variances) if self.stochastic else None,
         )
