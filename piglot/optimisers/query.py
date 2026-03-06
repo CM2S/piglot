@@ -48,7 +48,7 @@ class QueryOptimiser(Optimiser):
         objective : Objective
             Objective to optimise.
         """
-        if objective.composition is not None:
+        if objective.is_composite():
             raise InvalidOptimiserException('This optimiser does not support composition')
         if objective.has_variance():
             raise InvalidOptimiserException('This optimiser does not support stochasticity')
@@ -138,17 +138,24 @@ class QueryOptimiser(Optimiser):
 
         # Initial shot
         result = self.objective(init_shot)
-        best_value = result.values if self.objective.multi_objective else result.scalar_value
+        best_value = (
+            result.obj_values if self.objective.is_multi_objective() else result.scalar_value
+        )
         best_solution = init_shot
 
         # Build observation datasets
         param_dataset = np.array([best_solution])
-        objective_dataset = np.array([best_value])
-        if len(objective_dataset.shape) == 1:
-            objective_dataset = objective_dataset.reshape(-1, 1)
+        if self.objective.is_multi_objective():
+            objective_dataset = np.array([result.obj_values])
+        else:
+            if self.objective.scalarisation is None:
+                best_value = result.obj_values[0]
+            else:
+                best_value = result.scalar_value
+            objective_dataset = np.array([[best_value]])
 
         # Update progress
-        if self.objective.multi_objective:
+        if self.objective.is_multi_objective():
             best_value = self.update_mo_data(param_dataset, objective_dataset)
             best_solution = None
         self._progress_check(0, best_value, best_solution)
@@ -157,12 +164,17 @@ class QueryOptimiser(Optimiser):
         for i, param_set in enumerate(self.param_list):
             # Evaluate objective and add to dataset
             result = self.objective(param_set)
-            value = result.values if self.objective.multi_objective else result.scalar_value
+            if self.objective.is_multi_objective():
+                value = result.obj_values
+            elif self.objective.scalarisation is None:
+                value = result.obj_values[0]
+            else:
+                value = result.scalar_value
             param_dataset = np.vstack((param_dataset, param_set))
             objective_dataset = np.vstack((objective_dataset, value))
 
             # Update best-observed value
-            if self.objective.multi_objective:
+            if self.objective.is_multi_objective():
                 best_value = self.update_mo_data(param_dataset, objective_dataset)
                 best_solution = None
             elif value < best_value:

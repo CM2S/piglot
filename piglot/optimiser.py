@@ -422,7 +422,7 @@ class ScalarOptimiser(Optimiser):
         InvalidOptimiserException
             With an invalid combination of optimiser and objective function.
         """
-        if objective.composition is not None:
+        if objective.is_composite():
             raise InvalidOptimiserException('This optimiser does not support composition')
         if objective.has_variance():
             raise InvalidOptimiserException('This optimiser does not support stochasticity')
@@ -526,7 +526,7 @@ class ScalarOptimiser(Optimiser):
             lambda x, concurrent=False: self.objective(
                 self._denorm_params(x),
                 concurrent=concurrent
-            ).values.item(),
+            ).obj_values.item(),
             n_dim,
             n_iter,
             np.array([[-1.0, 1.0]]).repeat(n_dim, axis=0),

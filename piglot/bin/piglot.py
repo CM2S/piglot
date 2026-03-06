@@ -4,6 +4,7 @@ import os.path
 import argparse
 import shutil
 from yaml import safe_dump
+import numpy as np
 import torch
 from piglot.objectives import read_objective
 from piglot.optimisers import read_optimiser
@@ -76,7 +77,7 @@ def main(config_path: str = None):
     optimiser = read_optimiser(config["optimiser"], objective)
     stop = StoppingCriteria.read(config)
     # Run the optimisation
-    _, best_params = optimiser.optimise(
+    best_value, best_params = optimiser.optimise(
         config["iters"],
         settings.parameters,
         output_dir,
@@ -86,6 +87,22 @@ def main(config_path: str = None):
     # Re-run the best case
     if 'skip_last_run' not in config and best_params is not None and not objective.has_variance():
         objective(best_params)
+    # If we have an expected solution, compare the results
+    if 'expected' in config:
+        if 'value' not in config['expected']:
+            raise ValueError("Missing expected value for design objective.")
+        if 'parameters' not in config['expected']:
+            raise ValueError("Missing expected parameters for design objective.")
+        expected_value = float(config['expected']['value'])
+        expected_params = np.array(config['expected']['parameters'])
+        value_atol = float(config['expected'].get('value_atol', 1e-2))
+        value_rtol = float(config['expected'].get('value_rtol', 1e-2))
+        params_atol = float(config['expected'].get('parameters_atol', 1e-2))
+        params_rtol = float(config['expected'].get('parameters_rtol', 1e-2))
+        value_check = np.isclose(best_value, expected_value, atol=value_atol, rtol=value_rtol)
+        params_check = np.allclose(best_params, expected_params, atol=params_atol, rtol=params_rtol)
+        assert value_check, f"Failed value check: {best_value} vs {expected_value}"
+        assert params_check, f"Failed parameters check: {best_params} vs {expected_params}"
 
 
 if __name__ == '__main__':

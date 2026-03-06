@@ -288,7 +288,7 @@ def read_parameters(config: Dict[str, Any]) -> ParameterSet:
     # Fetch initial shot from another run
     if 'init_shot_from' in config:
         source = parse_config_file(config['init_shot_from'])
-        func_calls_file = os.path.join(source['output'], 'func_calls')
+        func_calls_file = os.path.join(source['output_dir'], 'func_calls')
         df = pd.read_table(func_calls_file)
         df.columns = df.columns.str.strip()
         min_series = df.iloc[df['Objective'].idxmin()]

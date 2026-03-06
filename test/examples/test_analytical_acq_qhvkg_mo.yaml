@@ -10,7 +10,7 @@ parameters:
 
 
 objective:
-  name: analytical_mo
+  name: analytical
   objectives:
     obj1:
       expression: a ** 2

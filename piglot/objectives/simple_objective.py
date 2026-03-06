@@ -41,6 +41,7 @@ class SimpleIndividualObjective(IndividualObjective, ABC):
     @abstractmethod
     def read(
         cls: type[IndividualT],
+        name: str,
         config: dict[str, Any],
         settings: Settings,
     ) -> IndividualT:
@@ -48,6 +49,8 @@ class SimpleIndividualObjective(IndividualObjective, ABC):
 
         Parameters
         ----------
+        name : str
+            Name of this objective.
         config : dict[str, Any]
             Configuration dictionary.
         settings : Settings
@@ -115,7 +118,10 @@ class SimpleObjective(Objective, Generic[IndividualT], ABC):
         # Check for the type of the objective
         if 'objectives' in config:
             # We have multiple objectives, so read them as a list and also parse scalarisations
-            objectives = [obj_cls.read(obj_config, settings) for obj_config in config['objectives']]
+            objectives = [
+                obj_cls.read(name, obj_config, settings)
+                for name, obj_config in config['objectives'].items()
+            ]
             return cls(
                 settings,
                 objectives=objectives,
@@ -126,7 +132,8 @@ class SimpleObjective(Objective, Generic[IndividualT], ABC):
             )
 
         # We have a single objective: read it directly and discard any scalarisation
-        return cls(settings, objectives=[obj_cls.read(config, settings)], scalarisation=None)
+        name = config.get('name', 'Objective')
+        return cls(settings, objectives=[obj_cls.read(name, config, settings)], scalarisation=None)
 
     @classmethod
     @abstractmethod

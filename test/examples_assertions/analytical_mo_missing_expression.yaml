@@ -8,7 +8,7 @@ parameters:
 
 
 objective:
-  name: analytical_mo
+  name: analytical
   objectives:
     obj_1:
       expression_dsa: a ** 2

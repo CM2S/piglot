@@ -299,12 +299,24 @@ class BayesianBoTorch(Optimiser):
         return [point * (bound[:, 1] - bound[:, 0]) + bound[:, 0] for point in points]
 
     def _result_to_dataset(self, result: ObjectiveResult) -> Tuple[np.ndarray, np.ndarray, float]:
-        values = result.latent_values if self.objective.is_composite() else result.obj_values
-        covariances = (
-            (result.latent_covariances if self.objective.is_composite() else result.obj_variances)
-            if self.objective.has_variance()
-            else np.diag(np.zeros_like(values))
-        )
+        # Set up values
+        if self.objective.is_composite():
+            values = result.latent_values
+        elif self.objective.scalarisation is None:
+            values = result.obj_values
+        else:
+            values = np.array([result.scalar_value])
+
+        # Set up variances/covariances
+        if self.objective.has_variance():
+            if self.objective.is_composite():
+                covariances = result.latent_covariances
+            elif self.objective.scalarisation is None:
+                covariances = np.diag(result.obj_variances)
+            else:
+                covariances = np.array([[result.scalar_variance]])
+        else:
+            covariances = np.diag(np.zeros_like(values))
 
         # No scalar value for multi-objective problems
         if self.objective.is_multi_objective():

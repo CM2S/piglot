@@ -8,13 +8,13 @@ parameters:
 
 
 objective:
-  name: analytical_mo
+  name: analytical
   scalarisation: sum
   objectives:
     obj_1:
       expression: a ** 2
-      variance: 0.1
+      variance_expr: 0.1
     obj_2:
       expression: a
-      variance: 0.01 * a ** 2
+      variance_expr: 0.01 * a ** 2
 

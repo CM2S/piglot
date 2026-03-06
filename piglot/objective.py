@@ -209,7 +209,7 @@ class Scalarisation(ABC):
             torch.from_numpy(variances) if variances is not None else None,
         )
         if torch_var is None:
-            return torch_mean.numpy(force=True), None
+            return torch_mean.numpy(force=True).item(), None
         return torch_mean.item(), torch_var.item()
 
     @abstractmethod

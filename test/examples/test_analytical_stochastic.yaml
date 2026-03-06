@@ -10,4 +10,4 @@ parameters:
 objective:
   name: analytical
   expression: a ** 2
-  variance: 0.1
+  variance_expr: 0.1

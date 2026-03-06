@@ -3,7 +3,6 @@ import os
 import shutil
 import pytest
 from piglot.bin.piglot import main as piglot_main
-from piglot.optimiser import InvalidOptimiserException
 from piglot.utils.assorted import change_cwd
 
 
@@ -28,17 +27,9 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         RuntimeError,
         'Negative variance not allowed',
     ),
-    'analytical_composite_no_scalarisation.yaml': (
-        ValueError,
-        'Composite objectives require scalarisation',
-    ),
     'analytical_missing_objectives.yaml': (
         RuntimeError,
-        'Missing analytical objectives to optimise for',
-    ),
-    'composite_bad_optimiser.yaml': (
-        InvalidOptimiserException,
-        'This optimiser does not support composition',
+        'Missing analytical expression to minimise',
     ),
     'invalid_optimiser.yaml': (
         RuntimeError,
@@ -79,10 +70,6 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     'synthetic_missing_function.yaml': (
         RuntimeError,
         "Missing test function",
-    ),
-    'synthetic_unknown_composition.yaml': (
-        ValueError,
-        'Reduction function "none" is not available.',
     ),
     'missing_iters.yaml': (
         RuntimeError,
@@ -146,7 +133,7 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'design_composite_points.yaml': (
         ValueError,
-        "All objectives must have a number of points specified for the composition.",
+        "Missing number of points for design target",
     ),
     'design_missing_quantity_name.yaml': (
         ValueError,
@@ -184,14 +171,6 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         ValueError,
         "All observed points are equal.",
     ),
-    'query_analytical_composite.yaml': (
-        InvalidOptimiserException,
-        "This optimiser does not support composition",
-    ),
-    'query_analytical_stochastic.yaml': (
-        InvalidOptimiserException,
-        "This optimiser does not support stochasticity",
-    ),
     'query_analytical_bad_num_params.yaml': (
         ValueError,
         "Number of parameters does not match the number of columns",
@@ -207,10 +186,6 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     'query_analytical_bad_ubounds.yaml': (
         ValueError,
         "Parameter values outside upper bounds",
-    ),
-    'curve_bad_composite_scalarisation.yaml': (
-        ValueError,
-        "Multi-objective composite problems require full composition",
     ),
     'curve_mo_bad_scalarisation.yaml': (
         ValueError,

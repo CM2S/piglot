@@ -21,6 +21,7 @@ class SyntheticIndividualObjective(SimpleIndividualObjective):
         self,
         name: str,
         settings: Settings,
+        function: str,
         weight: float = 1.0,
         maximise: bool = False,
         variance: bool = False,
@@ -36,11 +37,11 @@ class SyntheticIndividualObjective(SimpleIndividualObjective):
             bounds=bounds,
         )
         test_functions = self.get_test_functions()
-        if name not in test_functions:
+        if function not in test_functions:
             raise RuntimeError(
-                f'Unknown function {name}. Must be one of {list(test_functions.keys())}'
+                f'Unknown function {function}. Must be one of {list(test_functions.keys())}'
             )
-        self.func = test_functions[name](**kwargs)
+        self.func = test_functions[function](**kwargs)
         with open(os.path.join(settings.output_dir, 'optimum_value'), 'w', encoding='utf8') as file:
             file.write(f'{self.func.optimal_value}')
 
@@ -97,12 +98,14 @@ class SyntheticIndividualObjective(SimpleIndividualObjective):
 
     @classmethod
     def read(
-        cls: type[IndividualT], config: dict[str, Any], settings: Settings
+        cls: type[IndividualT], name: str, config: dict[str, Any], settings: Settings
     ) -> IndividualT:
         """Read the objective from a configuration dictionary.
 
         Parameters
         ----------
+        name : str
+            Name of this objective.
         config : dict[str, Any]
             Terms from the configuration dictionary.
         settings : Settings
@@ -123,8 +126,9 @@ class SyntheticIndividualObjective(SimpleIndividualObjective):
         variance = config.pop('variance', None)
         bounds = config.pop('bounds', None)
         return cls(
-            function,
+            name,
             settings,
+            function,
             weight=weight,
             maximise=maximise,
             variance=variance,

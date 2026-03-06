@@ -8,7 +8,7 @@ parameters:
 
 
 objective:
-  name: analytical_mo
+  name: analytical
   composite: True
   scalarisation: sum
   objectives:

@@ -175,12 +175,14 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
 
     @classmethod
     def read(
-        cls: type[IndividualT], config: dict[str, Any], settings: Settings
+        cls: type[IndividualT], name: str, config: dict[str, Any], settings: Settings
     ) -> IndividualT:
         """Read the objective from a configuration dictionary.
 
         Parameters
         ----------
+        name : str
+            Name of this objective.
         config : dict[str, Any]
             Terms from the configuration dictionary.
         settings : Settings
@@ -195,7 +197,7 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
         if 'expression' not in config:
             raise RuntimeError("Missing analytical expression to minimise")
         return cls(
-            config.get('name', 'Analytical Objective'),
+            name,
             settings,
             config['expression'],
             weight=float(config.get('weight', 1.0)),

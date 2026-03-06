@@ -8,7 +8,7 @@ parameters:
 
 
 objective:
-  name: analytical_mo
+  name: analytical
   scalarisation: sum
   objectives:
     obj_1:
