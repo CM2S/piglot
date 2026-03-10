@@ -5,7 +5,6 @@ from hashlib import sha256
 import numpy as np
 import pandas as pd
 import sympy
-from piglot.utils.yaml_parser import parse_config_file
 
 
 class Parameter:
@@ -287,6 +286,8 @@ def read_parameters(config: Dict[str, Any]) -> ParameterSet:
             parameters.add_output(name, sympy.lambdify(symbs, spec))
     # Fetch initial shot from another run
     if 'init_shot_from' in config:
+        # Avoid circular dependencies by importing here
+        from piglot.utils.yaml_parser import parse_config_file  # pylint: disable=C0415
         source = parse_config_file(config['init_shot_from'])
         func_calls_file = os.path.join(source['output_dir'], 'func_calls')
         df = pd.read_table(func_calls_file)

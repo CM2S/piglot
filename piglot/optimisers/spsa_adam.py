@@ -5,6 +5,7 @@ from scipy.stats import bernoulli
 from piglot.objective import Objective
 from piglot.optimiser import ScalarOptimiser
 from piglot.optimisers.spsa import boundary_check
+from piglot.settings import Settings
 
 
 class SPSA_Adam(ScalarOptimiser):
@@ -21,8 +22,19 @@ class SPSA_Adam(ScalarOptimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, objective: Objective, alpha=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8,
-                 gamma=0.101, prob=0.5, c=None, seed=1):
+    def __init__(
+        self,
+        settings: Settings,
+        objective: Objective,
+        alpha=0.01,
+        beta1=0.9,
+        beta2=0.999,
+        epsilon=1e-8,
+        gamma=0.101,
+        prob=0.5,
+        c=None,
+        seed=1,
+    ) -> None:
         """Constructs all necessary attributes for the SPSA-Adam optimiser.
 
         Parameters
@@ -45,7 +57,7 @@ class SPSA_Adam(ScalarOptimiser):
             Model parameter, refer to documentation, by default None
             If None, this parameter is defined according to internal heuristics.
         """
-        super().__init__('AdamSPSA', objective)
+        super().__init__('AdamSPSA', settings, objective)
         self.alpha = alpha
         self.beta1 = beta1
         self.beta2 = beta2

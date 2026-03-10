@@ -1,5 +1,5 @@
 """Main optimiser classes for using BoTorch with piglot"""
-from typing import Tuple, List, Type, Dict
+from typing import Callable, Tuple, List, Type, Dict
 from multiprocessing.pool import ThreadPool as Pool
 import os
 import warnings
@@ -39,11 +39,9 @@ from botorch.acquisition.multi_objective.logei import (
 )
 from botorch.acquisition.multi_objective.objective import GenericMCMultiOutputObjective
 from botorch.sampling import SobolQMCNormalSampler
-from piglot.objective import (
-    Objective,
-    ObjectiveResult,
-)
-from piglot.optimiser import Optimiser
+from piglot.settings import Settings
+from piglot.objective import Objective, ObjectiveResult
+from piglot.optimiser import Optimiser, OptimisationResult
 from piglot.optimisers.botorch.dataset import BayesDataset
 
 
@@ -138,6 +136,7 @@ class BayesianBoTorch(Optimiser):
 
     def __init__(
         self,
+        settings: Settings,
         objective: Objective,
         n_initial: int = None,
         n_test: int = 0,
@@ -162,7 +161,7 @@ class BayesianBoTorch(Optimiser):
     ) -> None:
         if bool(noisy) and objective.has_variance():
             warnings.warn("Noisy setting: ignoring objective variance")
-        super().__init__('BoTorch', objective)
+        super().__init__(settings, objective)
         self.objective = objective
         self.n_initial = n_initial
         self.acquisition = acquisition
@@ -206,13 +205,24 @@ class BayesianBoTorch(Optimiser):
             self.pca_variance = 1e-6
         torch.set_num_threads(1)
 
-    def _validate_problem(self, objective: Objective) -> None:
-        """Validate the combination of optimiser and objective
+    def name(self) -> str:
+        """Return the name of the optimiser.
+
+        Returns
+        -------
+        str
+            Name of the optimiser.
+        """
+        return "BoTorch"
+
+    @classmethod
+    def validate_problem(cls, objective: Objective) -> None:
+        """Validate the combination of optimiser and objective.
 
         Parameters
         ----------
         objective : Objective
-            Objective to optimise
+            Objective to optimise.
         """
 
     def _build_model(self, dataset: BayesDataset) -> Model:
@@ -351,7 +361,8 @@ class BayesianBoTorch(Optimiser):
             for i in range(pareto.shape[0])
         ]
         # Dump the Pareto front to a file
-        with open(os.path.join(self.output_dir, "pareto_front"), 'w', encoding='utf8') as file:
+        pareto_file = os.path.join(self.settings.output_dir, "pareto_front")
+        with open(pareto_file, 'w', encoding='utf8') as file:
             # Write header
             num_obj = pareto.shape[1]
             file.write('\t'.join([f'{"Objective_" + str(i + 1):>15}' for i in range(num_obj)]))
@@ -485,34 +496,28 @@ class BayesianBoTorch(Optimiser):
         return extra
 
     def _optimise(
-        self,
-        n_dim: int,
-        n_iter: int,
-        bound: np.ndarray,
-        init_shot: np.ndarray,
-    ):
-        """
+        self, callback: Callable[[int, OptimisationResult, dict[str, str]], bool]
+    ) -> OptimisationResult:
+        """Optimise the objective with BoTorch.
+
         Parameters
         ----------
-        func : callable
-            function to optimize
-        n_dim : integer
-            dimension, i.e., number of parameters to optimize
-        n_iter : integer
-            maximum number of iterations
-        bound : array
-            first column corresponding to the lower bound, and second column to the
-            upper bound
-        init_shot : list
-            initial shot for the optimization problem
+        callback : Callable[[OptimisationResult, dict[str, str]], bool]
+            Callback function for reporting the optimiser progress and checking for termination.
+            The first argument is the current optimisation result, while the second argument is a
+            dictionary with additional information to pass to the user. Call this function at the
+            end of each iteration, and if it returns True, stop the optimisation.
 
         Returns
         -------
-        best_value : float
-            best loss function value
-        best_solution : list
-            best parameter solution
+        OptimisationResult
+            Result of the optimisation.
         """
+        # Build parameters
+        n_iter = self.settings.iters
+        n_dim = len(self.settings.parameters)
+        bound = np.array([[param.lbound, param.ubound] for param in self.settings.parameters])
+        init_shot = np.array([param.inital_value for param in self.settings.parameters])
 
         # Initialise heuristic variables
         self.n_initial = self.n_initial or max(8, 2 * n_dim)
@@ -540,7 +545,8 @@ class BayesianBoTorch(Optimiser):
             best_params = None
         else:
             best_params, best_value = dataset.min()
-        self._progress_check(0, best_value, best_params)
+        result = OptimisationResult(best_value, best_params)
+        callback(0, result, self._get_extra_info(None, dataset))
 
         # Optimisation loop
         for i_iter in range(n_iter):
@@ -585,12 +591,8 @@ class BayesianBoTorch(Optimiser):
                 best_params = candidates[best_idx, :]
 
             # Update progress (with extra data if available)
-            if self._progress_check(
-                i_iter + 1,
-                best_value,
-                best_params,
-                extra_info=self._get_extra_info(cv_error, dataset),
-            ):
+            result = OptimisationResult(best_value, best_params)
+            if callback(i_iter + 1, result, self._get_extra_info(cv_error, dataset)):
                 break
 
         # Return optimisation result
@@ -599,4 +601,4 @@ class BayesianBoTorch(Optimiser):
             best_params = None
         else:
             best_params, best_result = dataset.min()
-        return best_params, best_result
+        return OptimisationResult(best_result, best_params)

@@ -7,14 +7,47 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 import numpy as np
 from tqdm import tqdm
-from piglot.parameter import ParameterSet
+from piglot.settings import Settings
 from piglot.utils.assorted import pretty_time
 from piglot.objective import Objective
 
 
 @dataclass
 class OptimisationResult:
-    pass
+    """Container for the result of the optimisation."""
+
+    value: float
+    params: Optional[np.ndarray] = None
+    conf_interval: Tuple[float, float] = (None, None)
+
+
+@dataclass
+class OptimiserState:
+    """Container for the state of the optimiser."""
+
+    i_iter: int = 0
+    iters_without_improvement: int = 0
+    best_result: OptimisationResult = None
+
+    def update(self, i_iter: int, result: OptimisationResult, stochastic: bool) -> None:
+        """Update the optimiser state with a new optimisation result.
+
+        Parameters
+        ----------
+        i_iter : int
+            Current iteration number.
+        result : OptimisationResult
+            Result of the current iteration.
+        stochastic : bool
+            Whether the objective is stochastic (i.e., has variance).
+        """
+        # Update iteration counts first
+        self.i_iter = i_iter
+        self.iters_without_improvement += 1
+        # Update best result
+        if stochastic or self.best_result is None or result.value < self.best_result.value:
+            self.best_result = result
+            self.iters_without_improvement = 0
 
 
 class StoppingCriteria:
@@ -123,96 +156,34 @@ class InvalidOptimiserException(Exception):
 
 
 class Optimiser(ABC):
-    """
-    Interface for implementing different optimization algorithms.
+    """Optimiser interface."""
 
-    Methods
-    -------
-    _init_optimiser(n_iter, parameters, pbar, loss, stop_criteria):
-        constructs the attributes for the optimiser.
-    optimise(loss, n_iter, parameters, stop_criteria = StoppingCriteria()):
-        initiates optimiser.
-    _optimise(self, func, n_dim, n_iter, bound, init_shot):
-        performs the optimization.
-    _progress_check(self, i_iter, curr_value, curr_solution):
-        evaluates the optimiser progress.
-    """
+    def __init__(self, settings: Settings, objective: Objective) -> None:
+        # Sanity check on the objective
+        self.validate_problem(objective)
 
-    def __init__(self, name: str, objective: Objective) -> None:
-        self.name = name
+        self.settings = settings
         self.objective = objective
-        self.parameters = None
-        self.i_iter = None
-        self.n_iter = None
-        self.iters_no_improv = None
-        self.pbar = None
-        self.stop_criteria = None
-        self.output_dir = None
-        self.best_value = None
-        self.best_solution = None
-        self.begin_time = None
-        self.conf_interval = (None, None)
+        self.parameters = settings.parameters
+        self.state = OptimiserState()
+        self.begin_time = time.time()
 
-    @abstractmethod
-    def _validate_problem(self, objective: Objective) -> None:
-        """Validate the combination of optimiser and objective.
+        # Lazy initialisation of the progress bar
+        self.pbar: tqdm = None
 
-        Parameters
-        ----------
-        objective : Objective
-            Objective to optimise.
-        """
-
-    def optimise(
-        self,
-        n_iter: int,
-        parameters: ParameterSet,
-        output_dir: str,
-        stop_criteria: StoppingCriteria = StoppingCriteria(),
-        verbose: bool = True,
-    ) -> Tuple[float, np.ndarray]:
-        """
-        Optimiser for the outside world.
-
-        Parameters
-        ----------
-        objective : Objective
-            Objective function to optimise.
-        n_iter : int
-            Maximum number of iterations.
-        parameters : ParameterSet
-            Set of parameters to optimise.
-        output_dir : str
-            Whether to write output to the output directory, by default None.
-        stop_criteria : StoppingCriteria
-            List of stopping criteria, by default none attributed.
-        verbose : bool
-            Whether to output progress status, by default True.
+    def optimise(self) -> OptimisationResult:
+        """Optimiser for the outside world.
 
         Returns
         -------
-        float
-            Best observed objective value.
-        np.ndarray
-            Observed optimum of the objective.
+        OptimisationResult
+            Result of the optimisation.
         """
-        # Sanity check
-        self._validate_problem(self.objective)
-        # Initialise optimiser
-        self.n_iter = n_iter
-        self.parameters = parameters
-        self.stop_criteria = stop_criteria
-        self.output_dir = output_dir
-        self.iters_no_improv = 0
-        # Build initial shot and bounds
-        n_dim = len(self.parameters)
-        init_shot = np.array([par.inital_value for par in self.parameters])
-        bounds = np.array([[par.lbound, par.ubound] for par in self.parameters])
-        # Build best solution
-        self.best_value = np.nan
-        self.best_solution = None
+        # Reset state and time
+        self.state = OptimiserState()
+        self.begin_time = time.time()
         # Prepare history output files
-        with open(os.path.join(self.output_dir, "history"), 'w', encoding='utf8') as file:
+        with open(os.path.join(self.settings.output_dir, "history"), 'w', encoding='utf8') as file:
             file.write(f'{"Iteration":>10}\t')
             file.write(f'{"Time /s":>15}\t')
             if self.objective.has_variance():
@@ -228,59 +199,27 @@ class Optimiser(ABC):
             file.write('\n')
         # Prepare optimiser
         self.objective.prepare()
-        self.pbar = tqdm(total=n_iter, desc=self.name) if verbose else None
+        if not self.settings.quiet:
+            self.pbar = tqdm(total=self.settings.iters, desc=self.name())
         # Optimise
-        self.begin_time = time.perf_counter()
-        self._optimise(n_dim, n_iter, bounds, init_shot)
-        elapsed = time.perf_counter() - self.begin_time
+        result = self._optimise(self.__update_progress)
         # Output progress
-        if verbose:
+        if not self.settings.quiet:
             self.pbar.close()
-            print(f'Completed {self.i_iter} iterations in {pretty_time(elapsed)}')
-            print(f'Best loss: {self.best_value:15.8e}')
-            if self.best_solution is not None:
-                print('Best parameters')
-                max_width = max(len(par.name) for par in self.parameters)
-                for i, par in enumerate(self.parameters):
-                    print(f'- {par.name.rjust(max_width)}: {self.best_solution[i]:>12.6f}')
+            # print(f'Completed {self.state.i_iter} iterations in {pretty_time(elapsed)}')
+            # print(f'Best loss: {self.best_value:15.8e}')
+            # if self.best_solution is not None:
+            #     print('Best parameters')
+            #     max_width = max(len(par.name) for par in self.parameters)
+            #     for i, par in enumerate(self.parameters):
+            #         print(f'- {par.name.rjust(max_width)}: {self.best_solution[i]:>12.6f}')
         # Return the best value
-        return self.best_value, self.best_solution
-
-    @abstractmethod
-    def _optimise(
-        self,
-        n_dim: int,
-        n_iter: int,
-        bound: np.ndarray,
-        init_shot: np.ndarray,
-    ) -> Tuple[float, np.ndarray]:
-        """
-        Abstract method for optimising the objective.
-
-        Parameters
-        ----------
-        n_dim : int
-            Number of parameters to optimise.
-        n_iter : int
-            Maximum number of iterations.
-        bound : np.ndarray
-            Array where first and second columns correspond to lower and upper bounds, respectively.
-        init_shot : np.ndarray
-            Initial shot for the optimisation problem.
-
-        Returns
-        -------
-        float
-            Best observed objective value.
-        np.ndarray
-            Observed optimum of the objective.
-        """
+        return result
 
     def __update_progress_files(
         self,
         i_iter: int,
-        curr_solution: np.ndarray,
-        curr_value: float,
+        result: OptimisationResult,
         extra_info: str,
     ) -> None:
         """Update progress on output files.
@@ -289,127 +228,198 @@ class Optimiser(ABC):
         ----------
         i_iter : int
             Current iteration number.
-        curr_solution : np.ndarray
-            Current objective minimiser.
-        curr_value : float
-            Current objective value.
+        result : OptimisationResult
+            Current optimisation result.
         extra_info : str
             Additional information to pass to user.
         """
         elapsed = time.perf_counter() - self.begin_time
-        skip_pars = curr_solution is None
+        skip_pars = result.params is None
         # Update progress file
-        with open(os.path.join(self.output_dir, "progress"), 'w', encoding='utf8') as file:
+        with open(os.path.join(self.settings.output_dir, "progress"), 'w', encoding='utf8') as file:
             file.write(f'Iteration: {i_iter}\n')
             file.write(f'Function calls: {self.objective.num_calls}\n')
-            file.write(f'Best loss: {self.best_value}\n')
-            if self.objective.has_variance() and self.conf_interval and all(self.conf_interval):
+            file.write(f'Best loss: {self.state.best_result.value}\n')
+            if self.objective.has_variance() and result.conf_interval and all(result.conf_interval):
                 file.write(
                     'Confidence interval (95%): '
-                    f'[{self.conf_interval[0]}, {self.conf_interval[1]}]\n'
+                    f'[{result.conf_interval[0]}, {result.conf_interval[1]}]\n'
                 )
             if extra_info is not None:
                 file.write(f'Optimiser info: {extra_info}\n')
             if not skip_pars:
                 file.write('Best parameters:\n')
-                for i, par in enumerate(self.parameters):
-                    file.write(f'\t{par.name}: {self.best_solution[i]}\n')
+                for i, par in enumerate(self.settings.parameters):
+                    file.write(f'\t{par.name}: {self.state.best_result.params[i]}\n')
             file.write(f'\nElapsed time: {pretty_time(elapsed)}\n')
         # Update history file
-        with open(os.path.join(self.output_dir, "history"), 'a', encoding='utf8') as file:
+        with open(os.path.join(self.settings.output_dir, "history"), 'a', encoding='utf8') as file:
             file.write(f'{i_iter:>10}\t')
             file.write(f'{elapsed:>15.8e}\t')
             if self.objective.has_variance():
-                file.write(f'{curr_value:>15.8e}\t')
-                if self.conf_interval and all(self.conf_interval):
-                    file.write(f'{self.conf_interval[0]:>15.8e}\t')
-                    file.write(f'{self.conf_interval[1]:>15.8e}\t')
+                file.write(f'{result.value:>15.8e}\t')
+                if result.conf_interval and all(result.conf_interval):
+                    file.write(f'{result.conf_interval[0]:>15.8e}\t')
+                    file.write(f'{result.conf_interval[1]:>15.8e}\t')
                 else:
                     file.write(''.rjust(15) + '\t')
                     file.write(''.rjust(15) + '\t')
             else:
-                file.write(f'{self.best_value:>15.8e}\t')
-                file.write(f'{curr_value:>15.8e}\t')
-            for i, par in enumerate(self.parameters):
-                file.write('None\t'.rjust(16) if skip_pars else f'{curr_solution[i]:>15.8f}\t')
+                file.write(f'{self.state.best_result.value:>15.8e}\t')
+                file.write(f'{result.value:>15.8e}\t')
+            for i, par in enumerate(self.settings.parameters):
+                file.write('None\t'.rjust(16) if skip_pars else f'{result.params[i]:>15.8f}\t')
             file.write(f"\t{'-' if extra_info is None else extra_info}")
             file.write('\n')
 
-    def _progress_check(
-        self,
-        i_iter: int,
-        curr_value: float,
-        curr_solution: np.ndarray,
-        extra_info: Dict[str, str] = None,
-        conf_interval: Tuple[float, float] = (None, None),
-    ) -> bool:
-        """
-        Report the optimiser progress and check for termination.
+    def __convergence_check(self, i_iter: int) -> bool:
+        """Check the convergence criteria.
 
         Parameters
         ----------
         i_iter : int
             Current iteration number.
-        curr_value : float
-            Current objective value.
-        curr_solution : np.ndarray
-            Current objective minimiser.
-        extra_info : Dict[str, str]
-            Additional information to pass to user.
-        conf_interval : Tuple[float, float]
-            Confidence interval for the current value (if available).
 
         Returns
         -------
         bool
             Whether any of the stopping criteria is satisfied.
         """
-        self.i_iter = i_iter
-        # Update new value to best value (when using exact objectives)
-        if self.objective.has_variance():
-            self.iters_no_improv = 0
-            self.best_value = curr_value
-            self.conf_interval = conf_interval
-            self.best_solution = curr_solution
-        else:
-            if curr_value >= self.best_value:
-                self.iters_no_improv += 1
-            else:
-                self.best_value = curr_value
-                self.best_solution = curr_solution
-                self.iters_no_improv = 0
-                self.conf_interval = conf_interval
+        # Iteration number
+        if i_iter > self.settings.iters:
+            return True
+        # Time
+        if self.settings.max_timeout is not None:
+            elapsed = time.time() - self.begin_time
+            if elapsed > self.settings.max_timeout:
+                return True
+        # Function calls
+        if self.settings.max_func_calls is not None:
+            if self.objective.num_calls > self.settings.max_func_calls:
+                return True
+        # Improvement
+        if self.settings.max_iters_no_improv is not None:
+            if self.state.iters_without_improvement > self.settings.max_iters_no_improv:
+                return True
+        # Value
+        if self.settings.conv_tol is not None:
+            if self.state.best_result.value < self.settings.conv_tol:
+                return True
+        return False
+
+    def __update_progress(
+        self, i_iter: int, result: OptimisationResult, extra_info: dict[str, str] = None
+    ) -> bool:
+        """Update the optimiser progress and check for termination.
+
+        Parameters
+        ----------
+        i_iter : int
+            Current iteration number.
+        result : OptimisationResult
+            Result of the current iteration.
+        extra_info : dict[str, str]
+            Additional information to pass to user.
+
+        Returns
+        -------
+        bool
+            Whether any of the stopping criteria is satisfied.
+        """
         # Parse extra info
         if extra_info is not None and len(extra_info) > 0:
             extra_info = ', '.join(f'{key}: {value}' for key, value in extra_info.items())
+
+        # Update optimiser state
+        self.state.update(i_iter, result, self.objective.has_variance())
+
         # Update progress bar
         if self.pbar is not None:
-            info = f'Loss: {self.best_value:6.3e}'
-            if self.objective.has_variance() and self.conf_interval and all(self.conf_interval):
-                info += f' ± {(self.conf_interval[1] - self.conf_interval[0]) / 2:6.3e}'
-                # info += f' [{self.conf_interval[0]:5.2e}, {self.conf_interval[1]:5.2e}] (95%)'
+            info = f'Loss: {self.state.best_result.value:6.3e}'
+            if (
+                self.objective.has_variance()
+                and self.state.best_result.conf_interval
+                and all(self.state.best_result.conf_interval)
+            ):
+                delta = (
+                    self.state.best_result.conf_interval[1]
+                    - self.state.best_result.conf_interval[0]
+                ) / 2
+                info += f' ± {delta:6.3e}'
             self.pbar.set_postfix_str(info + (f' ({extra_info})' if extra_info else ''))
             if i_iter > 0:
                 self.pbar.update()
+
         # Update progress in output files
-        self.__update_progress_files(i_iter, curr_solution, curr_value, extra_info)
-        # Convergence criterion
-        return i_iter > self.n_iter or self.stop_criteria.check_criteria(
-            curr_value,
-            self.iters_no_improv,
-            self.objective.num_calls,
-            time.perf_counter() - self.begin_time,
-        )
+        self.__update_progress_files(i_iter, result, extra_info)
+
+        # Check convergence criteria
+        return self.__convergence_check(i_iter)
+
+    @abstractmethod
+    def name(self) -> str:
+        """Name of the optimiser.
+
+        Returns
+        -------
+        str
+            Name of the optimiser.
+        """
+
+    @classmethod
+    @abstractmethod
+    def validate_problem(cls, objective: Objective) -> None:
+        """Validate the combination of optimiser and objective.
+
+        Parameters
+        ----------
+        objective : Objective
+            Objective to optimise.
+        """
+
+    @abstractmethod
+    def _optimise(
+        self, callback: Callable[[int, OptimisationResult, dict[str, str]], bool]
+    ) -> OptimisationResult:
+        """Abstract method for optimising the objective.
+
+        Parameters
+        ----------
+        callback : Callable[[OptimisationResult, dict[str, str]], bool]
+            Callback function for reporting the optimiser progress and checking for termination.
+            The first argument is the current optimisation result, while the second argument is a
+            dictionary with additional information to pass to the user. Call this function at the
+            end of each iteration, and if it returns True, stop the optimisation.
+
+        Returns
+        -------
+        OptimisationResult
+            Result of the optimisation.
+        """
 
 
 class ScalarOptimiser(Optimiser):
     """Base class for scalar optimisers."""
 
-    def __init__(self, name: str, objective: Objective) -> None:
-        super().__init__(name, objective)
-        self.bounds = None
+    def __init__(self, name: str, settings: Settings, objective: Objective) -> None:
+        super().__init__(settings, objective)
+        self.__name = name
+        self.bounds = np.array([[par.lbound, par.ubound] for par in self.parameters])
+        # Lazy callback for the scalar optimiser (TODO: refactor to avoid this)
+        self.__callback: Callable[[int, OptimisationResult, dict[str, str]], bool] = None
 
-    def _validate_problem(self, objective: Objective) -> None:
+    def name(self) -> str:
+        """Name of the optimiser.
+
+        Returns
+        -------
+        str
+            Name of the optimiser.
+        """
+        return self.__name
+
+    @classmethod
+    def validate_problem(cls, objective: Objective) -> None:
         """Validate the combination of optimiser and objective.
 
         Parameters
@@ -436,8 +446,7 @@ class ScalarOptimiser(Optimiser):
         bound: np.ndarray,
         init_shot: np.ndarray,
     ) -> Tuple[float, np.ndarray]:
-        """
-        Abstract method for optimising the objective.
+        """Abstract method for optimising the objective.
 
         Parameters
         ----------
@@ -491,38 +500,30 @@ class ScalarOptimiser(Optimiser):
         return self.bounds[:, 0] + (1.0 + params) * (self.bounds[:, 1] - self.bounds[:, 0]) / 2.0
 
     def _optimise(
-        self,
-        n_dim: int,
-        n_iter: int,
-        bound: np.ndarray,
-        init_shot: np.ndarray,
-    ) -> Tuple[float, np.ndarray]:
-        """
-        Abstract method for optimising the objective.
+        self, callback: Callable[[int, OptimisationResult, dict[str, str]], bool]
+    ) -> OptimisationResult:
+        """Abstract method for optimising the objective.
 
         Parameters
         ----------
-        objective : Objective
-            Objective function to optimise.
-        n_dim : int
-            Number of parameters to optimise.
-        n_iter : int
-            Maximum number of iterations.
-        bound : np.ndarray
-            Array where first and second columns correspond to lower and upper bounds, respectively.
-        init_shot : np.ndarray
-            Initial shot for the optimisation problem.
+        callback : Callable[[OptimisationResult, dict[str, str]], bool]
+            Callback function for reporting the optimiser progress and checking for termination.
+            The first argument is the current optimisation result, while the second argument is a
+            dictionary with additional information to pass to the user. Call this function at the
+            end of each iteration, and if it returns True, stop the optimisation.
 
         Returns
         -------
-        float
-            Best observed objective value.
-        np.ndarray
-            Observed optimum of the objective.
+        OptimisationResult
+            Result of the optimisation.
         """
-        self.bounds = bound
+        # Set up problem
+        n_dim = len(self.parameters)
+        init_shot = np.array([par.inital_value for par in self.parameters])
+        n_iter = self.settings.iters
+        self.__callback = callback   # TODO: refactor to avoid this
         # Optimise the scalarised objective
-        return self._scalar_optimise(
+        best_value, best_params = self._scalar_optimise(
             lambda x, concurrent=False: self.objective(
                 self._denorm_params(x),
                 concurrent=concurrent
@@ -532,6 +533,11 @@ class ScalarOptimiser(Optimiser):
             np.array([[-1.0, 1.0]]).repeat(n_dim, axis=0),
             self._norm_params(init_shot),
         )
+        # Return the best value
+        return OptimisationResult(
+            value=best_value,
+            params=None if best_params is None else self._denorm_params(best_params),
+        )
 
     def _progress_check(
         self,
@@ -540,8 +546,7 @@ class ScalarOptimiser(Optimiser):
         curr_solution: np.ndarray,
         extra_info: str = None,
     ) -> bool:
-        """
-        Report the optimiser progress and check for termination (with parameter denormalisation).
+        """Report the optimiser progress and check for termination (with parameter denormalisation).
 
         Parameters
         ----------
@@ -559,5 +564,7 @@ class ScalarOptimiser(Optimiser):
         bool
             Whether any of the stopping criteria is satisfied.
         """
-        denorm_solution = None if curr_solution is None else self._denorm_params(curr_solution)
-        super()._progress_check(i_iter, curr_value, denorm_solution, extra_info)
+        solution = None if curr_solution is None else self._denorm_params(curr_solution)
+        result = OptimisationResult(value=curr_value, params=solution)
+        info = {'info': extra_info} if extra_info is not None else None
+        return self.__callback(i_iter, result, info)

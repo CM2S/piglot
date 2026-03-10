@@ -74,16 +74,11 @@ def main(config_path: str = None):
     # Build piglot problem
     settings = read_settings(config)
     objective = read_objective(config["objective"], settings)
-    optimiser = read_optimiser(config["optimiser"], objective)
-    stop = StoppingCriteria.read(config)
+    optimiser = read_optimiser(config["optimiser"], settings, objective)
     # Run the optimisation
-    best_value, best_params = optimiser.optimise(
-        config["iters"],
-        settings.parameters,
-        output_dir,
-        verbose=not config["quiet"],
-        stop_criteria=stop,
-    )
+    result = optimiser.optimise()
+    best_value = result.value
+    best_params = result.params
     # Re-run the best case
     if 'skip_last_run' not in config and best_params is not None and not objective.has_variance():
         objective(best_params)

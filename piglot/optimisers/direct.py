@@ -4,6 +4,7 @@ import copy
 import numpy as np
 from piglot.objective import Objective
 from piglot.optimiser import ScalarOptimiser
+from piglot.settings import Settings
 
 
 class Rectangle:
@@ -54,17 +55,19 @@ class DIRECT(ScalarOptimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, objective: Objective, epsilon=0):
+    def __init__(self, settings: Settings, objective: Objective, epsilon=0):
         """Constructs all necessary attributes for the DIRECT optimiser.
 
         Parameters
         ----------
+        settings : Settings
+            Settings for the optimiser.
         objective : Objective
             Objective function to optimise.
         epsilon : float, optional
             Model parameter, refer to documentation, by default 0.
         """
-        super().__init__('DIRECT', objective)
+        super().__init__('DIRECT', settings, objective)
         self.epsilon = epsilon
         self.K = 0
 

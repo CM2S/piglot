@@ -11,6 +11,9 @@ T = TypeVar('T')
 class Settings:
     """Container for global settings and configuration."""
 
+    # Number of iterations to run
+    iters: int
+
     # Directory to store outputs
     output_dir: str
 
@@ -25,6 +28,12 @@ class Settings:
 
     # Quiet mode (suppress output)
     quiet: bool = False
+
+    # Stopping criteria
+    conv_tol: float = None
+    max_timeout: float = None
+    max_func_calls: int = None
+    max_iters_no_improv: int = None
 
 
 def type_factory(cls: type[T]) -> Callable[[dict[str, Any]], T]:
@@ -62,9 +71,12 @@ def read_settings(config: dict[str, Any]) -> Settings:
     # Check for mandatory entries
     if 'output_dir' not in config:
         raise RuntimeError("Missing output directory from the config file")
+    if 'iters' not in config:
+        raise RuntimeError("Missing number of iterations from the config file")
     # Set up mandatory entries
     parsed_config = {
-        'output_dir': config['output_dir'],
+        'iters': int(config['iters']),
+        'output_dir': str(config['output_dir']),
         'parameters': read_parameters(config),
     }
     # Read optional entries from the configuration file

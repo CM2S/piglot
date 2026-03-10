@@ -4,6 +4,7 @@ import numpy as np
 from scipy.stats import norm, qmc
 from piglot.objective import Objective
 from piglot.optimiser import ScalarOptimiser
+from piglot.settings import Settings
 
 
 class PureRandomSearch(ScalarOptimiser):
@@ -22,9 +23,8 @@ class PureRandomSearch(ScalarOptimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, objective: Objective, sampling='uniform', seed=1):
-        """
-        Constructs all the necessary attributes for the PRS optimiser.
+    def __init__(self, settings: Settings, objective: Objective, sampling='uniform', seed=1):
+        """Constructs all the necessary attributes for the random search.
 
         Parameters
         ----------
@@ -37,7 +37,7 @@ class PureRandomSearch(ScalarOptimiser):
             decreasing standard deviation throughout the iterative process.
             - 'sobol': Sampling based on the Sobol sequence (requires scipy >= 1.7).
         """
-        super().__init__('PRS', objective)
+        super().__init__('Random', settings, objective)
         # Check if sampling method is valid
         valid_samples = ['uniform', 'normal', 'sobol']
         if sampling not in valid_samples:

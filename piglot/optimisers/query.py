@@ -1,13 +1,14 @@
 """Module for a simple query optimiser."""
-from typing import Tuple
+from typing import Callable
 import os
 import numpy as np
 import torch
 from botorch.utils.multi_objective.box_decompositions.non_dominated import (
     FastNondominatedPartitioning,
 )
-from piglot.optimiser import Optimiser, InvalidOptimiserException
+from piglot.optimiser import Optimiser, InvalidOptimiserException, OptimisationResult
 from piglot.objective import Objective
+from piglot.settings import Settings
 
 
 class QueryOptimiser(Optimiser):
@@ -15,6 +16,7 @@ class QueryOptimiser(Optimiser):
 
     def __init__(
         self,
+        settings: Settings,
         objective: Objective,
         param_list_file: str,
         reference_point: list[float] = None,
@@ -33,27 +35,37 @@ class QueryOptimiser(Optimiser):
         nadir_scale : float, optional
             Scale factor for the nadir point, by default 0.1.
         """
-        super().__init__('Query', objective)
+        super().__init__(settings, objective)
         self.param_list = np.genfromtxt(param_list_file)
         self.reference_point = reference_point
         self.nadir_scale = nadir_scale
         if len(self.param_list.shape) == 1:
             self.param_list = self.param_list.reshape(-1, 1)
 
-    def _validate_problem(self, objective: Objective) -> None:
+    def name(self) -> str:
+        """Get the name of the optimiser."""
+        return 'Query'
+
+    @classmethod
+    def validate_problem(cls, objective: Objective) -> None:
         """Validate the combination of optimiser and objective.
 
         Parameters
         ----------
         objective : Objective
             Objective to optimise.
+
+        Raises
+        ------
+        InvalidOptimiserException
+            With an invalid combination of optimiser and objective function.
         """
         if objective.is_composite():
             raise InvalidOptimiserException('This optimiser does not support composition')
         if objective.has_variance():
             raise InvalidOptimiserException('This optimiser does not support stochasticity')
 
-    def update_mo_data(self, parameters: np.ndarray, observations: np.ndarray) -> Tuple[float, int]:
+    def update_mo_data(self, parameters: np.ndarray, observations: np.ndarray) -> tuple[float, int]:
         """Get the partitioning of the observations in multi-objective optimisation.
 
         Parameters
@@ -65,7 +77,7 @@ class QueryOptimiser(Optimiser):
 
         Returns
         -------
-        Tuple[float, int]
+        tuple[float, int]
             Hypervolume and number of non-dominated points.
         """
         if self.reference_point is not None:
@@ -85,7 +97,8 @@ class QueryOptimiser(Optimiser):
             for i in range(pareto.shape[0])
         ]
         # Dump the Pareto front to a file
-        with open(os.path.join(self.output_dir, "pareto_front"), 'w', encoding='utf8') as file:
+        pareto_file = os.path.join(self.settings.output_dir, "pareto_front")
+        with open(pareto_file, 'w', encoding='utf8') as file:
             # Write header
             num_obj = pareto.shape[1]
             file.write('\t'.join([f'{"Objective_" + str(i + 1):>15}' for i in range(num_obj)]))
@@ -97,33 +110,28 @@ class QueryOptimiser(Optimiser):
         return -np.log(hypervolume)
 
     def _optimise(
-        self,
-        n_dim: int,
-        n_iter: int,
-        bound: np.ndarray,
-        init_shot: np.ndarray,
-    ) -> Tuple[float, np.ndarray]:
-        """
-        Optimise the objective.
+        self, callback: Callable[[int, OptimisationResult, dict[str, str]], bool]
+    ) -> OptimisationResult:
+        """Optimise the objective.
 
         Parameters
         ----------
-        n_dim : int
-            Number of parameters to optimise.
-        n_iter : int
-            Maximum number of iterations.
-        bound : np.ndarray
-            Array where first and second columns correspond to lower and upper bounds, respectively.
-        init_shot : np.ndarray
-            Initial shot for the optimisation problem.
+        callback : Callable[[OptimisationResult, dict[str, str]], bool]
+            Callback function for reporting the optimiser progress and checking for termination.
+            The first argument is the current optimisation result, while the second argument is a
+            dictionary with additional information to pass to the user. Call this function at the
+            end of each iteration, and if it returns True, stop the optimisation.
 
         Returns
         -------
-        float
-            Best observed objective value.
-        np.ndarray
-            Observed optimum of the objective.
+        OptimisationResult
+            Result of the optimisation.
         """
+        # Build parameters
+        n_iter = self.settings.iters
+        n_dim = len(self.settings.parameters)
+        bound = np.array([[param.lbound, param.ubound] for param in self.settings.parameters])
+        init_shot = np.array([param.inital_value for param in self.settings.parameters])
 
         # Sanitise input
         if n_dim != self.param_list.shape[1]:
@@ -158,7 +166,8 @@ class QueryOptimiser(Optimiser):
         if self.objective.is_multi_objective():
             best_value = self.update_mo_data(param_dataset, objective_dataset)
             best_solution = None
-        self._progress_check(0, best_value, best_solution)
+        result = OptimisationResult(best_value, best_solution)
+        callback(0, result, {})
 
         # Iterate over all parameter sets
         for i, param_set in enumerate(self.param_list):
@@ -180,6 +189,7 @@ class QueryOptimiser(Optimiser):
             elif value < best_value:
                 best_value = value
                 best_solution = param_set
-            self._progress_check(i + 1, best_value, best_solution)
+            result = OptimisationResult(best_value, best_solution)
+            callback(i + 1, result, {})
 
-        return best_value, best_solution
+        return OptimisationResult(best_value, best_solution)

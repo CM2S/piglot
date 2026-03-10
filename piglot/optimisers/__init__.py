@@ -2,27 +2,20 @@
 from typing import Any, Dict, Type, Union
 from piglot.objective import Objective
 from piglot.optimiser import Optimiser
-from piglot.optimisers.aoa import AOA
 from piglot.optimisers.botorch.bayes import BayesianBoTorch
 from piglot.optimisers.direct import DIRECT
-from piglot.optimisers.ga import GA
-from piglot.optimisers.lipo_opt import LIPO
 from piglot.optimisers.query import QueryOptimiser
-from piglot.optimisers.pso import PSO
 from piglot.optimisers.random_search import PureRandomSearch
 from piglot.optimisers.spsa_adam import SPSA_Adam
 from piglot.optimisers.spsa import SPSA
+from piglot.settings import Settings
 
 
 AVAILABLE_OPTIMISERS: Dict[str, Type[Optimiser]] = {
-    'aoa': AOA,
     'bayesian': BayesianBoTorch,
     'bayes_skopt': BayesianBoTorch,
     'botorch': BayesianBoTorch,
     'direct': DIRECT,
-    'ga': GA,
-    'lipo': LIPO,
-    'pso': PSO,
     'query': QueryOptimiser,
     'random': PureRandomSearch,
     'spsa-adam': SPSA_Adam,
@@ -52,13 +45,15 @@ def str_to_numeric(data: str) -> Union[int, float, str]:
     return data
 
 
-def read_optimiser(config: Dict[str, Any], objective: Objective) -> Optimiser:
+def read_optimiser(config: Dict[str, Any], settings: Settings, objective: Objective) -> Optimiser:
     """Read the optimiser from the configuration dictionary.
 
     Parameters
     ----------
     config : Dict[str, Any]
         Configuration dictionary.
+    settings : Settings
+        Global settings for the problem.
     objective : Objective
         Objective to optimise.
 
@@ -80,4 +75,4 @@ def read_optimiser(config: Dict[str, Any], objective: Objective) -> Optimiser:
     # Build optimiser instance
     if name not in AVAILABLE_OPTIMISERS:
         raise RuntimeError(f"Unknown optimiser '{name}'.")
-    return AVAILABLE_OPTIMISERS[name](objective, **kwargs)
+    return AVAILABLE_OPTIMISERS[name](settings, objective, **kwargs)

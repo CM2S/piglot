@@ -4,6 +4,7 @@ import numpy as np
 from scipy.stats import bernoulli
 from piglot.objective import Objective
 from piglot.optimiser import ScalarOptimiser
+from piglot.settings import Settings
 
 
 def boundary_check(arg: np.ndarray, bounds: np.ndarray) -> np.ndarray:
@@ -39,8 +40,18 @@ class SPSA(ScalarOptimiser):
         Solves the optimization problem
     """
 
-    def __init__(self, objective: Objective, alpha=0.602, gamma=0.101, prob=0.5, seed=1, A=None,
-                 a=None, c=None):
+    def __init__(
+        self,
+        settings: Settings,
+        objective: Objective,
+        alpha=0.602,
+        gamma=0.101,
+        prob=0.5,
+        seed=1,
+        A=None,
+        a=None,
+        c=None,
+    ) -> None:
         """Constructs all necessary attributes for the SPSA optimiser.
 
         Parameters
@@ -65,7 +76,7 @@ class SPSA(ScalarOptimiser):
             Model parameter, refer to documentation, by default None
             If None, this parameter is defined according to internal heuristics.
         """
-        super().__init__('SPSA', objective)
+        super().__init__('SPSA', settings, objective)
         self.alpha = alpha
         self.gamma = gamma
         self.prob = prob
