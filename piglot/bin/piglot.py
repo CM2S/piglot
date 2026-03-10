@@ -8,7 +8,6 @@ import numpy as np
 import torch
 from piglot.objectives import read_objective
 from piglot.optimisers import read_optimiser
-from piglot.optimiser import StoppingCriteria
 from piglot.settings import read_settings
 from piglot.utils.yaml_parser import parse_config_file
 
