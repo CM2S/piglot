@@ -1,10 +1,24 @@
 """Module for parsing the YAML configuration file."""
 from typing import Dict, Any
+from dataclasses import dataclass
 import os
 import os.path
 import yaml
 from yaml.parser import ParserError
 from yaml.scanner import ScannerError
+from piglot.settings import read_settings, Settings
+from piglot.objectives import read_objective, Objective
+from piglot.optimisers import read_optimiser, Optimiser
+
+
+@dataclass
+class ProblemConfig:
+    """Container for the optimisation problem."""
+
+    config_path: str
+    settings: Settings
+    objective: Objective
+    optimiser: Optimiser
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -63,3 +77,23 @@ def parse_config_file(config_file: str) -> Dict[str, Any]:
     elif config['quiet']:
         config["quiet"] = True
     return config
+
+
+def build_problem(config_path: str) -> ProblemConfig:
+    """Build the problem from the configuration file path.
+
+    Parameters
+    ----------
+    config_path : str
+        Path to the configuration file.
+
+    Returns
+    -------
+    ProblemConfig
+        Container with the optimisation problem.
+    """
+    config = parse_config_file(config_path)
+    settings = read_settings(config)
+    objective = read_objective(config["objective"], settings)
+    optimiser = read_optimiser(config["optimiser"], settings, objective)
+    return ProblemConfig(config_path, settings, objective, optimiser)

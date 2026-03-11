@@ -27,6 +27,21 @@ class TabularColumn(ABC):
             The formatted value as a string.
         """
 
+    @abstractmethod
+    def reverse_format_value(self, value: str) -> Any:
+        """Reverse the formatting of a value from a string to its original type.
+
+        Parameters
+        ----------
+        value : str
+            The formatted value as a string.
+
+        Returns
+        -------
+        Any
+            The original value in its original type.
+        """
+
     def format_header(self) -> str:
         """Format the column header according to the column's settings.
 
@@ -57,6 +72,21 @@ class TabularIntColumn(TabularColumn):
         """
         return f"{int(value):{self.align}{self.width}d}"
 
+    def reverse_format_value(self, value: str) -> int:
+        """Reverse the formatting of an integer value from a string to an integer.
+
+        Parameters
+        ----------
+        value : str
+            The formatted value as a string.
+
+        Returns
+        -------
+        int
+            The original value as an integer.
+        """
+        return int(value.strip())
+
 
 @dataclass
 class TabularFloatColumn(TabularColumn):
@@ -80,6 +110,21 @@ class TabularFloatColumn(TabularColumn):
         """
         return f"{float(value):{self.align}{self.width}.{self.precision}{self.notation}}"
 
+    def reverse_format_value(self, value: str) -> float:
+        """Reverse the formatting of a float value from a string to a float.
+
+        Parameters
+        ----------
+        value : str
+            The formatted value as a string.
+
+        Returns
+        -------
+        float
+            The original value as a float.
+        """
+        return float(value.strip())
+
 
 class TabularStringColumn(TabularColumn):
     """Container for a string column in a table."""
@@ -98,6 +143,21 @@ class TabularStringColumn(TabularColumn):
             The formatted value as a string.
         """
         return f"{str(value):{self.align}{self.width}s}"
+
+    def reverse_format_value(self, value: str) -> str:
+        """Reverse the formatting of a string value from a string to a string.
+
+        Parameters
+        ----------
+        value : str
+            The formatted value as a string.
+
+        Returns
+        -------
+        str
+            The original value as a string.
+        """
+        return value.strip()
 
 
 class Table:
@@ -167,3 +227,44 @@ class TabularFile:
         """
         with open(self.path, 'a', encoding='utf-8') as f:
             f.write(self.table.format_row(row) + '\n')
+
+    def read(self) -> dict[str, list[Any]]:
+        """Read the contents of the file per column.
+
+        Returns
+        -------
+        dict[str, list[Any]]
+            The contents of the file as a dictionary where each key is a column name and each value
+            is a list of values for that column.
+        """
+        data = {column.name: [] for column in self.table.columns}
+        with open(self.path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        # Check if the file is empty or only contains the header
+        if len(lines) < 2:
+            return data
+
+        # Check if the header matches the expected columns
+        header = [a.strip() for a in lines[0].strip().split(self.table.sep)]
+        expected_header = [column.name for column in self.table.columns]
+        if header != expected_header:
+            print(header)
+            print(expected_header)
+            raise ValueError(f"Header of file {self.path} does not match expected columns.")
+
+        # Read the data
+        for line in lines[1:]:
+            # Split the line into values and check if it matches the number of columns
+            values = line.rstrip('\n').split(self.table.sep)
+            if len(values) != len(self.table.columns):
+                raise ValueError(
+                    f"Row length {len(values)} in file {self.path} does not match number of "
+                    f"columns {len(self.table.columns)}"
+                )
+
+            # Reverse format the values and store them in the data dictionary
+            for column, value in zip(self.table.columns, values):
+                data[column.name].append(column.reverse_format_value(value))
+
+        return data

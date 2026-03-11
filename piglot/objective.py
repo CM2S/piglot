@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from functools import partial
 import numpy as np
 import torch
+from matplotlib.figure import Figure
 from piglot.settings import Settings
 from piglot.utils.composition import ConcatUtility, CompositionMixin
 from piglot.utils.tabular import TabularFile, TabularStringColumn, TabularFloatColumn
@@ -51,6 +52,19 @@ class ObjectiveResult:
     scalar_variance: Optional[float] = None
     latent_values: Optional[np.ndarray] = None
     latent_covariances: Optional[np.ndarray] = None
+
+
+@dataclass
+class FunctionCallsData:
+    """Container for function calls data."""
+    start_times: np.ndarray
+    run_times: np.ndarray
+    params: np.ndarray
+    hashes: list[str]
+    obj_values: np.ndarray
+    obj_variances: Optional[np.ndarray]
+    scalar_values: Optional[np.ndarray]
+    scalar_variances: Optional[np.ndarray]
 
 
 class IndividualObjective(CompositionMixin, ABC):
@@ -171,6 +185,23 @@ class IndividualObjective(CompositionMixin, ABC):
         if self.has_variance():
             return np.array([[result.variance]])
         return np.zeros((1, 1))
+
+    def plot_case(self, case_hash: str, **kwargs) -> list[Figure]:
+        """Plot a given function call given the parameter hash
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+        **kwargs : dict, optional
+            Additional keyword arguments to pass to the plotting function
+
+        Returns
+        -------
+        list[Figure]
+            List of figures with the plot
+        """
+        raise NotImplementedError("Single case plotting not implemented for this objective")
 
 
 class Scalarisation(ABC):
@@ -347,28 +378,22 @@ class Objective(CompositionMixin, ABC):
 
         return objectives
 
-    def __call__(self, params: np.ndarray, *args: Any, **kwargs: Any) -> ObjectiveResult:
-        """Objective computation for the outside world.
-
-        Handles scalarisation, composition and output file writing.
+    def __build_objective_result(
+        self,
+        results: list[IndividualObjectiveResult],
+    ) -> ObjectiveResult:
+        """Build the full objective result from the individual objective results and parameters.
 
         Parameters
         ----------
-        params : np.ndarray
-            Set of parameters to evaluate the objective for.
-        *args, **kwargs
-            Additional arguments to pass to the evaluation function.
+        results : list[IndividualObjectiveResult]
+            List of individual objective results.
 
         Returns
         -------
         ObjectiveResult
-            Objective result.
+            The full objective result.
         """
-        begin_time = time.perf_counter()
-
-        # Evaluate objective(s)
-        results = self._objective(params, *args, **kwargs)
-
         # Extract objective values and variances
         obj_values = np.array([
             obj.get_obj_value(res) for res, obj in zip(results, self.objectives)
@@ -398,8 +423,7 @@ class Objective(CompositionMixin, ABC):
                     obj.get_latent_covariances(res) for res, obj in zip(results, self.objectives)
                 ])
 
-        # Construct the full objective result
-        result = ObjectiveResult(
+        return ObjectiveResult(
             results=results,
             obj_values=obj_values,
             obj_variances=obj_variances,
@@ -409,8 +433,30 @@ class Objective(CompositionMixin, ABC):
             latent_covariances=latent_covariances,
         )
 
-        # Update outputs
+    def __call__(self, params: np.ndarray, *args: Any, **kwargs: Any) -> ObjectiveResult:
+        """Objective computation for the outside world.
+
+        Handles scalarisation, composition and output file writing.
+
+        Parameters
+        ----------
+        params : np.ndarray
+            Set of parameters to evaluate the objective for.
+        *args, **kwargs
+            Additional arguments to pass to the evaluation function.
+
+        Returns
+        -------
+        ObjectiveResult
+            Objective result.
+        """
+        # Evaluate objective(s) and build the full result
+        begin_time = time.perf_counter()
+        individual_obj = self._objective(params, *args, **kwargs)
+        result = self.__build_objective_result(individual_obj)
         end_time = time.perf_counter()
+
+        # Update outputs
         with self.mutex:
             self.num_calls += 1
             self.__dump_call(begin_time - self.begin_time, end_time - begin_time, result, params)
@@ -505,6 +551,103 @@ class Objective(CompositionMixin, ABC):
                 *params,
                 self.settings.parameters.hash(params),
             ])
+
+    def read_func_calls(self) -> FunctionCallsData:
+        """Read and parse the function calls file into a dictionary.
+
+        Returns
+        -------
+        FunctionCallsData
+            Data of the function calls file.
+        """
+        # Initial sanity check
+        if self.func_calls_file is None:
+            raise RuntimeError("No function calls file available for this objective.")
+
+        # Read the function calls file
+        data = self.func_calls_file.read()
+
+        # Parse mandatory fields
+        start_times = np.array(data["Start Time /s"])
+        run_times = np.array(data["Run Time /s"])
+        params = np.array([
+            [data[param.name][i] for param in self.settings.parameters]
+            for i in range(len(data["Hash"]))
+        ])
+        hashes = data["Hash"]
+
+        # Parse optional fields
+        obj_variances = None
+        scalar_values = None
+        scalar_variances = None
+        if len(self.objectives) > 1:
+            obj_values = np.array([
+                data[f"Objective_{i + 1}"] for i in range(self.num_objectives())
+            ]).T
+            if self.has_variance():
+                obj_variances = np.array([
+                    data[f"Variance_{i + 1}"] for i in range(self.num_objectives())
+                ]).T
+        else:
+            obj_values = np.array(data["Objective"])
+            if self.has_variance():
+                obj_variances = np.array(data["Variance"])
+            if self.scalarisation is not None:
+                scalar_values = np.array(data["Objective"])
+                if self.has_variance():
+                    scalar_variances = np.array(data["Variance"])
+
+        return FunctionCallsData(
+            start_times=start_times,
+            run_times=run_times,
+            params=params,
+            hashes=hashes,
+            obj_values=obj_values,
+            obj_variances=obj_variances,
+            scalar_values=scalar_values,
+            scalar_variances=scalar_variances,
+        )
+
+    def plot_case(self, case_hash: str, **kwargs) -> list[Figure]:
+        """Plot a given function call given the parameter hash.
+
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+        **kwargs : dict, optional
+            Additional keyword arguments to pass to the plotting function
+
+        Returns
+        -------
+        list[Figure]
+            List of figures with the plot
+        """
+        return [fig for obj in self.objectives for fig in obj.plot_case(case_hash, **kwargs)]
+
+    def plot_best(self) -> list[Figure]:
+        """Plot the current best case
+
+        Returns
+        -------
+        list[Figure]
+            List of figures with the plot
+        """
+        data = self.read_func_calls()
+
+        # Single-objective case: find best case based on the objective value
+        if not self.is_multi_objective():
+            obj_vals = data.obj_values if self.scalarisation is None else data.scalar_values
+            return self.plot_case(data.hashes[np.argmin(obj_vals)])
+
+        # Multi-objective case: we plot the best individual objective for each objective
+        figures = []
+        for i, obj in enumerate(self.objectives):
+            best_hash = data.hashes[np.argmin(data.obj_values[:, i])]
+            figures.extend(
+                self.plot_case(best_hash, title=f"Best case for objective {i + 1} ({obj.name})")
+            )
+        return figures
 
     @abstractmethod
     def _objective(

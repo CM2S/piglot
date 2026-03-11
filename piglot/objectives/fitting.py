@@ -183,7 +183,9 @@ class FittingSingleObjective(ResponseSingleObjective):
         )
         self.reference = reference
 
-    def plot(self, axis: plt.Axes, raw_results: dict[str, OutputResult]) -> dict[Line2D, str]:
+    def plot_response(
+        self, axis: plt.Axes, raw_results: dict[str, OutputResult]
+    ) -> dict[Line2D, str]:
         """Plot the response for this objective.
 
         Parameters

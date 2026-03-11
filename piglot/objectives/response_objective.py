@@ -188,7 +188,9 @@ class ResponseSingleObjective(IndividualObjective, ABC):
         return self.latent_transformer.length() if self.is_composite() else 1
 
     @abstractmethod
-    def plot(self, axis: plt.Axes, raw_results: dict[str, OutputResult]) -> dict[Line2D, str]:
+    def plot_response(
+        self, axis: plt.Axes, raw_results: dict[str, OutputResult]
+    ) -> dict[Line2D, str]:
         """Plot the response for this objective.
 
         Parameters
@@ -312,35 +314,35 @@ class ResponseObjective(Objective):
         # Compute the individual objective results
         return [objective.evaluate(params, raw_responses) for objective in self.objectives]
 
-    def plot_case(self, case_hash: str, options: dict[str, Any] = None) -> list[Figure]:
-        """Plot a given function call given the parameter hash
+    def plot_case(self, case_hash: str, **kwargs) -> list[Figure]:
+        """Plot a given function call given the parameter hash.
 
         Parameters
         ----------
         case_hash : str, optional
             Parameter hash for the case to plot
-        options : dict[str, Any], optional
-            Options to pass to the plotting function, by default None
+        **kwargs : dict, optional
+            Additional keyword arguments to pass to the plotting function
 
         Returns
         -------
         list[Figure]
-            list of figures with the plot
+            List of figures with the plot
         """
         append_title = ''
-        if options is not None and 'append_title' in options:
-            append_title = f' ({options["append_title"]})'
+        if kwargs is not None and 'append_title' in kwargs:
+            append_title = f' ({kwargs["append_title"]})'
         # Load all responses and post-process them
         responses = self.postproc_responses(self.solver.get_output_response(case_hash))
         # Extract the parameters
         params = self.solver.get_case_params(case_hash)
-        if options is not None and 'params' in options:
+        if kwargs is not None and 'params' in kwargs:
             append_title += f' - {params}'
         # Plot each target
         figures = []
         for objective in self.objectives:
             fig, axis = plt.subplots()
-            objective.plot(axis, responses)
+            objective.plot_response(axis, responses)
             axis.set_title(objective.name + append_title)
             axis.grid()
             axis.legend()
@@ -362,7 +364,7 @@ class ResponseObjective(Objective):
     #     mapping: dict[Line2D, str] = {}
     #     for objective in self.objectives:
     #         fig, axis = plt.subplots()
-    #         line, = objective.plot(axis, responses)
+    #         line, = objective.plot_response(axis, responses)
     #         axis.set_title(objective.name)
     #         axis.legend()
     #         # Store the line and figure

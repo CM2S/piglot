@@ -21,7 +21,9 @@ ObjectiveT = TypeVar('ObjectiveT', bound='ResponseDesignObjective')
 class DesignSingleObjective(ResponseSingleObjective):
     """Single objective for design optimisation objectives."""
 
-    def plot(self, axis: plt.Axes, raw_results: dict[str, OutputResult]) -> dict[Line2D, str]:
+    def plot_response(
+        self, axis: plt.Axes, raw_results: dict[str, OutputResult]
+    ) -> dict[Line2D, str]:
         """Plot the response for this objective.
 
         Parameters
