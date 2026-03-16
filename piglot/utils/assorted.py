@@ -1,13 +1,36 @@
 """Assorted utilities."""
-from typing import List, Dict, Tuple, Type, TypeVar, Any
+from typing import List, Dict, Tuple, Type, TypeVar, Any, Union
 import os
 import copy
 import contextlib
 import importlib
 import importlib.util
+from dataclasses import Field, MISSING
 import numpy as np
 from scipy.stats import t
 import torch
+
+
+def str_to_numeric(data: str) -> Union[int, float, str]:
+    """Tries to convert a string to a numeric value.
+
+    Parameters
+    ----------
+    data : str
+        String to convert.
+
+    Returns
+    -------
+    Union[int, float, str]
+        Converted value.
+    """
+    try:
+        data = float(data)
+    except (TypeError, ValueError):
+        return data
+    if int(data) == data:
+        return int(data)
+    return data
 
 
 def pretty_time(elapsed_sec: float) -> str:
@@ -244,3 +267,54 @@ class TorchContainer:
             if isinstance(attr, (torch._C._TensorBase, TorchContainer)):  # pylint: disable=W0212
                 setattr(new_object, name, attr.to(device, dtype=dtype))
         return new_object
+
+
+class ReadableMixin:
+    """Mixin for dataclasses that can be read from a configuration dictionary."""
+
+    @classmethod
+    def read(cls: type[T], config: dict[str, Any]) -> T:
+        """Read an instance of the class from a configuration dictionary.
+
+        Parameters
+        ----------
+        cls : type[T]
+            Class to create an instance of.
+        config : dict
+            Configuration dictionary for the instance.
+
+        Returns
+        -------
+        T
+            The created instance.
+        """
+
+        def type_factory(cls: type[T]) -> Any:
+            """Factory for type conversion functions.
+
+            Parameters
+            ----------
+            cls : type[T]
+                Type to convert to.
+
+            Returns
+            -------
+            Any
+                Function that converts a configuration dictionary to the given type, or the type
+                itself if no conversion is needed.
+            """
+            if issubclass(cls, ReadableMixin):
+                return cls.read
+            return cls
+
+        parsed_config: dict[str, Any] = {}
+        entries: dict[str, Field] = cls.__dataclass_fields__  # pylint: disable=no-member
+        # Populate the configuration dictionary
+        for key, field in entries.items():
+            if key in config:
+                # Use the type annotation to convert the value from the configuration file
+                factory = type_factory(field.type)
+                parsed_config[key] = factory(config[key])
+            elif field.default is MISSING:
+                raise ValueError(f"Missing required field '{key}' for reading '{cls.__name__}'.")
+        return cls(**parsed_config)

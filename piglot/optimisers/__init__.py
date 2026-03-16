@@ -1,9 +1,10 @@
 """Module for optimisers."""
-from typing import Any, Dict, Type, Union
+from typing import Any, Dict, Type
 from piglot.objective import Objective
 from piglot.optimiser import Optimiser
 from piglot.optimisers.botorch.bayes import BayesianBoTorch
 from piglot.optimisers.direct import DIRECT
+from piglot.optimisers.generic.optimiser import GenericOptimiser
 from piglot.optimisers.query import QueryOptimiser
 from piglot.optimisers.random_search import PureRandomSearch
 from piglot.optimisers.spsa_adam import SPSA_Adam
@@ -16,33 +17,12 @@ AVAILABLE_OPTIMISERS: Dict[str, Type[Optimiser]] = {
     'bayes_skopt': BayesianBoTorch,
     'botorch': BayesianBoTorch,
     'direct': DIRECT,
+    'generic': GenericOptimiser,
     'query': QueryOptimiser,
     'random': PureRandomSearch,
     'spsa-adam': SPSA_Adam,
     'spsa': SPSA,
 }
-
-
-def str_to_numeric(data: str) -> Union[int, float, str]:
-    """Tries to convert a string to a numeric value.
-
-    Parameters
-    ----------
-    data : str
-        String to convert.
-
-    Returns
-    -------
-    Union[int, float, str]
-        Converted value.
-    """
-    try:
-        data = float(data)
-    except (TypeError, ValueError):
-        return data
-    if int(data) == data:
-        return int(data)
-    return data
 
 
 def read_optimiser(config: Dict[str, Any], settings: Settings, objective: Objective) -> Optimiser:
@@ -71,8 +51,8 @@ def read_optimiser(config: Dict[str, Any], settings: Settings, objective: Object
         if 'name' not in config:
             raise RuntimeError("Missing optimiser name.")
         name = config.pop("name")
-        kwargs = {n: str_to_numeric(v) for n, v in config.items()}
+        kwargs = config
     # Build optimiser instance
     if name not in AVAILABLE_OPTIMISERS:
         raise RuntimeError(f"Unknown optimiser '{name}'.")
-    return AVAILABLE_OPTIMISERS[name](settings, objective, **kwargs)
+    return AVAILABLE_OPTIMISERS[name].read(kwargs, settings, objective)

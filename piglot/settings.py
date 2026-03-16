@@ -1,5 +1,5 @@
 """Module for global settings and configuration."""
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 from dataclasses import dataclass, Field, _MISSING_TYPE as MISSING_TYPE
 from piglot.parameter import ParameterSet, read_parameters
 
@@ -36,24 +36,6 @@ class Settings:
     max_iters_no_improv: int = None
 
 
-def type_factory(cls: type[T]) -> Callable[[dict[str, Any]], T]:
-    """Factory for type conversion functions.
-
-    Parameters
-    ----------
-    cls : type[T]
-        Type to convert to.
-
-    Returns
-    -------
-    Callable[[dict[str, Any]], T]
-        Function that converts a configuration dictionary to the given type.
-    """
-    if cls == ParameterSet:
-        return read_parameters
-    return cls
-
-
 def read_settings(config: dict[str, Any]) -> Settings:
     """Read the settings from the configuration dictionary.
 
@@ -75,14 +57,15 @@ def read_settings(config: dict[str, Any]) -> Settings:
         raise RuntimeError("Missing number of iterations from the config file")
     # Set up mandatory entries
     parsed_config = {
-        'iters': int(config['iters']),
-        'output_dir': str(config['output_dir']),
+        'iters': int(config.pop('iters')),
+        'output_dir': str(config.pop('output_dir')),
         'parameters': read_parameters(config),
     }
+    # Hacky: remove the parameters from the config
+    config.pop('parameters', None)
     # Read optional entries from the configuration file
     for key, field in settings_entries.items():
-        if key in config and field.default is MISSING_TYPE:
+        if key in config and field.default is not MISSING_TYPE:
             # Use the type annotation to convert the value from the configuration file
-            factory = type_factory(field.type)
-            parsed_config[key] = factory(config[key])
+            parsed_config[key] = field.type(config[key])
     return Settings(**parsed_config)

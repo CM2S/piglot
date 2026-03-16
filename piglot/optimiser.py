@@ -1,6 +1,6 @@
 """Main optimiser module"""
 from __future__ import annotations
-from typing import Dict, Any, Tuple, Callable, Optional
+from typing import Tuple, Callable, Optional, TypeVar, Any
 import os
 import time
 from dataclasses import dataclass
@@ -8,8 +8,11 @@ from abc import ABC, abstractmethod
 import numpy as np
 from tqdm import tqdm
 from piglot.settings import Settings
-from piglot.utils.assorted import pretty_time
+from piglot.utils.assorted import pretty_time, str_to_numeric
 from piglot.objective import Objective
+
+
+T = TypeVar('T', bound='Optimiser')
 
 
 @dataclass
@@ -98,20 +101,11 @@ class Optimiser(ABC):
             file.write('\n')
         # Prepare optimiser
         self.objective.prepare()
-        if not self.settings.quiet:
-            self.pbar = tqdm(total=self.settings.iters, desc=self.name())
+        self._progress_report_prepare()
         # Optimise
         result = self._optimise(self.__update_progress)
         # Output progress
-        if not self.settings.quiet:
-            self.pbar.close()
-            # print(f'Completed {self.state.i_iter} iterations in {pretty_time(elapsed)}')
-            # print(f'Best loss: {self.best_value:15.8e}')
-            # if self.best_solution is not None:
-            #     print('Best parameters')
-            #     max_width = max(len(par.name) for par in self.parameters)
-            #     for i, par in enumerate(self.parameters):
-            #         print(f'- {par.name.rjust(max_width)}: {self.best_solution[i]:>12.6f}')
+        self._progress_report_close()
         # Return the best value
         return result
 
@@ -233,21 +227,7 @@ class Optimiser(ABC):
         self.state.update(i_iter, result, self.objective.has_variance())
 
         # Update progress bar
-        if self.pbar is not None:
-            info = f'Loss: {self.state.best_result.value:6.3e}'
-            if (
-                self.objective.has_variance()
-                and self.state.best_result.conf_interval
-                and all(self.state.best_result.conf_interval)
-            ):
-                delta = (
-                    self.state.best_result.conf_interval[1]
-                    - self.state.best_result.conf_interval[0]
-                ) / 2
-                info += f' ± {delta:6.3e}'
-            self.pbar.set_postfix_str(info + (f' ({extra_info})' if extra_info else ''))
-            if i_iter > 0:
-                self.pbar.update()
+        self._progress_report_update(i_iter, extra_info)
 
         # Update progress in output files
         self.__update_progress_files(i_iter, result, extra_info)
@@ -295,6 +275,65 @@ class Optimiser(ABC):
         OptimisationResult
             Result of the optimisation.
         """
+
+    def _progress_report_prepare(self) -> None:
+        """Initialising the progress bar."""
+        if not self.settings.quiet:
+            self.pbar = tqdm(total=self.settings.iters, desc=self.name())
+
+    def _progress_report_update(self, i_iter: int, extra_info: dict[str, str]) -> None:
+        """Update the progress bar.
+
+        Parameters
+        ----------
+        i_iter : int
+            Current iteration number.
+        result : OptimisationResult
+            Result of the current iteration.
+        extra_info : dict[str, str]
+            Additional information to pass to user.
+        """
+        if self.pbar is not None:
+            info = f'Loss: {self.state.best_result.value:6.3e}'
+            if (
+                self.objective.has_variance()
+                and self.state.best_result.conf_interval
+                and all(self.state.best_result.conf_interval)
+            ):
+                delta = (
+                    self.state.best_result.conf_interval[1]
+                    - self.state.best_result.conf_interval[0]
+                ) / 2
+                info += f' ± {delta:6.3e}'
+            self.pbar.set_postfix_str(info + (f' ({extra_info})' if extra_info else ''))
+            if i_iter > 0:
+                self.pbar.update()
+
+    def _progress_report_close(self) -> None:
+        """Close the progress bar."""
+        if self.pbar is not None:
+            self.pbar.close()
+
+    @classmethod
+    def read(cls: type[T], config: dict[str, Any], settings: Settings, objective: Objective) -> T:
+        """Read an optimiser from the given configuration.
+
+        Parameters
+        ----------
+        config : dict
+            Configuration dictionary for the optimiser.
+        settings : Settings
+            Settings for the optimiser.
+        objective : Objective
+            Objective to optimise.
+
+        Returns
+        -------
+        T
+            The created optimiser instance.
+        """
+        config = {k: str_to_numeric(v) for k, v in config.items()}
+        return cls(settings, objective, **config)
 
 
 class ScalarOptimiser(Optimiser):
