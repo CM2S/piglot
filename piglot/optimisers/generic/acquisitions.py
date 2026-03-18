@@ -31,7 +31,7 @@ from botorch.sampling import SobolQMCNormalSampler
 from piglot.data.surrogate import ObjectiveModel
 from piglot.parameter import ParameterSet
 from piglot.optimisers.generic.containers import OptimisationState
-from piglot.utils.assorted import ReadableMixin
+from piglot.utils.readable import ReadableMixin
 
 
 @dataclass

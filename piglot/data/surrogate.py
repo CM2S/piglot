@@ -22,7 +22,7 @@ from botorch.posteriors.transformed import TransformedPosterior
 from botorch.sampling import MCSampler, SobolQMCNormalSampler
 from piglot.data.dataset import ObjectiveDataset
 from piglot.data.transforms import Standardiser, PCA, ChainTransform
-from piglot.utils.assorted import ReadableMixin
+from piglot.utils.readable import ReadableMixin
 
 
 T = TypeVar('T', bound='SurrogateSettings')
@@ -41,32 +41,6 @@ class SurrogateSettings(ReadableMixin):
     hetero_max_iter: int = 128
     hetero_tol_mean: float = 1e-06
     hetero_tol_var: float = 1e-06
-
-    @classmethod
-    def read(cls: type[T], config: dict) -> T:
-        """Create surrogate settings from a configuration dictionary.
-
-        Parameters
-        ----------
-        config : dict
-            Configuration dictionary containing the settings for the surrogate model.
-
-        Returns
-        -------
-        T
-            The created surrogate settings instance.
-        """
-        return cls(
-            noise=config.get('noise', 'infer'),
-            noise_model=config.get('noise_model', 'homoscedastic'),
-            pca_variance=config.get('pca_variance', 1e-6),
-            std_tol=config.get('std_tol', 1e-6),
-            min_variance=config.get('min_variance', 1e-6),
-            hetero_num_var_samples=config.get('hetero_num_var_samples', 512),
-            hetero_max_iter=config.get('hetero_max_iter', 128),
-            hetero_tol_mean=config.get('hetero_tol_mean', 1e-06),
-            hetero_tol_var=config.get('hetero_tol_var', 1e-06),
-        )
 
 
 def fit_mll_pytorch_loop(mll: ExactMarginalLogLikelihood, n_iters: int = 100) -> None:

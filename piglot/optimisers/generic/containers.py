@@ -9,7 +9,7 @@ from piglot.objective import ObjectiveResult
 from piglot.optimiser import OptimisationResult
 from piglot.data.dataset import ObjectiveDataset
 from piglot.data.surrogate import SurrogateSettings
-from piglot.utils.assorted import ReadableMixin
+from piglot.utils.readable import ReadableMixin
 
 
 MultiObjectiveStateDataT = TypeVar('MultiObjectiveStateDataT', bound='MultiObjectiveStateData')
@@ -26,31 +26,6 @@ class OptimisationSettings(ReadableMixin):
     num_workers: int = 1
     nadir_scale: float = 0.1
     ref_point: Optional[torch.Tensor] = None
-
-    @classmethod
-    def read(cls: type[T], config: dict) -> T:
-        """Create an optimisation settings instance from a configuration dictionary.
-
-        Parameters
-        ----------
-        config : dict
-            Configuration dictionary containing the settings for the optimisation campaign.
-
-        Returns
-        -------
-        T
-            The created optimisation settings instance.
-        """
-        surrogate_settings = SurrogateSettings()
-        if 'surrogate_settings' in config:
-            surrogate_settings = SurrogateSettings.read(config['surrogate_settings'])
-        return cls(
-            surrogate_settings=surrogate_settings,
-            noisy=config.get('noisy', False),
-            num_workers=config.get('num_workers', 1),
-            nadir_scale=config.get('nadir_scale', 0.1),
-            ref_point=torch.tensor(config['ref_point']) if 'ref_point' in config else None,
-        )
 
 
 @dataclass
