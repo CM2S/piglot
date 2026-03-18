@@ -1,5 +1,4 @@
 """Module containing optimisation objective primites"""
-from __future__ import annotations
 import os
 import os.path
 import time

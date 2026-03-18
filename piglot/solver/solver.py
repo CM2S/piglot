@@ -1,5 +1,4 @@
 """Module for solvers."""
-from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Dict, Any, Type, TypeVar
 from abc import ABC, abstractmethod
@@ -83,7 +82,7 @@ class CaseResult:
             safe_dump_all((metadata, responses), file)
 
     @staticmethod
-    def read(filename: str, parameters: ParameterSet) -> CaseResult:
+    def read(filename: str, parameters: ParameterSet) -> "CaseResult":
         """Read a case result file.
 
         Parameters

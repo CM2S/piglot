@@ -1,5 +1,4 @@
 """Module for multi-case solvers."""
-from __future__ import annotations
 from typing import List, Dict, Any, Type, TypeVar
 from abc import ABC, abstractmethod
 import os

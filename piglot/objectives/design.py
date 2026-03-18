@@ -1,5 +1,4 @@
 """Module for curve fitting objectives"""
-from __future__ import annotations
 from typing import Any, TypeVar
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D

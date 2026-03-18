@@ -1,5 +1,4 @@
 """Module for output fields from Links solver."""
-from __future__ import annotations
 from typing import Dict, Any
 import os
 import re
@@ -119,7 +118,7 @@ class FieldsOutput(OutputField):
         return OutputResult(x_field, y_field)
 
     @classmethod
-    def read(cls, config: Dict[str, Any]) -> FieldsOutput:
+    def read(cls, config: Dict[str, Any]) -> "FieldsOutput":
         """Read the output field from the configuration dictionary.
 
         Parameters

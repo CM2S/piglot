@@ -1,5 +1,4 @@
 """Module for script-based solvers."""
-from __future__ import annotations
 from typing import List, Dict, Any
 from abc import ABC, abstractmethod
 import os
@@ -100,7 +99,7 @@ class ScriptSolver(SingleCaseSolver):
         config: Dict[str, Any],
         parameters: ParameterSet,
         output_dir: str,
-    ) -> ScriptSolver:
+    ) -> "ScriptSolver":
         """Read the solver from the configuration dictionary.
 
         Parameters

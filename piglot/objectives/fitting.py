@@ -1,5 +1,4 @@
 """Module for curve fitting objectives"""
-from __future__ import annotations
 from typing import Any, Optional, TypeVar
 import os
 import sys

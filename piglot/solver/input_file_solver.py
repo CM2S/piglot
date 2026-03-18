@@ -1,5 +1,4 @@
 """Module for input file-based solvers."""
-from __future__ import annotations
 from typing import Dict, Any, List, TypeVar, Type, Callable, Tuple
 from abc import ABC, abstractmethod
 import os
@@ -178,7 +177,7 @@ class ScriptOutputField(OutputField):
         """
 
     @staticmethod
-    def read(config: Dict[str, Any]) -> ScriptOutputField:
+    def read(config: Dict[str, Any]) -> "ScriptOutputField":
         """Read the output field from the configuration dictionary.
 
         Parameters

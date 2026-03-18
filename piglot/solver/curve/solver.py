@@ -1,5 +1,4 @@
 """Module for Curve solver."""
-from __future__ import annotations
 from typing import Dict, Any, List, Tuple, Type, Optional
 import re
 import time
@@ -140,7 +139,7 @@ class CurveCase(Case):
         cls,
         name: str,
         config: Dict[str, Any],
-    ) -> CurveCase:
+    ) -> "CurveCase":
         """Read the case from the configuration dictionary.
 
         Parameters

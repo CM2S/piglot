@@ -1,5 +1,4 @@
 """Module for generic response-based objectives."""
-from __future__ import annotations
 from typing import Any, Optional, TypeVar
 from abc import ABC, abstractmethod
 import warnings

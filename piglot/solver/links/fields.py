@@ -1,5 +1,4 @@
 """Module for output fields from Links solver."""
-from __future__ import annotations
 from typing import Dict, Any, Union
 import os
 import numpy as np
@@ -85,7 +84,7 @@ class Reaction(OutputField):
         return OutputResult(data_group[:, 0], data_group[:, self.field])
 
     @classmethod
-    def read(cls, config: Dict[str, Any]) -> Reaction:
+    def read(cls, config: Dict[str, Any]) -> "Reaction":
         """Read the output field from the configuration dictionary.
 
         Parameters
@@ -242,7 +241,7 @@ class OutFile(OutputField):
         return OutputResult(df.iloc[:, x_column].to_numpy(), df.iloc[:, y_column].to_numpy())
 
     @classmethod
-    def read(cls, config: Dict[str, Any]) -> OutFile:
+    def read(cls, config: Dict[str, Any]) -> "OutFile":
         """Read the output field from the configuration dictionary.
 
         Parameters

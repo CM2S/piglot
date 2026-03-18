@@ -1,6 +1,5 @@
 """Dataset classes for optimising with BoTorch."""
-from __future__ import annotations
-from typing import Tuple, Type, TypeVar, Union
+from typing import Optional, Tuple, Type, TypeVar, Union
 import copy
 import numpy as np
 import torch
@@ -38,20 +37,20 @@ class Standardiser:
     def transform(
         self,
         values: torch.Tensor,
-        covariances: torch.Tensor | None = None,
-    ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
+        covariances: Optional[torch.Tensor] = None,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """Standardise data.
 
         Parameters
         ----------
         values : torch.Tensor
             Values to transform.
-        covariances : torch.Tensor | None
+        covariances : Optional[torch.Tensor]
             Variances to transform, if any.
 
         Returns
         -------
-        torch.Tensor | Tuple[torch.Tensor, torch.Tensor]
+        Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
             Transformed values and covariances (if any).
         """
         # Are all observed points equal?
@@ -94,7 +93,7 @@ class Standardiser:
         # Note: we are using a view, so the expanded tensor is already modified
         return expanded
 
-    def to(self, device: str) -> Standardiser:
+    def to(self, device: str) -> "Standardiser":
         """Move the standardiser to a given device.
 
         Parameters
@@ -155,20 +154,20 @@ class PCA:
     def transform(
         self,
         values: torch.Tensor,
-        covariances: torch.Tensor | None = None,
-    ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor]:
+        covariances: Optional[torch.Tensor] = None,
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """Transform data to the latent space.
 
         Parameters
         ----------
         values : torch.Tensor
             Values to transform.
-        covariances : torch.Tensor | None
+        covariances : Optional[torch.Tensor]
             Variances to transform, if any.
 
         Returns
         -------
-        torch.Tensor | Tuple[torch.Tensor, torch.Tensor]
+        Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]
             Transformed values and covariances (if any).
         """
         if covariances is None:
@@ -194,7 +193,7 @@ class PCA:
         """
         return self.standardiser.untransform(data @ self.transformation.T)
 
-    def to(self, device: str) -> PCA:
+    def to(self, device: str) -> "PCA":
         """Move the PCA to a given device.
 
         Parameters
@@ -394,7 +393,7 @@ class BayesDataset:
         idx = torch.argmin(self.objectives)
         return self.params[idx, :].cpu().numpy(), self.objectives[idx].cpu().numpy()
 
-    def to(self, device: str) -> BayesDataset:
+    def to(self, device: str) -> "BayesDataset":
         """Move the dataset to a given device.
 
         Parameters

@@ -1,5 +1,4 @@
 """Module for surrogate GP models."""
-from __future__ import annotations
 from typing import Literal, Optional, List, Union, Any, TypeVar
 import warnings
 from dataclasses import dataclass
@@ -206,7 +205,7 @@ class PseudoHeteroscedasticSingleTaskGP(BatchedMultiOutputGPyTorchModel, ExactGP
         sampler: MCSampler,
         observation_noise: Optional[Tensor] = None,
         **kwargs: Any,
-    ) -> PseudoHeteroscedasticSingleTaskGP:
+    ) -> "PseudoHeteroscedasticSingleTaskGP":
         r"""Fantasize the model.
 
         Args:

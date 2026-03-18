@@ -1,5 +1,4 @@
 """Module for output fields from Crate solver."""
-from __future__ import annotations
 from typing import Dict, Any, Union
 import os
 import numpy as np
@@ -79,7 +78,7 @@ class HresFile(OutputField):
         return OutputResult(df.iloc[:, x_column].to_numpy(), df.iloc[:, y_column].to_numpy())
 
     @classmethod
-    def read(cls, config: Dict[str, Any]) -> HresFile:
+    def read(cls, config: Dict[str, Any]) -> "HresFile":
         """Read the output field from the configuration dictionary.
 
         Parameters

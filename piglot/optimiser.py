@@ -1,5 +1,4 @@
 """Main optimiser module"""
-from __future__ import annotations
 from typing import Tuple, Callable, Optional, TypeVar, Any
 import os
 import time

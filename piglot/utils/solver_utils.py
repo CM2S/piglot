@@ -1,5 +1,4 @@
 """Utilities for the solver module."""
-from __future__ import annotations
 import os
 import re
 import sys
@@ -217,7 +216,7 @@ class VerbosityManager:
             if self.stderr is not None:
                 self.stderr.flush()
 
-    def __enter__(self) -> VerbosityManager:
+    def __enter__(self) -> "VerbosityManager":
         sys.stdout = self.stdout
         sys.stderr = self.stderr
         return self
