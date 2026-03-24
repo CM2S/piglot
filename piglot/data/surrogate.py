@@ -30,7 +30,7 @@ T = TypeVar('T', bound='SurrogateSettings')
 class SurrogateSettings(ReadableModel):
     """Options for surrogate model construction."""
 
-    noise: Literal['infer', 'fixed'] = 'infer'
+    noise: Literal['infer', 'fixed', 'none'] = 'none'
     noise_model: Literal['homoscedastic', 'heteroscedastic'] = 'homoscedastic'
     pca_variance: float = 1e-6
     std_tol: float = 1e-6
@@ -324,21 +324,32 @@ class ObjectiveModel:
 
         # Build the dataset for the GP model
         self.inputs = self.raw_dataset.inputs
-        self.outputs, self.output_variances = self.output_transform.transform(
+        self.outputs, output_covariances = self.output_transform.transform(
             self.raw_dataset.outputs, self.raw_dataset.covariances
         )
 
-        # Sanitise variances: these are only needed if we are using a fixed noise model
-        # Regardless, we need to diagonalise and clamp them to prevent GPyTorch warnings
-        if settings.noise == 'fixed' and self.output_variances is None:
-            raise ValueError('Fixed noise model requires provided output variances')
-        if settings.noise == 'infer' and self.output_variances is not None:
-            warnings.warn('Ignoring provided output variances when inferring noise levels')
-            self.output_variances = None
-        if self.output_variances is not None:
+        # Sanitise variances
+        if settings.noise == 'fixed':
+            # Fixed noise mode: ensure we have provided output covariances
+            # Then, diagonalise and clamp them to prevent GPyTorch warnings
+            if output_covariances is None:
+                raise ValueError('Fixed noise model requires provided output covariances')
             self.output_variances = torch.clamp_min(
-                torch.diagonal(self.output_variances, dim1=-2, dim2=-1), settings.min_variance
+                torch.diagonal(output_covariances, dim1=-2, dim2=-1), settings.min_variance
             )
+        elif settings.noise == 'infer':
+            # Infer noise mode: ensure we do not have provided output variances
+            if output_covariances is not None:
+                raise ValueError('Cannot infer noise levels when output variances are provided')
+            self.output_variances = None
+        elif settings.noise == 'none':
+            # No noise mode: ensure we do not have provided output variances
+            # Set output variances to a small constant value to prevent GPyTorch warnings
+            if output_covariances is not None:
+                raise ValueError('Noisy observations are not allowed when noise is set to "none"')
+            self.output_variances = torch.full_like(self.outputs, settings.min_variance)
+        else:
+            raise ValueError(f'Unknown noise setting: {settings.noise}')
 
         # Build and fit the GP model
         if settings.noise == 'infer' and settings.noise_model == 'heteroscedastic':
