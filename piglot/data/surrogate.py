@@ -1,7 +1,6 @@
 """Module for surrogate GP models."""
 from typing import Literal, Optional, List, Union, Any, TypeVar
 import warnings
-from dataclasses import dataclass
 import torch
 from torch import Tensor
 from gpytorch.distributions.multivariate_normal import MultivariateNormal
@@ -22,14 +21,13 @@ from botorch.posteriors.transformed import TransformedPosterior
 from botorch.sampling import MCSampler, SobolQMCNormalSampler
 from piglot.data.dataset import ObjectiveDataset
 from piglot.data.transforms import Standardiser, PCA, ChainTransform
-from piglot.utils.readable import ReadableMixin
+from piglot.utils.readable import ReadableModel
 
 
 T = TypeVar('T', bound='SurrogateSettings')
 
 
-@dataclass
-class SurrogateSettings(ReadableMixin):
+class SurrogateSettings(ReadableModel):
     """Options for surrogate model construction."""
 
     noise: Literal['infer', 'fixed'] = 'infer'

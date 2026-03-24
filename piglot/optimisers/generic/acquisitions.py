@@ -1,6 +1,5 @@
 """Module for acquisition functions with BoTorch."""
 from typing import Optional
-from dataclasses import dataclass
 import torch
 from botorch.acquisition import (
     AcquisitionFunction,
@@ -31,11 +30,10 @@ from botorch.sampling import SobolQMCNormalSampler
 from piglot.data.surrogate import ObjectiveModel
 from piglot.parameter import ParameterSet
 from piglot.optimisers.generic.containers import OptimisationState
-from piglot.utils.readable import ReadableMixin
+from piglot.utils.readable import ReadableModel
 
 
-@dataclass
-class AcquisitionSettings(ReadableMixin):
+class AcquisitionSettings(ReadableModel):
     """Container for settings related to acquisition functions."""
     name: str
     q: int = 1

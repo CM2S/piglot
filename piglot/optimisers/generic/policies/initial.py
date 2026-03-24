@@ -1,19 +1,21 @@
 """Module with the policy for evaluating the initial candidates."""
-from typing import Optional, TypeVar, Any
+from typing import Optional, TypeVar
 import numpy as np
 from piglot.data.dataset import ObjectiveDataset
 from piglot.data.surrogate import ObjectiveModel
 from piglot.optimisers.generic.containers import OptimisationState
 from piglot.optimisers.generic.campaign import CandidatePolicy
+from piglot.utils.readable import readable_from_constructor
 
 
 T = TypeVar('T', bound='InitialCandidatePolicy')
 
 
+@readable_from_constructor
 class InitialCandidatePolicy(CandidatePolicy):
     """Policy that generates candidates randomly."""
 
-    def __init__(self, rounds: int) -> None:
+    def __init__(self, rounds: int = 1) -> None:
         super().__init__(rounds, False)
 
     def get_next_candidates(
@@ -45,19 +47,3 @@ class InitialCandidatePolicy(CandidatePolicy):
             List of parameters for the next candidates to evaluate.
         """
         return [np.array([p.inital_value for p in dataset.settings.parameters])] * num_candidates
-
-    @classmethod
-    def read(cls: type[T], config: dict[str, Any]) -> T:
-        """Read a candidate policy from the given configuration.
-
-        Parameters
-        ----------
-        config : dict
-            Configuration dictionary for the candidate policy.
-
-        Returns
-        -------
-        T
-            The created candidate policy instance.
-        """
-        return cls(rounds=config.get('rounds', 1))

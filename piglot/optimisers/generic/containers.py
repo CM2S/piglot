@@ -9,7 +9,7 @@ from piglot.objective import ObjectiveResult
 from piglot.optimiser import OptimisationResult
 from piglot.data.dataset import ObjectiveDataset
 from piglot.data.surrogate import SurrogateSettings
-from piglot.utils.readable import ReadableMixin
+from piglot.utils.readable import ReadableModel
 
 
 MultiObjectiveStateDataT = TypeVar('MultiObjectiveStateDataT', bound='MultiObjectiveStateData')
@@ -18,14 +18,13 @@ MultiObjectiveStateDataT = TypeVar('MultiObjectiveStateDataT', bound='MultiObjec
 T = TypeVar('T', bound='OptimisationSettings')
 
 
-@dataclass
-class OptimisationSettings(ReadableMixin):
+class OptimisationSettings(ReadableModel):
     """Container for settings related to optimisation."""
-    surrogate_settings: Optional[SurrogateSettings]
     noisy: bool = False
     num_workers: int = 1
     nadir_scale: float = 0.1
-    ref_point: Optional[torch.Tensor] = None
+    ref_point: Optional[list[float]] = None
+    surrogate_settings: SurrogateSettings = SurrogateSettings()
 
 
 @dataclass
@@ -90,7 +89,7 @@ class MultiObjectiveStateData:
                 y_points=y_points, nadir_scale=optim_settings.nadir_scale
             )
         else:
-            ref_point = optim_settings.ref_point
+            ref_point = torch.tensor(optim_settings.ref_point)
 
         # Update partitioning and Pareto front
         partitioning = FastNondominatedPartitioning(ref_point, Y=y_points)

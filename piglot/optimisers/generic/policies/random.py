@@ -1,21 +1,23 @@
 """Module with the random policy for generic data-driven optimisation."""
-from typing import Optional, TypeVar, Any, Literal
+from typing import Optional, TypeVar, Literal
 import numpy as np
 from piglot.data.dataset import ObjectiveDataset
 from piglot.data.surrogate import ObjectiveModel
 from piglot.optimisers.generic.containers import OptimisationState
 from piglot.optimisers.generic.campaign import CandidatePolicy
+from piglot.utils.readable import readable_from_constructor
 
 
 T = TypeVar('T', bound='RandomCandidatePolicy')
 
 
+@readable_from_constructor
 class RandomCandidatePolicy(CandidatePolicy):
     """Policy that generates candidates randomly."""
 
     def __init__(
         self,
-        rounds: int,
+        rounds: int = 1,
         num_workers: Optional[int] = None,
         num_candidates_per_round: Optional[int] = None,
         mode: Optional[Literal['sequential', 'batched', 'async']] = None,
@@ -57,25 +59,3 @@ class RandomCandidatePolicy(CandidatePolicy):
             np.array([self.rng.uniform(low=p.lbound, high=p.ubound) for p in parameters])
             for _ in range(num_candidates)
         ]
-
-    @classmethod
-    def read(cls: type[T], config: dict[str, Any]) -> T:
-        """Read a candidate policy from the given configuration.
-
-        Parameters
-        ----------
-        config : dict
-            Configuration dictionary for the candidate policy.
-
-        Returns
-        -------
-        T
-            The created candidate policy instance.
-        """
-        return cls(
-            rounds=config.get('rounds', 1),
-            num_workers=config.get('num_workers'),
-            num_candidates_per_round=config.get('num_candidates_per_round'),
-            mode=config.get('mode'),
-            seed=config.get('seed'),
-        )
