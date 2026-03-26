@@ -79,7 +79,7 @@ def parse_config_file(config_file: str) -> Dict[str, Any]:
     return config
 
 
-def build_problem(config_path: str) -> ProblemConfig:
+def build_problem(config_path: str) -> tuple[ProblemConfig, dict[str, Any]]:
     """Build the problem from the configuration file path.
 
     Parameters
@@ -89,11 +89,11 @@ def build_problem(config_path: str) -> ProblemConfig:
 
     Returns
     -------
-    ProblemConfig
-        Container with the optimisation problem.
+    tuple[ProblemConfig, dict[str, Any]]
+        A tuple containing the ProblemConfig and the raw configuration dictionary.
     """
     config = parse_config_file(config_path)
     settings = read_settings(config)
     objective = read_objective(config["objective"], settings)
     optimiser = read_optimiser(config["optimiser"], settings, objective)
-    return ProblemConfig(config_path, settings, objective, optimiser)
+    return ProblemConfig(config_path, settings, objective, optimiser), config

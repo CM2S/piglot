@@ -97,7 +97,7 @@ class PlottingModuleConfigFile(PlottingModule):
             raise FileNotFoundError(f"Configuration file {config} not found.")
 
         # Read the problem configuration from the file and generate the figure(s)
-        problem = build_problem(config)
+        problem, _ = build_problem(config)
         figures = self.plot_run(problem, args)
 
         # Save the figure(s) if required
