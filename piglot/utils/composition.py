@@ -71,56 +71,6 @@ class ConcatUtility:
         ]
 
 
-class CompositionMixin:
-    """Mixin for objective classes that support composition."""
-
-    def __init__(self, composite: bool) -> None:
-        self.__composite = composite
-
-    def is_composite(self) -> bool:
-        """Check if this objective supports composition.
-
-        Returns
-        -------
-        bool
-            True if this objective supports composition, False otherwise.
-        """
-        return self.__composite
-
-    def composition(self, latent: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
-        """Composition function for this objective, if supported.
-
-        Parameters
-        ----------
-        latent : torch.Tensor
-            Latent space values from the inner function.
-        params : torch.Tensor
-            Parameters for the given result.
-
-        Returns
-        -------
-        torch.Tensor
-            Composition result.
-        """
-        # Under non-composite objectives, the composition is just the identity function
-        if not self.is_composite():
-            return latent
-        raise NotImplementedError("Composition function not implemented for this objective.")
-
-    def latent_size(self) -> int:
-        """Return the size of the latent space for this objective.
-
-        Returns
-        -------
-        int
-            Size of the latent space.
-        """
-        # Under non-composite objectives, assume a size of 1 for the scalar value of the objective
-        if not self.is_composite():
-            return 1
-        raise NotImplementedError("Latent size not implemented for this objective.")
-
-
 class LatentTransformer(ABC):
     """Base class for latent space transformations."""
 

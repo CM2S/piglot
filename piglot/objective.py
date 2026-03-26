@@ -11,7 +11,7 @@ import numpy as np
 import torch
 from matplotlib.figure import Figure
 from piglot.settings import Settings
-from piglot.utils.composition import ConcatUtility, CompositionMixin
+from piglot.utils.composition import ConcatUtility
 from piglot.utils.tabular import TabularFile, TabularStringColumn, TabularFloatColumn
 
 
@@ -66,7 +66,7 @@ class FunctionCallsData:
     scalar_variances: Optional[np.ndarray]
 
 
-class IndividualObjective(CompositionMixin, ABC):
+class IndividualObjective(ABC):
     """Base class for individual objectives for generic optimisation problems."""
 
     def __init__(
@@ -78,11 +78,11 @@ class IndividualObjective(CompositionMixin, ABC):
         composite: bool = False,
         bounds: tuple[float, float] = None,
     ) -> None:
-        super().__init__(composite)
         self.name = name
         self.maximise = maximise
         self.weight = float(weight)
         self.variance = variance
+        self.composite = composite
         self.bounds = None
         if bounds is not None:
             self.bounds = tuple(float(b) for b in bounds)
@@ -90,6 +90,49 @@ class IndividualObjective(CompositionMixin, ABC):
                 raise ValueError(f"Invalid bounds {self.bounds}.")
             if self.maximise:
                 self.bounds = (-self.bounds[1], -self.bounds[0])
+
+    def is_composite(self) -> bool:
+        """Check if this objective supports composition.
+
+        Returns
+        -------
+        bool
+            True if this objective supports composition, False otherwise.
+        """
+        return self.composite
+
+    def composition(self, latent: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
+        """Composition function for this objective, if supported.
+
+        Parameters
+        ----------
+        latent : torch.Tensor
+            Latent space values from the inner function.
+        params : torch.Tensor
+            Parameters for the given result.
+
+        Returns
+        -------
+        torch.Tensor
+            Composition result.
+        """
+        # Under non-composite objectives, the composition is just the identity function
+        if not self.is_composite():
+            return latent
+        raise NotImplementedError("Composition function not implemented for this objective.")
+
+    def latent_size(self) -> int:
+        """Return the size of the latent space for this objective.
+
+        Returns
+        -------
+        int
+            Size of the latent space.
+        """
+        # Under non-composite objectives, assume a size of 1 for the scalar value of the objective
+        if not self.is_composite():
+            return 1
+        raise NotImplementedError("Latent size not implemented for this objective.")
 
     def has_variance(self) -> bool:
         """Check if this objective has variance information.
@@ -264,7 +307,7 @@ class Scalarisation(ABC):
         """
 
 
-class Objective(CompositionMixin, ABC):
+class Objective(ABC):
     """Abstract class for optimisation objectives"""
 
     def __init__(
@@ -274,10 +317,10 @@ class Objective(CompositionMixin, ABC):
         scalarisation: Scalarisation = None,
         composite: bool = False,
     ) -> None:
-        super().__init__(composite or any(obj.is_composite() for obj in objectives))
         self.settings = settings
         self.objectives = objectives
         self.scalarisation = scalarisation
+        self.composite = composite or any(obj.is_composite() for obj in objectives)
         self.num_calls = 0
         self.begin_time = time.perf_counter()
         self.mutex = Lock()
@@ -297,6 +340,16 @@ class Objective(CompositionMixin, ABC):
         """Prepare output files before optimising the problem. This creates output files."""
         if self.func_calls_file is not None:
             self.func_calls_file.prepare()
+
+    def is_composite(self) -> bool:
+        """Check if this objective supports composition.
+
+        Returns
+        -------
+        bool
+            True if this objective supports composition, False otherwise.
+        """
+        return self.composite
 
     def num_objectives(self) -> int:
         """Get the number of objectives.
