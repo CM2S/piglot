@@ -1,8 +1,10 @@
 """Module for data generation and handling in piglot."""
+import os
 from typing import Optional
 from dataclasses import dataclass
 from threading import Lock
 import time
+import pickle
 import numpy as np
 import torch
 from piglot.settings import Settings
@@ -77,6 +79,8 @@ class ObjectiveDataset:
             )
             self.num_evaluations += 1
             self.data.append(observation)
+            with open(os.path.join(self.settings.output_dir, "dataset.bin"), "wb") as f:
+                pickle.dump(self.data, f)
 
         return result
 
@@ -132,3 +136,9 @@ class ObjectiveDataset:
                     if self.objective.has_variance() else None
                 ),
             )
+
+    def load(self) -> None:
+        """Load the dataset from a file."""
+        with self.lock, open(os.path.join(self.settings.output_dir, "dataset.bin"), "rb") as f:
+            self.data = pickle.load(f)
+            self.num_evaluations = len(self.data)
