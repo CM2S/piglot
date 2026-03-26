@@ -18,7 +18,7 @@ from piglot.optimisers.generic.containers import (
 from piglot.optimisers.generic.acquisitions import get_best_posterior_mean
 
 
-T = TypeVar('CandidatePolicyT', bound='CandidatePolicy')
+T = TypeVar('T', bound='CandidatePolicy')
 
 
 class OptimisationCampaign:
