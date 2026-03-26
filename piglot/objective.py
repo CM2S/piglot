@@ -362,6 +362,32 @@ class Objective(CompositionMixin, ABC):
             return result.obj_values.item()
         return result.scalar_value
 
+    def get_objective_variance(self, result: ObjectiveResult) -> float:
+        """Get the scalar objective variance from the result, if available.
+
+        Parameters
+        ----------
+        result : ObjectiveResult
+            The result containing the objective values and scalarised value.
+
+        Returns
+        -------
+        float
+            The scalar objective variance.
+        """
+        if self.is_multi_objective():
+            raise RuntimeError(
+                "Scalarised objective variance is not defined for multi-objective problems."
+            )
+
+        if self.scalarisation is None:
+            if result.obj_variances is None:
+                raise RuntimeError("Objective variance is not available.")
+            return result.obj_variances.item()
+        if result.scalar_variance is None:
+            raise RuntimeError("Scalarised objective variance is not available.")
+        return result.scalar_variance
+
     def composition(self, latent: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
         """Composition function for this objective, if supported.
 

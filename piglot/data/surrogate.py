@@ -19,8 +19,8 @@ from botorch.models.transforms.outcome import Standardize, OutcomeTransform
 from botorch.posteriors.gpytorch import GPyTorchPosterior
 from botorch.posteriors.transformed import TransformedPosterior
 from botorch.sampling import MCSampler, SobolQMCNormalSampler
-from piglot.data.dataset import ObjectiveDataset
-from piglot.data.transforms import Standardiser, PCA, ChainTransform
+from piglot.data.dataset import ObjectiveDataset, RawDataset
+from piglot.data.transforms import Standardiser, PCA, ChainTransform, Transform
 from piglot.utils.readable import ReadableModel
 
 
@@ -293,29 +293,21 @@ def fit_most_likely_heteroscedastic_gp(
     return hetero_model
 
 
-class ObjectiveModel:
-    """Surrogate model for an objective dataset using Gaussian processes."""
+class GPModel:
+    """Generic Gaussian process surrogate model."""
 
     def __init__(
         self,
-        dataset: ObjectiveDataset,
+        dataset: RawDataset,
         settings: SurrogateSettings,
+        output_transform: Optional[Transform] = None,
     ) -> None:
-        self.dataset = dataset
+        self.raw_dataset = dataset
         self.settings = settings
-        self.raw_dataset = dataset.export_raw()
 
-        # Build the output transform: chain PCA + standardisation on composite objectives
-        if dataset.objective.is_composite():
-            self.output_transform = ChainTransform(
-                self.raw_dataset.outputs,
-                self.raw_dataset.covariances,
-                [
-                    (PCA, {'variance': settings.pca_variance, 'std_tol': settings.std_tol}),
-                    (Standardiser, {'std_tol': settings.std_tol}),
-                ]
-            )
-        else:
+        # Set up output transform
+        self.output_transform = output_transform
+        if self.output_transform is None:
             self.output_transform = Standardiser(
                 self.raw_dataset.outputs,
                 self.raw_dataset.covariances,
@@ -380,12 +372,13 @@ class ObjectiveModel:
                 warnings.warn('Optimisation of the MLL failed, falling back to PyTorch optimiser')
                 fit_mll_pytorch_loop(mll)
 
-    def _sample(
+    def sample(
         self,
         input_data: torch.Tensor,
         sampler: Optional[MCSampler] = None,
         sample_shape: Optional[torch.Size] = None,
         seed: Optional[int] = None,
+        observation_noise: Union[bool, torch.Tensor] = False,
     ) -> torch.Tensor:
         """Draw samples from the model at the provided input locations.
 
@@ -399,6 +392,9 @@ class ObjectiveModel:
             Shape of the samples to draw. If `sampler` is provided, this is ignored.
         seed : Optional[int], optional
             Random seed to use when creating the default sampler. Only used if `sampler` is `None`.
+        observation_noise : Union[bool, torch.Tensor], optional
+            Whether to include observation noise in the samples. If a tensor is provided,
+            it is used as the observation noise.
 
         Returns
         -------
@@ -416,11 +412,70 @@ class ObjectiveModel:
             sampler = SobolQMCNormalSampler(sample_shape, seed=seed)
 
         # Draw samples from the GP posterior (reduced latent space)
-        posterior = self.gp.posterior(input_data)
+        posterior = self.gp.posterior(input_data, observation_noise=observation_noise)
         samples = sampler(posterior)
 
         # Untransform the samples back to the original space
         return self.output_transform.untransform(samples)
+
+
+class ObjectiveModel(GPModel):
+    """Surrogate model for an objective dataset using Gaussian processes."""
+
+    def __init__(self, dataset: ObjectiveDataset, settings: SurrogateSettings) -> None:
+        # Build the output transform: chain PCA + standardisation on composite objectives
+        raw_dataset = dataset.export_raw()
+        if dataset.objective.is_composite():
+            output_transform = ChainTransform(
+                raw_dataset.outputs,
+                raw_dataset.covariances,
+                [
+                    (PCA, {'variance': settings.pca_variance, 'std_tol': settings.std_tol}),
+                    (Standardiser, {'std_tol': settings.std_tol}),
+                ]
+            )
+        else:
+            output_transform = Standardiser(
+                raw_dataset.outputs, raw_dataset.covariances, std_tol=settings.std_tol
+            )
+
+        # Build model
+        super().__init__(raw_dataset, settings, output_transform=output_transform)
+        self.dataset = dataset
+
+    def sample(
+        self,
+        input_data: torch.Tensor,
+        sampler: Optional[MCSampler] = None,
+        sample_shape: Optional[torch.Size] = None,
+        seed: Optional[int] = None,
+        observation_noise: Union[bool, torch.Tensor] = False,
+    ) -> torch.Tensor:
+        """Draw samples from the model at the provided input locations.
+
+        Parameters
+        ----------
+        input_data : torch.Tensor
+            A `(batch_shape) x q x d` tensor of input locations.
+        sampler : Optional[MCSampler], optional
+            Sampler to use when drawing samples. If `None`, a SobolQMCNormalSampler is used.
+        sample_shape : Optional[torch.Size], optional
+            Shape of the samples to draw. If `sampler` is provided, this is ignored.
+        seed : Optional[int], optional
+            Random seed to use when creating the default sampler. Only used if `sampler` is `None`.
+        observation_noise : Union[bool, torch.Tensor], optional
+            Whether to include observation noise in the samples. If a tensor is provided,
+            it is used as the observation noise.
+
+        Returns
+        -------
+        torch.Tensor
+            A `(sample_shape) x (batch_shape) x q x o` tensor of model samples.
+        """
+        raise NotImplementedError(
+            "Do not call `sample()` directly for ObjectiveModel. "
+            "Use `latent_samples()` or `objective_samples()` instead."
+        )
 
     def latent_samples(
         self,
@@ -428,6 +483,7 @@ class ObjectiveModel:
         sampler: Optional[MCSampler] = None,
         sample_shape: Optional[torch.Size] = None,
         seed: Optional[int] = None,
+        observation_noise: Union[bool, torch.Tensor] = False,
     ) -> torch.Tensor:
         """Draw samples from the latent space at the provided input locations.
 
@@ -443,6 +499,9 @@ class ObjectiveModel:
             Shape of the samples to draw. If `sampler` is provided, this is ignored.
         seed : Optional[int], optional
             Random seed to use when creating the default sampler. Only used if `sampler` is `None`.
+        observation_noise : Union[bool, torch.Tensor], optional
+            Whether to include observation noise in the samples. If a tensor is provided,
+            it is used as the observation noise.
 
         Returns
         -------
@@ -452,7 +511,13 @@ class ObjectiveModel:
         # Sanitise composite objective
         if not self.dataset.objective.is_composite():
             raise ValueError('Latent samples are only available for composite objectives')
-        return self._sample(input_data, sampler=sampler, sample_shape=sample_shape, seed=seed)
+        return super().sample(
+            input_data,
+            sampler=sampler,
+            sample_shape=sample_shape,
+            seed=seed,
+            observation_noise=observation_noise,
+        )
 
     def objective_samples(
         self,
@@ -460,6 +525,7 @@ class ObjectiveModel:
         sampler: Optional[MCSampler] = None,
         sample_shape: Optional[torch.Size] = None,
         seed: Optional[int] = None,
+        observation_noise: Union[bool, torch.Tensor] = False,
     ) -> torch.Tensor:
         """Draw samples from the objective function model at the provided input locations.
 
@@ -473,13 +539,22 @@ class ObjectiveModel:
             Shape of the samples to draw. If `sampler` is provided, this is ignored.
         seed : Optional[int], optional
             Random seed to use when creating the default sampler. Only used if `sampler` is `None`.
+        observation_noise : Union[bool, torch.Tensor], optional
+            Whether to include observation noise in the samples. If a tensor is provided,
+            it is used as the observation noise.
 
         Returns
         -------
         torch.Tensor
             A `(sample_shape) x (batch_shape) x q x o` tensor of model samples.
         """
-        samples = self._sample(input_data, sampler=sampler, sample_shape=sample_shape, seed=seed)
+        samples = super().sample(
+            input_data,
+            sampler=sampler,
+            sample_shape=sample_shape,
+            seed=seed,
+            observation_noise=observation_noise,
+        )
 
         # If composite objective, map samples back to objective space
         if self.dataset.objective.is_composite():

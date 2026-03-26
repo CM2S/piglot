@@ -118,7 +118,7 @@ class ObjectiveDataset:
                     inputs=inputs,
                     outputs=np.array([[obs.result.scalar_value] for obs in self.data]),
                     covariances=(
-                        np.array([[obs.result.scalar_variance] for obs in self.data])
+                        np.array([[[obs.result.scalar_variance]] for obs in self.data])
                         if self.objective.has_variance() else None
                     ),
                 )
@@ -128,7 +128,7 @@ class ObjectiveDataset:
                 inputs=inputs,
                 outputs=np.array([[obs.result.obj_values.item()] for obs in self.data]),
                 covariances=(
-                    np.array([[obs.result.obj_variances.item()] for obs in self.data])
+                    np.array([[[obs.result.obj_variances.item()]] for obs in self.data])
                     if self.objective.has_variance() else None
                 ),
             )

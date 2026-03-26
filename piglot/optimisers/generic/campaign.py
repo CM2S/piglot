@@ -113,6 +113,18 @@ class OptimisationCampaign:
             self.state.best_params = self.dataset.data[idx].params
             self.state.best_result = self.dataset.data[idx].result
 
+        # Stochastic single-objective case with a single observation: it is our best guess
+        elif self.state.num_evaluations == 1:
+            value = self.objective.get_objective_value(self.dataset.data[0].result)
+            variance = self.objective.get_objective_variance(self.dataset.data[0].result)
+            self.state.best_value = value
+            self.state.best_params = self.dataset.data[0].params
+            self.state.best_result = self.dataset.data[0].result
+            self.state.conf_interval = (
+                -(value + 1.96 * np.sqrt(variance)),
+                -(value - 1.96 * np.sqrt(variance))
+            )
+
         # Stochastic single-objective case: find the value by optimising the model's posterior mean
         else:
             model = self.get_model()
