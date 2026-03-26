@@ -101,7 +101,9 @@ class IndividualObjective(ABC):
         """
         return self.composite
 
-    def composition(self, latent: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
+    def composition(
+        self, latent: torch.Tensor, params: torch.Tensor  # pylint: disable=W0613
+    ) -> torch.Tensor:
         """Composition function for this objective, if supported.
 
         Parameters
