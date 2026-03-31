@@ -102,6 +102,7 @@ class OptimisationCampaign:
             self.state.mo_state = MultiObjectiveStateData.from_dataset(
                 self.dataset, self.optim_settings
             )
+            self.state.best_value = -self.state.mo_state.hypervolume
 
         # Deterministic single-objective case: find the best observation
         elif not self.is_stochastic():
