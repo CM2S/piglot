@@ -7,7 +7,7 @@ import time
 import shutil
 import numpy as np
 from yaml import safe_dump_all, safe_load_all
-from piglot.parameter import ParameterSet
+from piglot.parameter import ParameterSet, ParameterValues
 from piglot.utils.assorted import pretty_time
 from piglot.utils.solver_utils import VerbosityManager
 
@@ -135,15 +135,13 @@ class Solver(ABC):
         """Prepare data for the optimisation."""
 
     @abstractmethod
-    def solve(
-        self, values: dict[str, np.ndarray], concurrent: bool,
-    ) -> dict[str, OutputResult]:
+    def solve(self, values: ParameterValues, concurrent: bool) -> dict[str, OutputResult]:
         """Solve all cases for the given set of parameter values.
 
         Parameters
         ----------
-        values : dict[str, np.ndarray]
-            Current named set of parameter values to evaluate.
+        values : ParameterValues
+            Named set of parameter values for this evaluation.
         concurrent : bool
             Whether this run may be concurrent to another one (so use unique file names).
 
@@ -334,31 +332,29 @@ class SingleCaseSolver(Solver, ABC):
         return self.get_case_result(param_hash).responses
 
     @abstractmethod
-    def _solve(self, values: np.ndarray, concurrent: bool) -> Dict[str, OutputResult]:
+    def _solve(self, values: dict[str, float], concurrent: bool) -> dict[str, OutputResult]:
         """Internal solver for the prescribed problems.
 
         Parameters
         ----------
-        values : array
-            Current parameters to evaluate.
+        values : dict[str, float]
+            Named set of parameter values for this evaluation.
         concurrent : bool
             Whether this run may be concurrent to another one (so use unique file names).
 
         Returns
         -------
-        Dict[str, OutputResult]
+        dict[str, OutputResult]
             Evaluated results for each output field.
         """
 
-    def solve(
-        self, values: dict[str, np.ndarray], concurrent: bool,
-    ) -> dict[str, OutputResult]:
+    def solve(self, values: ParameterValues, concurrent: bool) -> dict[str, OutputResult]:
         """Solve all cases for the given set of parameter values.
 
         Parameters
         ----------
-        values : dict[str, np.ndarray]
-            Current named set of parameter values to evaluate.
+        values : ParameterValues
+            Named set of parameter values for this evaluation.
         concurrent : bool
             Whether this run may be concurrent to another one (so use unique file names).
 
@@ -370,12 +366,11 @@ class SingleCaseSolver(Solver, ABC):
         # Run the solver
         begin_time = time.time()
         with self.verbosity_manager:
-            results = self._solve(values, concurrent)
+            results = self._solve(values.scalar_values, concurrent)
         run_time = time.time() - begin_time
         # Post-process results: write history entries
-        param_hash = self.parameters.hash(values)
         case_result = CaseResult(
-            begin_time, run_time, self.parameters.to_scalar_dict(values), True, param_hash, results
+            begin_time, run_time, values.scalar_values, True, values.param_hash, results
         )
-        case_result.write(os.path.join(self.cases_hist, case_result.param_hash))
+        case_result.write(os.path.join(self.cases_hist, values.param_hash))
         return results

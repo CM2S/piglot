@@ -12,10 +12,7 @@ class Reduction(ABC):
 
     @abstractmethod
     def reduce_torch(
-        self,
-        time: torch.Tensor,
-        data: torch.Tensor,
-        params: torch.Tensor,
+        self, time: torch.Tensor, data: torch.Tensor, params: dict[str, torch.Tensor]
     ) -> torch.Tensor:
         """Reduce the input data to a single value (with gradients).
 
@@ -25,8 +22,8 @@ class Reduction(ABC):
             Time points of the response.
         data : torch.Tensor
             Data points of the response.
-        params : torch.Tensor
-            Parameters for the given responses.
+        params : dict[str, torch.Tensor]
+            Named parameters for the given responses.
 
         Returns
         -------
@@ -34,7 +31,9 @@ class Reduction(ABC):
             Reduced value of the data.
         """
 
-    def reduce(self, time: np.ndarray, data: np.ndarray, params: np.ndarray) -> np.ndarray:
+    def reduce(
+        self, time: np.ndarray, data: np.ndarray, params: dict[str, np.ndarray]
+    ) -> np.ndarray:
         """Reduce the input data to a single value.
 
         Parameters
@@ -43,8 +42,8 @@ class Reduction(ABC):
             Time points of the response.
         data : np.ndarray
             Data points of the response.
-        params : np.ndarray
-            Parameters for the given responses.
+        params : dict[str, np.ndarray]
+            Named parameters for the given responses.
 
         Returns
         -------
@@ -54,7 +53,7 @@ class Reduction(ABC):
         return self.reduce_torch(
             torch.from_numpy(time),
             torch.from_numpy(data),
-            torch.from_numpy(params),
+            {k: torch.from_numpy(v) for k, v in params.items()}
         ).numpy(force=True)
 
     def test_reduction(self) -> None:
@@ -95,25 +94,22 @@ class NegateReduction(Reduction):
         self.reduction = reduction
 
     def reduce_torch(
-        self,
-        time: torch.Tensor,
-        data: torch.Tensor,
-        params: torch.Tensor,
+        self, time: torch.Tensor, data: torch.Tensor, params: dict[str, torch.Tensor]
     ) -> torch.Tensor:
         """Reduce the input data to a single value.
 
         Parameters
         ----------
-        time : np.ndarray
+        time : torch.Tensor
             Time points of the response.
-        data : np.ndarray
+        data : torch.Tensor
             Data points of the response.
-        params : np.ndarray
-            Parameters for the given responses.
+        params : dict[str, torch.Tensor]
+            Named parameters for the given responses.
 
         Returns
         -------
-        np.ndarray
+        torch.Tensor
             Reduced value of the data.
         """
         return -self.reduction.reduce_torch(time, data, params)
@@ -125,45 +121,12 @@ class ParameterReduction(Reduction):
     Useful for multi-objective when a parameter is also an objective.
     """
 
-    def __init__(self, param_index: int) -> None:
+    def __init__(self, param_name: str, param_index: int = 0) -> None:
+        self.param_name = param_name
         self.param_index = param_index
 
     def reduce_torch(
-        self,
-        time: torch.Tensor,
-        data: torch.Tensor,
-        params: torch.Tensor,
-    ) -> torch.Tensor:
-        """Reduce the input data to a single value.
-
-        Parameters
-        ----------
-        time : np.ndarray
-            Time points of the response.
-        data : np.ndarray
-            Data points of the response.
-        params : np.ndarray
-            Parameters for the given responses.
-
-        Returns
-        -------
-        np.ndarray
-            Reduced value of the data.
-        """
-        return params[..., self.param_index]
-
-
-class SimpleReduction(Reduction):
-    """Reduction function defined from a lambda function (without using the parameters)."""
-
-    def __init__(self, reduction: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]) -> None:
-        self.reduction = reduction
-
-    def reduce_torch(
-        self,
-        time: torch.Tensor,
-        data: torch.Tensor,
-        params: torch.Tensor,
+        self, time: torch.Tensor, data: torch.Tensor, params: dict[str, torch.Tensor]
     ) -> torch.Tensor:
         """Reduce the input data to a single value.
 
@@ -173,8 +136,36 @@ class SimpleReduction(Reduction):
             Time points of the response.
         data : torch.Tensor
             Data points of the response.
-        params : torch.Tensor
-            Parameters for the given responses.
+        params : dict[str, torch.Tensor]
+            Named parameters for the given responses.
+
+        Returns
+        -------
+        torch.Tensor
+            Reduced value of the data.
+        """
+        return params[self.param_name][..., self.param_index]
+
+
+class SimpleReduction(Reduction):
+    """Reduction function defined from a lambda function (without using the parameters)."""
+
+    def __init__(self, reduction: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]) -> None:
+        self.reduction = reduction
+
+    def reduce_torch(
+        self, time: torch.Tensor, data: torch.Tensor, params: dict[str, torch.Tensor]
+    ) -> torch.Tensor:
+        """Reduce the input data to a single value.
+
+        Parameters
+        ----------
+        time : torch.Tensor
+            Time points of the response.
+        data : torch.Tensor
+            Data points of the response.
+        params : dict[str, torch.Tensor]
+            Named parameters for the given responses.
 
         Returns
         -------
@@ -244,7 +235,7 @@ def read_reduction(config: Union[str, Dict[str, Any]]) -> Reduction:
     if name == 'parameter':
         if 'index' not in config:
             raise ValueError("Missing index for the parameter reduction.")
-        return ParameterReduction(int(config['index']))
+        return ParameterReduction(config['param'], int(config.get('index', 0)))
     if name not in AVAILABLE_REDUCTIONS:
         raise ValueError(f'Reduction function "{name}" is not available.')
     return AVAILABLE_REDUCTIONS[name]

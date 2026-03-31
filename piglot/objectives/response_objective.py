@@ -7,6 +7,7 @@ import torch
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.figure import Figure
+from piglot.parameter import ParameterValues
 from piglot.settings import Settings
 from piglot.solver.solver import Solver, OutputResult
 from piglot.objective import (
@@ -96,14 +97,14 @@ class ResponseSingleObjective(IndividualObjective, ABC):
         return params.expand(*(list(time.shape[:-1]) + [params.shape[-1]]))
 
     def evaluate(
-        self, params: np.ndarray, raw_results: dict[str, OutputResult]
+        self, params: ParameterValues, raw_results: dict[str, OutputResult]
     ) -> IndividualObjectiveResult:
         """Evaluate objective value for the given results.
 
         Parameters
         ----------
-        params : np.ndarray
-            Parameter values for this evaluation.
+        params : ParameterValues
+            Named set of parameter values for this evaluation.
         raw_results : dict[str, OutputResult]
             Raw responses from the solver.
 
@@ -114,7 +115,10 @@ class ResponseSingleObjective(IndividualObjective, ABC):
         """
         # Extract the responses of interest and compute the objective value and variance
         results = self._extract_responses(raw_results)
-        obj_values = [self.quantity.reduce(result.time, result.data, params) for result in results]
+        obj_values = [
+            self.quantity.reduce(result.time, result.data, params.vector_values)
+            for result in results
+        ]
 
         # Mean objective value
         value = np.mean(obj_values).item()
@@ -152,7 +156,7 @@ class ResponseSingleObjective(IndividualObjective, ABC):
             latent_covariances=latent_covar,
         )
 
-    def composition(self, latent: torch.Tensor, params: torch.Tensor) -> torch.Tensor:
+    def composition(self, latent: torch.Tensor, params: dict[str, torch.Tensor]) -> torch.Tensor:
         """Composition function for this objective, if supported.
 
         Parameters
@@ -160,7 +164,7 @@ class ResponseSingleObjective(IndividualObjective, ABC):
         latent : torch.Tensor
             Latent space values from the inner function.
         params : torch.Tensor
-            Parameters for the given result.
+            Named parameters for the given result.
 
         Returns
         -------
@@ -173,7 +177,8 @@ class ResponseSingleObjective(IndividualObjective, ABC):
         # We need to reconstruct the time and data from the latent space representation, and then
         # compute the quantity reduction to get the objective value
         time, data = self.latent_transformer.inverse_transform(latent)
-        return self.quantity.reduce_torch(time, data, self._expand_params(time, params))
+        expanded_params = {k: self._expand_params(time, v) for k, v in params.items()}
+        return self.quantity.reduce_torch(time, data, expanded_params)
 
     def latent_size(self) -> int:
         """Return the size of the latent space for this objective.
@@ -289,21 +294,21 @@ class ResponseObjective(Objective):
         return responses
 
     def _objective(
-        self, params: np.ndarray, concurrent: bool = False
+        self, params: ParameterValues, concurrent: bool = False
     ) -> list[IndividualObjectiveResult]:
-        """Abstract method for objective computation.
+        """Method for objective computation.
 
         Parameters
         ----------
-        params : np.ndarray
-            Set of parameters to evaluate the objective for.
+        params : ParameterValues
+            Named set of parameters to evaluate the objective for.
         concurrent : bool, optional
             Whether this call may be concurrent to others, by default False.
 
         Returns
         -------
         list[IndividualObjectiveResult]
-            list of individual objective results.
+            List of individual objective results.
         """
         raw_responses = self.solver.solve(params, concurrent)
 

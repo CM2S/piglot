@@ -4,7 +4,7 @@ import re
 import time
 import numpy as np
 import sympy
-from piglot.parameter import ParameterSet
+from piglot.parameter import ParameterSet, ParameterValues
 from piglot.solver.solver import CaseResult, OutputResult
 from piglot.solver.multi_case_solver import MultiCaseSolver, Case
 
@@ -52,15 +52,13 @@ class CurveCase(Case):
         """
         return [self.case_name]
 
-    def get_expression(self, expression: str, parameters: ParameterSet, values: np.ndarray) -> str:
+    def get_expression(self, expression: str, values: ParameterValues) -> str:
         """Get the expression for this case.
 
         Parameters
         ----------
         expression : str
             Expression template for this case.
-        parameters : ParameterSet
-            Parameter set for this problem.
         values : np.ndarray
             Current parameters to evaluate.
 
@@ -69,25 +67,17 @@ class CurveCase(Case):
         str
             Expression for this case.
         """
-        param_value = parameters.to_scalar_dict(values)
-        for parameter, value in param_value.items():
+        for parameter, value in values.scalar_values.items():
             expression = re.sub(r'\<' + parameter + r'\>', str(value), expression)
         return expression
 
-    def run(
-        self,
-        parameters: ParameterSet,
-        values: np.ndarray,
-        tmp_dir: str,
-    ) -> CaseResult:
+    def run(self, values: ParameterValues, tmp_dir: str) -> CaseResult:
         """Run the case for the given set of parameters.
 
         Parameters
         ----------
-        parameters : ParameterSet
-            Parameter set for this problem.
-        values : np.ndarray
-            Current parameters to evaluate.
+        values : ParameterValues
+            Named set of parameter values for this evaluation.
         tmp_dir : str
             Temporary directory to run the problem.
 
@@ -99,13 +89,13 @@ class CurveCase(Case):
         begin_time = time.time()
         # Prepare symbols
         symbs = sympy.symbols(self.parametric)
-        expression = sympy.lambdify(symbs, self.get_expression(self.expression, parameters, values))
+        expression = sympy.lambdify(symbs, self.get_expression(self.expression, values))
         # Evaluate the expression on the grid
         grid = np.linspace(self.bounds[0], self.bounds[1], self.points)
         curve = np.array([expression(**{self.parametric: x}) for x in grid])
         # Check if this is a stochastic curve
         if self.variance is not None:
-            var_expression = self.get_expression(self.variance, parameters, values)
+            var_expression = self.get_expression(self.variance, values)
             var_func = sympy.lambdify(symbs, var_expression)
             variances = np.array([var_func(**{self.parametric: x}) for x in grid])
             # Check if variances are valid
@@ -127,9 +117,9 @@ class CurveCase(Case):
         return CaseResult(
             begin_time,
             run_time,
-            parameters.to_scalar_dict(values),
+            values.scalar_values,
             True,
-            parameters.hash(values),
+            values.param_hash,
             {self.case_name: OutputResult(grid, curve)},
         )
 

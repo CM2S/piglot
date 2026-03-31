@@ -1,7 +1,7 @@
 """Module for simple objective functions based on individual objectives."""
 from typing import Any, Optional, TypeVar, Generic
 from abc import ABC, abstractmethod
-import numpy as np
+from piglot.parameter import ParameterValues
 from piglot.settings import Settings
 from piglot.objective import (
     Objective,
@@ -21,13 +21,15 @@ class SimpleIndividualObjective(IndividualObjective, ABC):
     """Self-contained individual objective function."""
 
     @abstractmethod
-    def evaluate(self, params: np.ndarray, concurrent: bool) -> IndividualObjectiveResult:
+    def evaluate(
+        self, params: ParameterValues, concurrent: bool
+    ) -> IndividualObjectiveResult:
         """Evaluate the objective for a set of parameters.
 
         Parameters
         ----------
-        params : np.ndarray
-            Set of parameters to evaluate the objective for.
+        params : ParameterValues
+            Named set of parameters to evaluate the objective for.
         concurrent : bool, optional
             Whether this call may be concurrent to others.
 
@@ -76,13 +78,15 @@ class SimpleObjective(Objective, Generic[IndividualT], ABC):
         # Update type hints for the individual objectives
         self.objectives: list[IndividualT]
 
-    def _objective(self, params: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
+    def _objective(
+        self, params: ParameterValues, concurrent: bool = False
+    ) -> ObjectiveResult:
         """Objective computation for simple individual objectives.
 
         Parameters
         ----------
-        params : np.ndarray
-            Set of parameters to evaluate the objective for.
+        params : ParameterValues
+            Named set of parameters to evaluate the objective for.
         concurrent : bool, optional
             Whether this call may be concurrent to others, by default False.
 

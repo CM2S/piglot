@@ -94,8 +94,8 @@ class Optimiser(ABC):
             else:
                 file.write(f'{"Best Loss":>15}\t')
                 file.write(f'{"Current Loss":>15}\t')
-            for par in self.parameters:
-                file.write(f'{par.name:>15}\t')
+            for name in self.parameters.get_scalar_names():
+                file.write(f'{name:>15}\t')
             file.write('\tOptimiser info')
             file.write('\n')
         # Prepare optimiser
@@ -127,6 +127,8 @@ class Optimiser(ABC):
         """
         elapsed = time.perf_counter() - self.begin_time
         skip_pars = result.params is None
+        if not skip_pars:
+            param_dict = self.settings.parameters.to_values(self.state.best_result.params)
         # Update progress file
         with open(os.path.join(self.settings.output_dir, "progress"), 'w', encoding='utf8') as file:
             file.write(f'Iteration: {i_iter}\n')
@@ -141,8 +143,8 @@ class Optimiser(ABC):
                 file.write(f'Optimiser info: {extra_info}\n')
             if not skip_pars:
                 file.write('Best parameters:\n')
-                for i, par in enumerate(self.settings.parameters):
-                    file.write(f'\t{par.name}: {self.state.best_result.params[i]}\n')
+                for name, value in param_dict.scalar_values.items():
+                    file.write(f'\t{name}: {value}\n')
             file.write(f'\nElapsed time: {pretty_time(elapsed)}\n')
         # Update history file
         with open(os.path.join(self.settings.output_dir, "history"), 'a', encoding='utf8') as file:
@@ -159,8 +161,11 @@ class Optimiser(ABC):
             else:
                 file.write(f'{self.state.best_result.value:>15.8e}\t')
                 file.write(f'{result.value:>15.8e}\t')
-            for i, par in enumerate(self.settings.parameters):
-                file.write('None\t'.rjust(16) if skip_pars else f'{result.params[i]:>15.8f}\t')
+            if skip_pars:
+                file.write('None\t'.rjust(16) * len(self.settings.parameters.get_scalar_names()))
+            else:
+                for value in param_dict.scalar_values.values():
+                    file.write(f'{value:>15.8f}\t')
             file.write(f"\t{'-' if extra_info is None else extra_info}")
             file.write('\n')
 

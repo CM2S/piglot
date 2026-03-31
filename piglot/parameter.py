@@ -1,5 +1,5 @@
 """Optimisation parameter module."""
-import math
+from dataclasses import dataclass
 from typing import Iterator, Any, Union, TypeVar, Optional
 from abc import ABC, abstractmethod
 from hashlib import sha256
@@ -306,29 +306,38 @@ class ComputedParameter(Parameter):
             )
         super().__init__(name, optimisable=False, num_components=num_components)
 
-    def compute(self, values: dict[str, Union[float, np.ndarray]]) -> Union[float, np.ndarray]:
+    def compute(self, values: dict[str, np.ndarray]) -> np.ndarray:
         """Compute the value of the parameter based on other parameters.
 
         Parameters
         ----------
-        values : dict[str, Union[float, np.ndarray]]
+        values : dict[str, np.ndarray]
             Dictionary of parameter values.
 
         Returns
         -------
-        Union[float, np.ndarray]
+        np.ndarray
             Computed value of the parameter.
         """
-        # Use a globals with only numpy and math functions (inject all math functions into globals)
+        # Use a globals with only numpy functions
         allowed_globals = {
-            'np': np,
-            'math': math,
-            **{k: getattr(math, k) for k in dir(math) if not k.startswith("_")}
+            k: getattr(np, k) for k in dir(np) if not k.startswith("_") and not k.endswith("_")
         }
         try:
-            return eval(self.code, allowed_globals, values)
+            result = eval(self.code, allowed_globals, values)
         except Exception as e:
             raise RuntimeError(f"Error computing parameter {self.name}: {e}")
+
+        # Sanitise return type
+        if isinstance(result, (int, float)):
+            return np.array([result])
+        elif isinstance(result, np.ndarray):
+            return result
+        else:
+            raise RuntimeError(
+                f"Computed value {result} of parameter {self.name} "
+                f"has unsupported type {type(result)}."
+            )
 
     @classmethod
     def read(
@@ -357,6 +366,14 @@ class ComputedParameter(Parameter):
             raise ValueError(f"Missing 'expression' in configuration for parameter {name}.")
         expression = config["expression"]
         return cls(name, expression, optim_params)
+
+
+@dataclass
+class ParameterValues:
+    """Container for a set of parameter values for objective evaluation."""
+    scalar_values: dict[str, float]
+    vector_values: dict[str, np.ndarray]
+    param_hash: str
 
 
 class ParameterSet:
@@ -509,70 +526,38 @@ class ParameterSet:
         }
         return [dict(zip(values.keys(), combination)) for combination in product(*values.values())]
 
-    def to_dict(
-        self, values: np.ndarray, include_computed: bool
-    ) -> dict[str, Union[float, np.ndarray]]:
-        """Build a dict with name-value pairs given a list of values.
+    def to_values(self, values: np.ndarray) -> ParameterValues:
+        """Get the parameter values as a ParameterValues object.
 
         Parameters
         ----------
         values : np.ndarray
             Values to pack. Their order is used for parameter resolution.
-        include_computed : bool
-            Whether to include computed parameters in the output.
 
         Returns
         -------
-        dict[str, Union[float, np.ndarray]]
-            Name-value pair for each parameter.
+        ParameterValues
+            Parameter values.
         """
-        optim_params = {
-            p.name: p.get_value(values[self.indices[i]:self.indices[i + 1]])
+        # Evaluate optimisable vector parameters
+        vector_params: dict[str, np.ndarray] = {
+            p.name: values[self.indices[i]:self.indices[i + 1]]
             for i, p in enumerate(self.optim_parameters)
         }
 
-        # Nothing more to do if computed parameters are not included
-        if not include_computed or len(self.computed_parameters) == 0:
-            return optim_params
-
-        # Add computed parameters
+        # Add computed vector parameters
         for param in self.computed_parameters:
-            optim_params[param.name] = param.compute(optim_params)
-        return optim_params
+            vector_params[param.name] = param.compute(vector_params)
 
-    def to_scalar_dict(self, values: np.ndarray, include_computed: bool = True) -> dict[str, float]:
-        """Build a dict with name-value scalar pairs given a list of values.
+        # Build scalar values: concatenate all vector components
+        scalar_values = [float(scalar) for vector in vector_params.values() for scalar in vector]
+        scalar_params = dict(zip(self.get_scalar_names(), scalar_values))
 
-        Parameters
-        ----------
-        values : np.ndarray
-            Values to pack. Their order is used for parameter resolution.
-        include_computed : bool, optional
-            Whether to include computed parameters in the output. Default is True.
-
-        Returns
-        -------
-        dict[str, float]
-            Name-value pair for each parameter.
-        """
-        # Build a dictionary of optimisable parameter names and their values scalar
-        optim_params: dict[str, float] = {}
-        for i, param in enumerate(self.optim_parameters):
-            param_values = values[self.indices[i]:self.indices[i + 1]]
-            for name, value in param.get_name_value_pair(param_values).items():
-                optim_params[name] = value
-
-        # Nothing more to do if computed parameters are not included
-        if not include_computed or len(self.computed_parameters) == 0:
-            return optim_params
-
-        # Add computed parameters from the vector-valued optimisable parameters
-        vector_optim_params = self.to_dict(values, include_computed=False)
-        for param in self.computed_parameters:
-            param_values = param.compute(vector_optim_params)
-            for name, value in param.get_name_value_pair(param_values).items():
-                optim_params[name] = value
-        return optim_params
+        return ParameterValues(
+            scalar_values=scalar_params,
+            vector_values=vector_params,
+            param_hash=self.__hash(values),
+        )
 
     def to_torch_dict(self, values: torch.Tensor) -> dict[str, torch.Tensor]:
         """Build a dict with name-value pairs given a list of values (with tensors).
@@ -595,7 +580,7 @@ class ParameterSet:
         }
 
     @staticmethod
-    def hash(values: np.ndarray) -> str:
+    def __hash(values: np.ndarray) -> str:
         """Build the hash for the current parameter values.
 
         Parameters

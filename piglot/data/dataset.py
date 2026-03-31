@@ -70,11 +70,12 @@ class ObjectiveDataset:
 
         # Store the observation
         with self.lock:
+            param_values = self.settings.parameters.to_values(params)
             observation = Observation(
                 call_number=self.num_evaluations,
                 elapsed_time=elapsed_time,
                 params=params,
-                params_dict=self.settings.parameters.to_scalar_dict(params),
+                params_dict=param_values.scalar_values,
                 result=result,
             )
             self.num_evaluations += 1

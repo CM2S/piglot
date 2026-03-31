@@ -11,6 +11,7 @@ import numpy as np
 import torch
 from matplotlib.figure import Figure
 from piglot.settings import Settings
+from piglot.parameter import ParameterValues
 from piglot.utils.composition import ConcatUtility
 from piglot.utils.tabular import TabularFile, TabularStringColumn, TabularFloatColumn
 
@@ -102,7 +103,7 @@ class IndividualObjective(ABC):
         return self.composite
 
     def composition(
-        self, latent: torch.Tensor, params: torch.Tensor  # pylint: disable=W0613
+        self, latent: torch.Tensor, params: dict[str, torch.Tensor]  # pylint: disable=W0613
     ) -> torch.Tensor:
         """Composition function for this objective, if supported.
 
@@ -110,8 +111,8 @@ class IndividualObjective(ABC):
         ----------
         latent : torch.Tensor
             Latent space values from the inner function.
-        params : torch.Tensor
-            Parameters for the given result.
+        params : dict[str, torch.Tensor]
+            Named parameters for the given result.
 
         Returns
         -------
@@ -464,10 +465,13 @@ class Objective(ABC):
         # Split the latent space into the individual objectives
         latent_responses = self.concat_utility.split(latent)
 
+        # Unpack the parameters
+        params_dict = self.settings.parameters.to_torch_dict(params)
+
         # When the inner objective is non-composite, we treat the scalar value as a
         # single-dimensional latent space
         objectives = torch.stack([
-            (obj.composition(lat, params) if obj.is_composite() else lat) * obj.sign()
+            (obj.composition(lat, params_dict) if obj.is_composite() else lat) * obj.sign()
             for lat, obj in zip(latent_responses, self.objectives)
         ], dim=-1)
 
@@ -480,10 +484,7 @@ class Objective(ABC):
 
         return objectives
 
-    def __build_objective_result(
-        self,
-        results: list[IndividualObjectiveResult],
-    ) -> ObjectiveResult:
+    def __build_objective_result(self, results: list[IndividualObjectiveResult]) -> ObjectiveResult:
         """Build the full objective result from the individual objective results and parameters.
 
         Parameters
@@ -552,16 +553,21 @@ class Objective(ABC):
         ObjectiveResult
             Objective result.
         """
+        # Convert parameter values
+        param_values = self.settings.parameters.to_values(params)
+
         # Evaluate objective(s) and build the full result
         begin_time = time.perf_counter()
-        individual_obj = self._objective(params, *args, **kwargs)
+        individual_obj = self._objective(param_values, *args, **kwargs)
         result = self.__build_objective_result(individual_obj)
         end_time = time.perf_counter()
 
         # Update outputs
         with self.mutex:
             self.num_calls += 1
-            self.__dump_call(begin_time - self.begin_time, end_time - begin_time, result, params)
+            self.__dump_call(
+                begin_time - self.begin_time, end_time - begin_time, result, param_values
+            )
         return result
 
     def __prepare_func_calls(self, file_path: str) -> TabularFile:
@@ -611,7 +617,7 @@ class Objective(ABC):
         begin_time: float,
         run_time: float,
         result: ObjectiveResult,
-        params: np.ndarray,
+        params: ParameterValues,
     ) -> None:
         """Dump the function call information to the function calls file.
 
@@ -623,14 +629,10 @@ class Objective(ABC):
             Run time of the function call.
         result : ObjectiveResult
             Result of the objective evaluation.
-        params : np.ndarray
-            Parameters at which the objective was evaluated.
+        params : ParameterValues
+            Named set of parameter values at which the objective was evaluated.
         """
         if self.func_calls_file is not None:
-            # Resolve parameter names
-            param_dict = self.settings.parameters.to_scalar_dict(params, include_computed=True)
-            param_values = [param_dict[n] for n in self.settings.parameters.get_scalar_names()]
-
             # Objective values and variances
             obj_values = []
             if self.num_objectives() > 1:
@@ -654,8 +656,8 @@ class Objective(ABC):
                 begin_time,
                 run_time,
                 *obj_values,
-                *param_values,
-                self.settings.parameters.hash(params),
+                *params.scalar_values.values(),
+                params.param_hash,
             ])
 
     def read_func_calls(self) -> FunctionCallsData:
@@ -757,14 +759,14 @@ class Objective(ABC):
 
     @abstractmethod
     def _objective(
-        self, params: np.ndarray, concurrent: bool = False
+        self, params: ParameterValues, concurrent: bool = False
     ) -> list[IndividualObjectiveResult]:
         """Abstract method for objective computation.
 
         Parameters
         ----------
-        params : np.ndarray
-            Set of parameters to evaluate the objective for.
+        params : ParameterValues
+            Named set of parameters to evaluate the objective for.
         concurrent : bool, optional
             Whether this call may be concurrent to others, by default False.
 

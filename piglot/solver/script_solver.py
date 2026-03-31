@@ -2,8 +2,7 @@
 from typing import List, Dict, Any
 from abc import ABC, abstractmethod
 import os
-import numpy as np
-from piglot.parameter import ParameterSet
+from piglot.parameter import ParameterSet, ParameterValues
 from piglot.solver.solver import OutputResult, SingleCaseSolver
 from piglot.utils.assorted import read_custom_module
 
@@ -24,17 +23,17 @@ class ScriptSolverCallable(ABC):
 
     @staticmethod
     @abstractmethod
-    def solve(values: Dict[str, float]) -> Dict[str, OutputResult]:
+    def solve(values: dict[str, float]) -> dict[str, OutputResult]:
         """Callable for script-based solvers.
 
         Parameters
         ----------
-        values : Dict[str, float]
+        values : dict[str, float]
             Current parameters to evaluate.
 
         Returns
         -------
-        Dict[str, OutputResult]
+        dict[str, OutputResult]
             Evaluated results for each output field.
         """
 
@@ -66,24 +65,23 @@ class ScriptSolver(SingleCaseSolver):
         super().__init__(script.get_output_fields(), parameters, output_dir, tmp_dir, verbosity)
         self.script = script
 
-    def _solve(self, values: np.ndarray, concurrent: bool) -> Dict[str, OutputResult]:
+    def _solve(self, values: ParameterValues, concurrent: bool) -> dict[str, OutputResult]:
         """Internal solver for the prescribed problems.
 
         Parameters
         ----------
-        values : array
-            Current parameters to evaluate.
+        values : ParameterValues
+            Named set of parameter values for this evaluation.
         concurrent : bool
             Whether this run may be concurrent to another one (so use unique file names).
 
         Returns
         -------
-        Dict[str, OutputResult]
+        dict[str, OutputResult]
             Evaluated results for each output field.
         """
         # Run the solver
-        param_dict = self.parameters.to_scalar_dict(values)
-        results = self.script.solve(param_dict)
+        results = self.script.solve(values.scalar_values)
         # Sanitise output fields before returning
         for field in self.output_fields:
             if field not in results:

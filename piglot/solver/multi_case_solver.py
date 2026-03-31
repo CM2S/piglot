@@ -4,8 +4,7 @@ from abc import ABC, abstractmethod
 import os
 import shutil
 from multiprocessing.pool import ThreadPool as Pool
-import numpy as np
-from piglot.parameter import ParameterSet
+from piglot.parameter import ParameterSet, ParameterValues
 from piglot.solver.solver import Solver, OutputResult, CaseResult
 
 
@@ -36,20 +35,13 @@ class Case(ABC):
         """
 
     @abstractmethod
-    def run(
-        self,
-        parameters: ParameterSet,
-        values: np.ndarray,
-        tmp_dir: str,
-    ) -> CaseResult:
+    def run(self, values: ParameterValues, tmp_dir: str) -> CaseResult:
         """Run the case for the given set of parameters.
 
         Parameters
         ----------
-        parameters : ParameterSet
-            Parameter set for this problem.
-        values : np.ndarray
-            Current parameters to evaluate.
+        values : ParameterValues
+            Named set of parameter values for this evaluation.
         tmp_dir : str
             Temporary directory to run the problem.
 
@@ -227,27 +219,23 @@ class MultiCaseSolver(Solver, ABC):
         # Just pick the first case to get the parameters
         return self.get_case_results(param_hash)[0].parameters
 
-    def solve(
-        self,
-        values: np.ndarray,
-        concurrent: bool,
-    ) -> Dict[str, OutputResult]:
+    def solve(self, values: ParameterValues, concurrent: bool) -> dict[str, OutputResult]:
         """Solve all cases for the given set of parameter values.
 
         Parameters
         ----------
-        values : array
-            Current parameters to evaluate.
+        values : ParameterValues
+            Named set of parameter values for this evaluation.
         concurrent : bool
             Whether this run may be concurrent to another one (so use unique file names).
 
         Returns
         -------
-        Dict[str, OutputResult]
+        dict[str, OutputResult]
             Evaluated results for each output field.
         """
         # Resolve tmp directory: use unique directory if concurrent
-        tmp_dir = f'{self.tmp_dir}_{self.parameters.hash(values)}' if concurrent else self.tmp_dir
+        tmp_dir = f'{self.tmp_dir}_{values.param_hash}' if concurrent else self.tmp_dir
         if os.path.isdir(tmp_dir):
             shutil.rmtree(tmp_dir)
         os.mkdir(tmp_dir)
@@ -255,7 +243,7 @@ class MultiCaseSolver(Solver, ABC):
         # Evaluate all cases (in parallel if specified)
         def run_case(case: Case) -> CaseResult:
             with self.verbosity_manager:
-                return case.run(self.parameters, values, tmp_dir)
+                return case.run(values, tmp_dir)
         if self.parallel > 1:
             with Pool(self.parallel) as pool:
                 results = pool.map(run_case, self.cases)

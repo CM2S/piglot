@@ -5,6 +5,7 @@ import numpy as np
 # import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+from piglot.parameter import ParameterValues
 from piglot.settings import Settings
 from piglot.objective import IndividualObjectiveResult
 from piglot.objectives.simple_objective import SimpleObjective, SimpleIndividualObjective
@@ -42,20 +43,21 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
             raise ValueError("Random evaluations require variance.")
         # Generate a dummy set of parameters (to ensure proper handling of output parameters)
         self.parameters = settings.parameters
-        values = self.parameters.get_initial_vector()
-        symbs = sympy.symbols(list(self.parameters.to_scalar_dict(values).keys()))
+        symbs = sympy.symbols(list(self.parameters.get_scalar_names()))
         self.expression = sympy.lambdify(symbs, expression)
         self.variance_expr = None if variance_expr is None else sympy.lambdify(symbs, variance_expr)
         self.use_random = use_random
         self.random_evals = random_evals
 
-    def evaluate(self, params: np.ndarray, concurrent: bool) -> IndividualObjectiveResult:
+    def evaluate(
+        self, params: ParameterValues, concurrent: bool
+    ) -> IndividualObjectiveResult:
         """Evaluate objective value for the given results.
 
         Parameters
         ----------
-        params : np.ndarray
-            Parameter values for this evaluation.
+        params : ParameterValues
+            Named set of parameter values for this evaluation.
         concurrent : bool
             Whether this call may be concurrent to others.
 
@@ -64,10 +66,10 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
         IndividualObjectiveResult
             Objective value and variance for the given parameters.
         """
-        value = self.expression(**self.parameters.to_scalar_dict(params))
+        value = self.expression(**params.scalar_values)
         variance = 0
         if self.variance_expr is not None:
-            variance = self.variance_expr(**self.parameters.to_scalar_dict(params))
+            variance = self.variance_expr(**params.scalar_values)
             if variance < 0:
                 raise RuntimeError("Negative variance not allowed.")
         # When random evaluations are requested, replace the data from sample evaluations

@@ -5,8 +5,7 @@ import os
 import re
 import time
 import shutil
-import numpy as np
-from piglot.parameter import ParameterSet
+from piglot.parameter import ParameterValues
 from piglot.solver.solver import OutputResult, CaseResult
 from piglot.solver.multi_case_solver import Case, MultiCaseSolver
 from piglot.utils.assorted import read_custom_module
@@ -57,17 +56,20 @@ class InputDataGenerator(ABC):
     """Base class for input data generators for input file-based solvers."""
 
     @abstractmethod
-    def generate(self, parameters: ParameterSet, values: np.ndarray, tmp_dir: str) -> InputData:
+    def generate(self, values: ParameterValues, tmp_dir: str) -> InputData:
         """Generate the input data for the given set of parameters.
 
         Parameters
         ----------
-        parameters : ParameterSet
-            Parameter set for this problem.
-        values : np.ndarray
+        values : ParameterValues
             Current parameters to evaluate.
         tmp_dir : str
             Temporary directory to run the problem.
+
+        Returns
+        -------
+        InputData
+            Input data for this problem.
         """
 
 
@@ -84,14 +86,12 @@ class DefaultInputDataGenerator(InputDataGenerator):
         self.substitution_dependencies = substitution_dependencies or []
         self.copy_dependencies = copy_dependencies or []
 
-    def generate(self, parameters: ParameterSet, values: np.ndarray, tmp_dir: str) -> InputData:
+    def generate(self, values: ParameterValues, tmp_dir: str) -> InputData:
         """Generate the input data for the given set of parameters.
 
         Parameters
         ----------
-        parameters : ParameterSet
-            Parameter set for this problem.
-        values : np.ndarray
+        values : ParameterValues
             Current parameters to evaluate.
         tmp_dir : str
             Temporary directory to run the problem.
@@ -101,15 +101,14 @@ class DefaultInputDataGenerator(InputDataGenerator):
         InputData
             Input data for this problem.
         """
-        param_dict = parameters.to_scalar_dict(values)
         # Replace parameters in the input file
         gen_input_file = os.path.join(tmp_dir, self.input_file)
-        write_parameters(param_dict, self.input_file, gen_input_file)
+        write_parameters(values.scalar_values, self.input_file, gen_input_file)
         # Replace parameters in the dependencies
         dependencies = []
         for dep in self.substitution_dependencies:
             output_file = os.path.join(tmp_dir, dep)
-            write_parameters(param_dict, dep, output_file)
+            write_parameters(values.scalar_values, dep, output_file)
             dependencies.append(os.path.basename(output_file))
         # Copy dependencies
         for dep in self.copy_dependencies:
@@ -243,20 +242,13 @@ class InputFileCase(Case, ABC):
             Whether the case ran successfully or not.
         """
 
-    def run(
-        self,
-        parameters: ParameterSet,
-        values: np.ndarray,
-        tmp_dir: str,
-    ) -> CaseResult:
+    def run(self, values: ParameterValues, tmp_dir: str) -> CaseResult:
         """Run the case for the given set of parameters.
 
         Parameters
         ----------
-        parameters : ParameterSet
-            Parameter set for this problem.
-        values : np.ndarray
-            Current parameters to evaluate.
+        values : ParameterValues
+            Named set of parameter values for this evaluation.
         tmp_dir : str
             Temporary directory to run the problem.
 
@@ -268,8 +260,7 @@ class InputFileCase(Case, ABC):
         # Isolate the input data into a new directory and generate the input data
         tmp_dir = os.path.join(tmp_dir, self.name())
         os.makedirs(tmp_dir, exist_ok=True)
-        param_hash = parameters.hash(values)
-        input_data = self.generator.generate(parameters, values, tmp_dir)
+        input_data = self.generator.generate(values, tmp_dir)
         # Ensure the temporary directory is consistent
         if input_data.tmp_dir != tmp_dir:
             raise ValueError(
@@ -295,9 +286,9 @@ class InputFileCase(Case, ABC):
         return CaseResult(
             begin_time,
             elapsed_time,
-            parameters.to_scalar_dict(values),
+            values.scalar_values,
             success,
-            param_hash,
+            values.param_hash,
             responses,
         )
 

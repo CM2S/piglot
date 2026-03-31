@@ -1,10 +1,10 @@
 """Provide synthetic test functions"""
 from typing import Any, TypeVar
 import os.path
-import numpy as np
 import torch
 import botorch.test_functions.synthetic
 from botorch.test_functions.synthetic import SyntheticTestFunction
+from piglot.parameter import ParameterValues
 from piglot.settings import Settings
 from piglot.objective import IndividualObjectiveResult
 from piglot.objectives.simple_objective import SimpleObjective, SimpleIndividualObjective
@@ -76,13 +76,13 @@ class SyntheticIndividualObjective(SimpleIndividualObjective):
             'three_hump_camel': botorch.test_functions.synthetic.ThreeHumpCamel,
         }
 
-    def evaluate(self, params: np.ndarray, concurrent: bool) -> IndividualObjectiveResult:
+    def evaluate(self, params: ParameterValues, concurrent: bool) -> IndividualObjectiveResult:
         """Evaluate objective value for the given results.
 
         Parameters
         ----------
-        params : np.ndarray
-            Parameter values for this evaluation.
+        params : ParameterValues
+            Named set of parameter values for this evaluation.
         concurrent : bool
             Whether this call may be concurrent to others.
 
@@ -91,7 +91,7 @@ class SyntheticIndividualObjective(SimpleIndividualObjective):
         IndividualObjectiveResult
             Objective value and variance for the given parameters.
         """
-        params = torch.from_numpy(params)
+        params = torch.tensor(list(params.scalar_values.values()))
         value = self.func.evaluate_true(params).item()
         return IndividualObjectiveResult(value=value, variance=0 if not self.variance else None)
 
