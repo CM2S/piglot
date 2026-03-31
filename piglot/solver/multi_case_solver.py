@@ -137,15 +137,11 @@ class MultiCaseSolver(Solver, ABC):
                 file.write(f"{'Start Time /s':>15}\t")
                 file.write(f"{'Run Time /s':>15}\t")
                 file.write(f"{'Success':>10}\t")
-                for param in self.parameters:
-                    file.write(f"{param.name:>15}\t")
+                for name in self.parameters.get_scalar_names():
+                    file.write(f"{name:>15}\t")
                 file.write(f'{"Hash":>64}\n')
 
-    def _write_history_entry(
-        self,
-        case: Case,
-        result: CaseResult,
-    ) -> None:
+    def _write_history_entry(self, case: Case, result: CaseResult) -> None:
         """Write this case's history entry.
 
         Parameters
@@ -156,17 +152,16 @@ class MultiCaseSolver(Solver, ABC):
             Result for this case.
         """
         # Write out the case file
-        param_hash = self.parameters.hash(result.values)
-        output_case_hist = os.path.join(self.cases_hist, f'{case.name()}-{param_hash}')
-        result.write(output_case_hist, self.parameters)
+        output_case_hist = os.path.join(self.cases_hist, f'{case.name()}-{result.param_hash}')
+        result.write(output_case_hist)
         # Add record to case log file
         with open(os.path.join(self.cases_dir, case.name()), 'a', encoding='utf8') as file:
             file.write(f'{result.begin_time - self.begin_time:>15.8e}\t')
             file.write(f'{result.run_time:>15.8e}\t')
             file.write(f'{result.success:>10}\t')
-            for value in result.values:
-                file.write(f"{value:>15.6f}\t")
-            file.write(f'{param_hash}\n')
+            for name in self.parameters.get_scalar_names():
+                file.write(f"{result.parameters[name]:>15.6f}\t")
+            file.write(f'{result.param_hash}\n')
 
     def get_output_fields(self) -> List[str]:
         """Get all output fields.
@@ -192,10 +187,7 @@ class MultiCaseSolver(Solver, ABC):
             Results for all cases.
         """
         return [
-            CaseResult.read(
-                os.path.join(self.cases_hist, f'{case.name()}-{param_hash}'),
-                self.parameters,
-            )
+            CaseResult.read(os.path.join(self.cases_hist, f'{case.name()}-{param_hash}'))
             for case in self.cases
         ]
 
@@ -233,8 +225,7 @@ class MultiCaseSolver(Solver, ABC):
             Parameters for this hash.
         """
         # Just pick the first case to get the parameters
-        result = self.get_case_results(param_hash)[0]
-        return {param.name: result.values[i] for i, param in enumerate(self.parameters)}
+        return self.get_case_results(param_hash)[0].parameters
 
     def solve(
         self,

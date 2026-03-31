@@ -42,8 +42,8 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
             raise ValueError("Random evaluations require variance.")
         # Generate a dummy set of parameters (to ensure proper handling of output parameters)
         self.parameters = settings.parameters
-        values = np.array([parameter.inital_value for parameter in self.parameters])
-        symbs = sympy.symbols(list(self.parameters.to_dict(values).keys()))
+        values = self.parameters.get_initial_vector()
+        symbs = sympy.symbols(list(self.parameters.to_scalar_dict(values).keys()))
         self.expression = sympy.lambdify(symbs, expression)
         self.variance_expr = None if variance_expr is None else sympy.lambdify(symbs, variance_expr)
         self.use_random = use_random
@@ -64,10 +64,10 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
         IndividualObjectiveResult
             Objective value and variance for the given parameters.
         """
-        value = self.expression(**self.parameters.to_dict(params))
+        value = self.expression(**self.parameters.to_scalar_dict(params))
         variance = 0
         if self.variance_expr is not None:
-            variance = self.variance_expr(**self.parameters.to_dict(params))
+            variance = self.variance_expr(**self.parameters.to_scalar_dict(params))
             if variance < 0:
                 raise RuntimeError("Negative variance not allowed.")
         # When random evaluations are requested, replace the data from sample evaluations

@@ -46,4 +46,4 @@ class InitialCandidatePolicy(CandidatePolicy):
         list[np.ndarray]
             List of parameters for the next candidates to evaluate.
         """
-        return [np.array([p.inital_value for p in dataset.settings.parameters])] * num_candidates
+        return [dataset.settings.parameters.get_initial_vector()] * num_candidates

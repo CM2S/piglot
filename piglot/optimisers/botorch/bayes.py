@@ -516,8 +516,8 @@ class BayesianBoTorch(Optimiser):
         # Build parameters
         n_iter = self.settings.iters
         n_dim = len(self.settings.parameters)
-        bound = np.array([[param.lbound, param.ubound] for param in self.settings.parameters])
-        init_shot = np.array([param.inital_value for param in self.settings.parameters])
+        bound = self.parameters.get_bounds()
+        init_shot = self.settings.parameters.get_initial_vector()
 
         # Initialise heuristic variables
         self.n_initial = self.n_initial or max(8, 2 * n_dim)

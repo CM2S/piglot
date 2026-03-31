@@ -592,7 +592,7 @@ class Objective(ABC):
                 obj_columns.append(obj_spec("Variance"))
 
         # Parameter columns
-        param_columns = [param_spec(param.name) for param in self.settings.parameters]
+        param_columns = [param_spec(name) for name in self.settings.parameters.get_scalar_names()]
 
         # Build the full column list
         return TabularFile(
@@ -627,6 +627,10 @@ class Objective(ABC):
             Parameters at which the objective was evaluated.
         """
         if self.func_calls_file is not None:
+            # Resolve parameter names
+            param_dict = self.settings.parameters.to_scalar_dict(params, include_computed=True)
+            param_values = [param_dict[n] for n in self.settings.parameters.get_scalar_names()]
+
             # Objective values and variances
             obj_values = []
             if self.num_objectives() > 1:
@@ -650,7 +654,7 @@ class Objective(ABC):
                 begin_time,
                 run_time,
                 *obj_values,
-                *params,
+                *param_values,
                 self.settings.parameters.hash(params),
             ])
 
@@ -672,9 +676,9 @@ class Objective(ABC):
         # Parse mandatory fields
         start_times = np.array(data["Start Time /s"])
         run_times = np.array(data["Run Time /s"])
+        param_names = self.settings.parameters.get_scalar_names(include_computed=False)
         params = np.array([
-            [data[param.name][i] for param in self.settings.parameters]
-            for i in range(len(data["Hash"]))
+            [data[name][i] for name in param_names] for i in range(len(data["Hash"]))
         ])
         hashes = data["Hash"]
 

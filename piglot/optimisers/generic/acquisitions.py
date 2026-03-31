@@ -25,7 +25,7 @@ from botorch.acquisition.multi_objective.logei import (
     qLogNoisyExpectedHypervolumeImprovement,
 )
 from botorch.acquisition.multi_objective.objective import GenericMCMultiOutputObjective
-from botorch.optim import optimize_acqf
+from botorch.optim import optimize_acqf, optimize_acqf_mixed, optimize_acqf_discrete
 from botorch.sampling import SobolQMCNormalSampler
 from piglot.data.surrogate import ObjectiveModel
 from piglot.parameter import ParameterSet
@@ -194,6 +194,7 @@ def optimise_acquisition(
     model: ObjectiveModel,
     settings: AcquisitionSettings,
     q: int = 1,
+    batch_initial_conditions: Optional[torch.Tensor] = None
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Optimise the given acquisition function.
 
@@ -209,6 +210,8 @@ def optimise_acquisition(
         Settings for the acquisition function.
     q : int
         Number of candidates to generate.
+    batch_initial_conditions : Optional[torch.Tensor]
+        Optional tensor with initial conditions for the batch.
 
     Returns
     -------
@@ -217,31 +220,57 @@ def optimise_acquisition(
     """
 
     # Default values for optional options
-    n_dim = len(parameters)
-    raw_samples = settings.raw_samples or max(256, 16 * n_dim * n_dim)
+    num_discrete = parameters.num_discrete()
+    num_continuous = len(parameters) - num_discrete
+    raw_samples = settings.raw_samples or max(256, 16 * num_continuous * num_continuous)
+    options = {
+        "sample_around_best": True,
+        "seed": settings.seed,
+        "init_batch_limit": settings.batch_size,
+    }
 
     # Build bounds
     bounds = torch.tensor(
-        [[p.lbound for p in parameters], [p.ubound for p in parameters]],
-        dtype=model.inputs.dtype,
-        device=model.inputs.device,
+        parameters.get_bounds().T, dtype=model.inputs.dtype, device=model.inputs.device
     )
 
-    # Optimise the acquisition function
-    candidates, acq_val = optimize_acqf(
+    # Optimise the acquisition function: continuous case
+    if num_discrete == 0:
+        return optimize_acqf(
+            acq,
+            bounds=bounds,
+            q=q,
+            num_restarts=settings.num_restarts,
+            raw_samples=raw_samples,
+            sequential=settings.sequential,
+            options=options,
+            batch_initial_conditions=batch_initial_conditions,
+        )
+
+    # We have at least one discrete parameter: find all combinations
+    features_list = parameters.get_discrete_combinations()
+
+    # Mixed case
+    if num_continuous > 0:
+        return optimize_acqf_mixed(
+            acq,
+            bounds=bounds,
+            q=q,
+            num_restarts=settings.num_restarts,
+            fixed_features_list=features_list,
+            raw_samples=raw_samples,
+            options=options,
+            batch_initial_conditions=batch_initial_conditions,
+        )
+
+    # We have only discrete parameters
+    choices = [list(map(float, f.values())) for f in features_list]
+    return optimize_acqf_discrete(
         acq,
-        bounds=bounds,
         q=q,
-        num_restarts=settings.num_restarts,
-        raw_samples=raw_samples,
-        sequential=settings.sequential,
-        options={
-            "sample_around_best": True,
-            "seed": settings.seed,
-            "init_batch_limit": settings.batch_size,
-        },
+        choices=torch.tensor(choices, dtype=model.inputs.dtype, device=model.inputs.device),
+        max_batch_size=settings.batch_size,
     )
-    return candidates, acq_val
 
 
 def build_and_optimise_acquisition(
@@ -295,24 +324,8 @@ def get_best_posterior_mean(
     tuple[torch.Tensor, torch.Tensor]
         Tuple with the best candidates and their posterior mean values.
     """
-
-    # Build bounds
-    bounds = torch.tensor(
-        [[p.lbound for p in parameters], [p.ubound for p in parameters]],
-        dtype=model.inputs.dtype,
-        device=model.inputs.device,
-    )
-
-    # Build the acquisition using the simple regret of the posterior mean
     settings = AcquisitionSettings(name='qsr', q=1)
     acq = get_acquisition(model, settings, state)
-
-    # Optimise the acquisition function
-    candidates, acq_val = optimize_acqf(
-        acq,
-        bounds=bounds,
-        q=1,
-        num_restarts=12,
-        batch_initial_conditions=model.inputs,
+    return optimise_acquisition(
+        acq, parameters, model, settings, q=1, batch_initial_conditions=model.inputs
     )
-    return candidates, acq_val

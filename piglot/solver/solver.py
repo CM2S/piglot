@@ -13,6 +13,7 @@ from piglot.utils.solver_utils import VerbosityManager
 
 
 T = TypeVar('T', bound='Solver')
+ResultT = TypeVar('ResultT', bound='CaseResult')
 
 
 @dataclass
@@ -47,12 +48,12 @@ class CaseResult:
     """Class for case results."""
     begin_time: float
     run_time: float
-    values: np.ndarray
+    parameters: dict[str, float]
     success: bool
     param_hash: str
     responses: Dict[str, OutputResult]
 
-    def write(self, filename: str, parameters: ParameterSet) -> None:
+    def write(self, filename: str) -> None:
         """Write out the case result.
 
         Parameters
@@ -68,7 +69,7 @@ class CaseResult:
             "begin_time": self.begin_time,
             "run_time": self.run_time,
             "run_time (pretty)": pretty_time(self.run_time),
-            "parameters": {p.name: float(v) for p, v in zip(parameters, self.values)},
+            "parameters": self.parameters,
             "success": "true" if self.success else "false",
             "param_hash": self.param_hash,
         }
@@ -81,20 +82,18 @@ class CaseResult:
         with open(filename, 'w', encoding='utf8') as file:
             safe_dump_all((metadata, responses), file)
 
-    @staticmethod
-    def read(filename: str, parameters: ParameterSet) -> "CaseResult":
+    @classmethod
+    def read(cls: type[ResultT], filename: str) -> ResultT:
         """Read a case result file.
 
         Parameters
         ----------
         filename : str
             Path to the case result file.
-        parameters : ParameterSet
-            Set of parameters for this case.
 
         Returns
         -------
-        CaseResult
+        ResultT
             Result instance.
         """
         # Read the file
@@ -105,10 +104,10 @@ class CaseResult:
             name: OutputResult(np.array([a[0] for a in data]), np.array([a[1] for a in data]))
             for name, data in responses_raw.items()
         }
-        return CaseResult(
+        return cls(
             metadata["begin_time"],
             metadata["run_time"],
-            np.array([float(metadata["parameters"][p.name]) for p in parameters]),
+            {name: float(value) for name, value in metadata["parameters"].items()},
             metadata["success"] == "true",
             metadata["param_hash"],
             responses,
@@ -137,22 +136,20 @@ class Solver(ABC):
 
     @abstractmethod
     def solve(
-        self,
-        values: np.ndarray,
-        concurrent: bool,
-    ) -> Dict[str, OutputResult]:
+        self, values: dict[str, np.ndarray], concurrent: bool,
+    ) -> dict[str, OutputResult]:
         """Solve all cases for the given set of parameter values.
 
         Parameters
         ----------
-        values : array
-            Current parameters to evaluate.
+        values : dict[str, np.ndarray]
+            Current named set of parameter values to evaluate.
         concurrent : bool
             Whether this run may be concurrent to another one (so use unique file names).
 
         Returns
         -------
-        Dict[str, OutputResult]
+        dict[str, OutputResult]
             Evaluated results for each output field.
         """
 
@@ -276,8 +273,8 @@ class SingleCaseSolver(Solver, ABC):
                 file.write(f"{'Start Time /s':>15}\t")
                 file.write(f"{'Run Time /s':>15}\t")
                 file.write(f"{'Success':>10}\t")
-                for param in self.parameters:
-                    file.write(f"{param.name:>15}\t")
+                for name in self.parameters.get_scalar_names():
+                    file.write(f"{name:>15}\t")
                 file.write(f'{"Hash":>64}\n')
 
     def get_output_fields(self) -> List[str]:
@@ -303,7 +300,7 @@ class SingleCaseSolver(Solver, ABC):
         CaseResult
             Result for this hash.
         """
-        return CaseResult.read(os.path.join(self.cases_hist, param_hash), self.parameters)
+        return CaseResult.read(os.path.join(self.cases_hist, param_hash))
 
     def get_case_params(self, param_hash: str) -> Dict[str, float]:
         """Get the parameters for a given hash.
@@ -354,22 +351,20 @@ class SingleCaseSolver(Solver, ABC):
         """
 
     def solve(
-        self,
-        values: np.ndarray,
-        concurrent: bool,
-    ) -> Dict[str, OutputResult]:
+        self, values: dict[str, np.ndarray], concurrent: bool,
+    ) -> dict[str, OutputResult]:
         """Solve all cases for the given set of parameter values.
 
         Parameters
         ----------
-        values : array
-            Current parameters to evaluate.
+        values : dict[str, np.ndarray]
+            Current named set of parameter values to evaluate.
         concurrent : bool
             Whether this run may be concurrent to another one (so use unique file names).
 
         Returns
         -------
-        Dict[str, OutputResult]
+        dict[str, OutputResult]
             Evaluated results for each output field.
         """
         # Run the solver
@@ -379,6 +374,8 @@ class SingleCaseSolver(Solver, ABC):
         run_time = time.time() - begin_time
         # Post-process results: write history entries
         param_hash = self.parameters.hash(values)
-        case_result = CaseResult(begin_time, run_time, values, True, param_hash, results)
-        case_result.write(os.path.join(self.cases_hist, case_result.param_hash), self.parameters)
+        case_result = CaseResult(
+            begin_time, run_time, self.parameters.to_scalar_dict(values), True, param_hash, results
+        )
+        case_result.write(os.path.join(self.cases_hist, case_result.param_hash))
         return results

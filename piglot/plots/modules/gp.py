@@ -83,13 +83,12 @@ class GPPlot(PlottingModuleConfigFile):
         list[Figure]
             A list of generated figures.
         """
-        if len(problem.settings.parameters) != 1:
+        if problem.settings.parameters.num_optim_parameters() != 1:
             raise ValueError("Can only plot a Gaussian process regression for a single parameter.")
 
         # Build x-grid
         parameters = problem.settings.parameters
-        x_min = min(par.lbound for par in parameters)
-        x_max = max(par.ubound for par in parameters)
+        x_min, x_max = parameters.get_bounds()[0]
         x = torch.linspace(x_min, x_max, args.num_points).view(-1, 1, 1)
 
         # Read function calls

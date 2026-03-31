@@ -54,8 +54,4 @@ class RandomCandidatePolicy(CandidatePolicy):
         list[np.ndarray]
             List of parameters for the next candidates to evaluate.
         """
-        parameters = dataset.settings.parameters
-        return [
-            np.array([self.rng.uniform(low=p.lbound, high=p.ubound) for p in parameters])
-            for _ in range(num_candidates)
-        ]
+        return [dataset.settings.parameters.get_random_vector() for _ in range(num_candidates)]

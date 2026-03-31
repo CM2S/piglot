@@ -82,7 +82,7 @@ class ScriptSolver(SingleCaseSolver):
             Evaluated results for each output field.
         """
         # Run the solver
-        param_dict = self.parameters.to_dict(values)
+        param_dict = self.parameters.to_scalar_dict(values)
         results = self.script.solve(param_dict)
         # Sanitise output fields before returning
         for field in self.output_fields:

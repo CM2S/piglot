@@ -69,7 +69,7 @@ class CurveCase(Case):
         str
             Expression for this case.
         """
-        param_value = parameters.to_dict(values)
+        param_value = parameters.to_scalar_dict(values)
         for parameter, value in param_value.items():
             expression = re.sub(r'\<' + parameter + r'\>', str(value), expression)
         return expression
@@ -98,17 +98,16 @@ class CurveCase(Case):
         """
         begin_time = time.time()
         # Prepare symbols
-        symbs = sympy.symbols([self.parametric] + [p.name for p in parameters])
+        symbs = sympy.symbols(self.parametric)
         expression = sympy.lambdify(symbs, self.get_expression(self.expression, parameters, values))
-        param_values = parameters.to_dict(values)
         # Evaluate the expression on the grid
         grid = np.linspace(self.bounds[0], self.bounds[1], self.points)
-        curve = np.array([expression(**param_values, **{self.parametric: x}) for x in grid])
+        curve = np.array([expression(**{self.parametric: x}) for x in grid])
         # Check if this is a stochastic curve
         if self.variance is not None:
             var_expression = self.get_expression(self.variance, parameters, values)
             var_func = sympy.lambdify(symbs, var_expression)
-            variances = np.array([var_func(**param_values, **{self.parametric: x}) for x in grid])
+            variances = np.array([var_func(**{self.parametric: x}) for x in grid])
             # Check if variances are valid
             if not np.all(variances > 0) or not np.all(np.isfinite(variances)):
                 raise ValueError("Invalid variances computed.")
@@ -128,7 +127,7 @@ class CurveCase(Case):
         return CaseResult(
             begin_time,
             run_time,
-            values,
+            parameters.to_scalar_dict(values),
             True,
             parameters.hash(values),
             {self.case_name: OutputResult(grid, curve)},

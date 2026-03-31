@@ -98,11 +98,9 @@ def read_settings(config: dict[str, Any]) -> Settings:
     parsed_config = {
         'iters': int(config.pop('iters')),
         'output_dir': str(config.pop('output_dir')),
-        'parameters': read_parameters(config),
+        'parameters': read_parameters(config.pop('parameters')),
     }
-    # Hacky: remove the parameters from the config
-    config.pop('parameters', None)
-    # Hacky, take 2: inject expected results
+    # Hacky: inject expected results
     if 'expected' in config:
         parsed_config['expected'] = ExpectedResult.read(config.pop('expected'))
     # Read optional entries from the configuration file

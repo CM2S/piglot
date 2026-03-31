@@ -456,7 +456,7 @@ class ScalarOptimiser(Optimiser):
         """
         # Set up problem
         n_dim = len(self.parameters)
-        init_shot = np.array([par.inital_value for par in self.parameters])
+        init_shot = self.parameters.get_initial_vector()
         n_iter = self.settings.iters
         self.__callback = callback   # TODO: refactor to avoid this
         # Optimise the scalarised objective

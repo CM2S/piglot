@@ -130,8 +130,8 @@ class QueryOptimiser(Optimiser):
         # Build parameters
         n_iter = self.settings.iters
         n_dim = len(self.settings.parameters)
-        bound = np.array([[param.lbound, param.ubound] for param in self.settings.parameters])
-        init_shot = np.array([param.inital_value for param in self.settings.parameters])
+        bound = self.parameters.get_bounds()
+        init_shot = self.settings.parameters.get_initial_vector()
 
         # Sanitise input
         if n_dim != self.param_list.shape[1]:

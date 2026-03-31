@@ -1,10 +1,10 @@
 """Module for sampling methods."""
 from typing import Optional, Literal
 from contextlib import ExitStack
+import numpy as np
 import torch
 import gpytorch.settings as gpts
 from botorch.posteriors import Posterior
-from botorch.utils.sampling import draw_sobol_samples
 from botorch.sampling import MCSampler, SobolQMCNormalSampler
 from piglot.data.surrogate import ObjectiveModel
 
@@ -62,60 +62,48 @@ class FastNormalSampler(MCSampler):
         return samples
 
 
-def draw_sobol_grid(
-    bounds: torch.Tensor, num_points: int, seed: Optional[int] = None
-) -> torch.Tensor:
-    """Draw a Sobol grid within the given bounds.
-
-    Parameters
-    ----------
-    bounds : torch.Tensor
-        The bounds of the grid (shape: 2 x d, where d is the dimensionality).
-    num_points : int
-        The number of points to draw.
-    seed : Optional[int], optional
-        The random seed, by default None.
-
-    Returns
-    -------
-    torch.Tensor
-        The drawn Sobol grid.
-    """
-    return draw_sobol_samples(bounds, n=num_points, q=1, seed=seed).squeeze(-2)
-
-
 def draw_function_samples(
     model: ObjectiveModel,
-    bounds: torch.Tensor,
     num_points: int,
     num_samples: int,
     seed: Optional[int] = None,
     kind: Literal['latent', 'objective'] = 'objective',
     strategy: Literal['sobol', 'cholesky', 'ciq', 'lanczos', 'rff'] = 'lanczos'
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Draw function samples from the given model within the specified bounds.
+    """Draw function samples from the given model.
 
     Parameters
     ----------
     model : ObjectiveModel
         The model to sample from.
-    bounds : torch.Tensor
-        The bounds of the input space (shape: 2 x d, where d is the dimensionality).
     num_points : int
         The number of points to draw.
+    num_samples : int
+        The number of samples to draw.
     seed : Optional[int], optional
         The random seed, by default None.
+    kind : Literal['latent', 'objective'], optional
+        The type of samples to draw, by default 'objective'.
+    strategy : Literal['sobol', 'cholesky', 'ciq', 'lanczos', 'rff'], optional
+        The sampling strategy to use, by default 'lanczos'.
 
     Returns
     -------
     tuple[torch.Tensor, torch.Tensor]
         The grid and the drawn function samples.
     """
-    sobol_grid = draw_sobol_grid(bounds, num_points, seed=seed)
+    # Generate random grid of points
+    rng = np.random.default_rng(seed)
+    params = model.dataset.settings.parameters
+    grid = torch.tensor([params.get_random_vector(rng).tolist() for _ in range(num_points)])
+
+    # Set up sampler
     if strategy == 'sobol':
         sampler = SobolQMCNormalSampler(torch.Size([num_samples]), seed=seed)
     else:
         sampler = FastNormalSampler(torch.Size([num_samples]), seed=seed, strategy=strategy)
+
+    # Draw samples
     if kind == 'latent':
-        return model.latent_samples(sobol_grid, sampler=sampler)
-    return sobol_grid, model.objective_samples(sobol_grid, sampler=sampler)
+        return model.latent_samples(grid, sampler=sampler)
+    return grid, model.objective_samples(grid, sampler=sampler)

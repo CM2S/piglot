@@ -101,7 +101,7 @@ class DefaultInputDataGenerator(InputDataGenerator):
         InputData
             Input data for this problem.
         """
-        param_dict = parameters.to_dict(values)
+        param_dict = parameters.to_scalar_dict(values)
         # Replace parameters in the input file
         gen_input_file = os.path.join(tmp_dir, self.input_file)
         write_parameters(param_dict, self.input_file, gen_input_file)
@@ -292,7 +292,14 @@ class InputFileCase(Case, ABC):
         elapsed_time = time.time() - begin_time
         # Read and return the fields
         responses = {name: field.get(input_data) for name, field in self.fields.items()}
-        return CaseResult(begin_time, elapsed_time, values, success, param_hash, responses)
+        return CaseResult(
+            begin_time,
+            elapsed_time,
+            parameters.to_scalar_dict(values),
+            success,
+            param_hash,
+            responses,
+        )
 
     @classmethod
     @abstractmethod

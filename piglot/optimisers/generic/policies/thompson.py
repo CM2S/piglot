@@ -1,7 +1,6 @@
 """Module for Thompson sampling policies."""
 from typing import Optional, TypeVar, Literal
 import numpy as np
-import torch
 from botorch.generation import MaxPosteriorSampling
 from piglot.data.dataset import ObjectiveDataset
 from piglot.data.surrogate import ObjectiveModel
@@ -66,10 +65,8 @@ class ThompsonSamplingCandidatePolicy(CandidatePolicy):
         if self.seed is not None:
             self.seed += 1
 
-        bounds = torch.tensor([[p.lbound, p.ubound] for p in dataset.settings.parameters]).T
         grid, samples = draw_function_samples(
             model,
-            bounds,
             self.num_points,
             round(num_candidates * self.oversample),
             seed=self.seed,
