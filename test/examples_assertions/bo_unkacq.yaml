@@ -6,7 +6,6 @@ optimiser:
   name: botorch
   acquisition: ucbb
   beta: 0.9
-  n_test: 2
 
 
 parameters:

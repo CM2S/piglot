@@ -2,7 +2,7 @@
 from typing import Any, Dict, Type
 from piglot.objective import Objective
 from piglot.optimiser import Optimiser
-from piglot.optimisers.botorch.bayes import BayesianBoTorch
+from piglot.optimisers.botorch import BayesianBoTorch
 from piglot.optimisers.direct import DIRECT
 from piglot.optimisers.generic.optimiser import GenericOptimiser
 from piglot.optimisers.query import QueryOptimiser
