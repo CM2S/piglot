@@ -2,7 +2,7 @@
 from typing import Any, Dict, Type
 from piglot.objective import Objective
 from piglot.optimiser import Optimiser
-from piglot.optimisers.botorch import BayesianBoTorch
+from piglot.optimisers.botorch import BoTorchOptimiser
 from piglot.optimisers.direct import DIRECT
 from piglot.optimisers.generic.optimiser import GenericOptimiser
 from piglot.optimisers.query import QueryOptimiser
@@ -14,9 +14,7 @@ from piglot.settings import Settings
 
 
 AVAILABLE_OPTIMISERS: Dict[str, Type[Optimiser]] = {
-    'bayesian': BayesianBoTorch,
-    'bayes_skopt': BayesianBoTorch,
-    'botorch': BayesianBoTorch,
+    'botorch': BoTorchOptimiser,
     'direct': DIRECT,
     'generic': GenericOptimiser,
     'query': QueryOptimiser,
