@@ -1,150 +1,104 @@
 """SPSA optimiser module."""
-from typing import Tuple, Callable, Optional
+from typing import Any, Callable, Optional
 import numpy as np
 from scipy.stats import bernoulli
 from piglot.objective import Objective
-from piglot.optimiser import ScalarOptimiser
+from piglot.optimiser import SimpleOptimiser
 from piglot.settings import Settings
 
 
-def boundary_check(arg: np.ndarray, bounds: np.ndarray) -> np.ndarray:
-    """Check if the values are within the bounds and correct them if not.
-
-    Parameters
-    ----------
-    arg : np.ndarray
-        Values to check.
-    bounds : np.ndarray
-        Lower and upper bounds.
-
-    Returns
-    -------
-    np.ndarray
-        Corrected values.
-    """
-    arg = np.where(arg > bounds[:, 1], bounds[:, 1], arg)
-    arg = np.where(arg < bounds[:, 0], bounds[:, 0], arg)
-    return arg
-
-
-class SPSA(ScalarOptimiser):
-    """
-    Simultaneous Perturbation Stochastic Approximation method for optimisation.
+class SPSA(SimpleOptimiser):
+    """Simultaneous Perturbation Stochastic Approximation method for optimisation.
 
     Reference:
     https://ieeexplore.ieee.org/document/705889
-
-    Methods
-    -------
-    _optimise(self, func, n_dim, n_iter, bound, init_shot):
-        Solves the optimization problem
     """
 
     def __init__(
         self,
         settings: Settings,
         objective: Objective,
-        alpha=0.602,
-        gamma=0.101,
-        prob=0.5,
-        seed=1,
-        A=None,
-        a=None,
-        c=None,
+        alpha: float = 0.602,
+        gamma: float = 0.101,
+        c: float = 1e-6,
+        lr: float = 0.01,
+        A: Optional[float] = None,
+        a: Optional[float] = None,
     ) -> None:
-        """Constructs all necessary attributes for the SPSA optimiser.
-
-        Parameters
-        ----------
-        objective : Objective
-            Objective function to optimise.
-        alpha : float, optional
-            Model parameter, refer to documentation, by default 0.602
-        gamma : float, optional
-            Model parameter, refer to documentation, by default 0.101
-        prob : float, optional
-            Model parameter, refer to documentation, by default 0.5
-        seed : int, optional
-            Random number generator seed, by default 1
-        A : float, optional
-            Model parameter, refer to documentation, by default None.
-            If None, this parameter is defined according to internal heuristics.
-        a : float, optional
-            Model parameter, refer to documentation, by default None
-            If None, this parameter is defined according to internal heuristics.
-        c : float, optional
-            Model parameter, refer to documentation, by default None
-            If None, this parameter is defined according to internal heuristics.
-        """
-        super().__init__('SPSA', settings, objective)
+        super().__init__(settings, objective, normalise_params=True)
         self.alpha = alpha
         self.gamma = gamma
-        self.prob = prob
-        self.seed = seed
+        self.lr = lr
         self.A = A
         self.a = a
-        self.c = 1e-6 if c is None else c
+        self.c = c
 
-    def _scalar_optimise(
-        self,
-        objective: Callable[[np.ndarray, Optional[bool]], float],
-        n_dim: int,
-        n_iter: int,
-        bound: np.ndarray,
-        init_shot: np.ndarray,
-    ) -> Tuple[float, np.ndarray]:
-        """
-        Abstract method for optimising the objective.
-
-        Parameters
-        ----------
-        objective : Callable[[np.ndarray], float]
-            Objective function to optimise.
-        n_dim : int
-            Number of parameters to optimise.
-        n_iter : int
-            Maximum number of iterations.
-        bound : np.ndarray
-            Array where first and second columns correspond to lower and upper bounds, respectively.
-        init_shot : np.ndarray
-            Initial shot for the optimisation problem.
+    def name(self) -> str:
+        """Name of the optimiser.
 
         Returns
         -------
-        float
-            Best observed objective value.
-        np.ndarray
-            Observed optimum of the objective.
+        str
+            Name of the optimiser.
         """
+        return "SPSA"
 
-        if self.A is None:
-            self.A = n_iter / 20
-        if self.a is None:
-            self.a = 2 * (self.A + 1)**self.alpha
+    def _simple_optimise(
+        self,
+        num_iters: int,
+        initial_guess: np.ndarray,
+        bounds: list[tuple[float, float]],
+        objective: Callable[[np.ndarray], float],
+        callback: Callable[[Any], None],
+    ) -> None:
+        """Optimise the objective function.
 
-        x = init_shot
-        new_value = objective(x)
-        if self._progress_check(0, new_value, x):
-            return x, new_value
+        Parameters
+        ----------
+        num_iters : int
+            Number of iterations for the optimisation.
+        initial_guess : np.ndarray
+            Initial guess for the optimisation.
+        bounds : list[tuple[float, float]]
+            Bounds for the optimisation variables.
+        objective : Callable[[np.ndarray], float]
+            Objective function to be minimised.
+        callback : Callable[[Any], None]
+            Callback function for reporting the optimiser progress and checking for termination.
+            This function is called at the end of each iteration and will raise StopIteration if
+            the optimisation should be stopped. Keyword arguments are reported from the optimiser.
+        """
+        # Initialise learning rates
+        A_val = num_iters / 20 if self.A is None else self.A
+        a_val = (A_val + 1) ** self.alpha if self.a is None else self.a
 
-        for i in range(0, n_iter):
-            a_k = self.a / (self.A + i + 1) ** self.alpha
+        # Set up helpers
+        x = initial_guess
+        n_dim = len(initial_guess)
+        lbounds = np.array([b[0] for b in bounds])
+        ubounds = np.array([b[1] for b in bounds])
+
+        # Initial evaluation
+        objective(x)
+        callback()
+
+        for i in range(0, num_iters):
+            # This iteration's learning rates
+            a_k = self.lr * a_val / (A_val + i + 1) ** self.alpha
             c_k = self.c / (i + 1) ** self.gamma
-            # [-1,1] Bernoulli distribution
-            delta = 2 * bernoulli.rvs(self.prob, size=n_dim, random_state=self.seed + i) - 1
-            # Bound check
-            up = boundary_check(x + c_k * delta, bound)
-            low = boundary_check(x - c_k * delta, bound)
+
+            # Search direction using a [-1,1] Bernoulli distribution
+            seed = i + (0 if self.settings.seed is None else self.settings.seed)
+            delta = 2 * bernoulli.rvs(0.5, size=n_dim, random_state=seed) - 1
+
+            # Estimate gradient
+            up = np.clip(x + c_k * delta, lbounds, ubounds)
+            low = np.clip(x - c_k * delta, lbounds, ubounds)
             pos_loss = objective(up)
             neg_loss = objective(low)
             gradient = (pos_loss - neg_loss) / (up - low)
-            # Update solution
-            x = x - a_k * gradient
-            # Bound check
-            x = boundary_check(x, bound)
-            new_value = objective(x)
-            # Update progress and check convergence
-            if self._progress_check(i+1, new_value, x):
-                break
 
-        return x, new_value
+            # Update and evaluate solution
+            x = np.clip(x - a_k * gradient, lbounds, ubounds)
+            objective(x)
+            callback()

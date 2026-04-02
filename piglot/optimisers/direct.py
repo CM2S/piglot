@@ -1,9 +1,9 @@
 """DIRECT optimiser module."""
-from typing import Tuple, Callable, Optional
+from typing import Callable, Any
 import copy
 import numpy as np
 from piglot.objective import Objective
-from piglot.optimiser import ScalarOptimiser
+from piglot.optimiser import SimpleOptimiser
 from piglot.settings import Settings
 
 
@@ -15,14 +15,14 @@ class Rectangle:
     diagonal(self):
         Returns the distance between the center and the furthest vertex.
     """
-    def __init__(self, size, center, func_val):
+    def __init__(self, size: np.ndarray, center: np.ndarray, func_val: float) -> None:
         """Constructor for the Rectangle class.
 
         Parameters
         ----------
-        size : array
+        size : np.ndarray
             Dimensions of the rectangle.
-        center : array
+        center : np.ndarray
             Coordinates of the centre of the rectable.
         func_val : float
             Function value at the centre of the rectangle.
@@ -31,7 +31,7 @@ class Rectangle:
         self.center = center
         self.func_val = func_val
 
-    def diagonal(self):
+    def diagonal(self) -> float:
         """Returns the distance between the center and the furthest vertex.
 
         Returns
@@ -42,52 +42,47 @@ class Rectangle:
         return np.linalg.norm(self.size / 2)
 
 
-class DIRECT(ScalarOptimiser):
-    """
-    DIRECT method for optimisation.
+class DIRECT(SimpleOptimiser):
+    """DIRECT method for optimisation.
 
     Reference:
     https://doi.org/10.1007/BF00941892
-
-    Methods
-    -------
-    _optimise(self, func, n_dim, n_iter, bound, init_shot):
-        Solves the optimization problem
     """
 
-    def __init__(self, settings: Settings, objective: Objective, epsilon=0):
-        """Constructs all necessary attributes for the DIRECT optimiser.
-
-        Parameters
-        ----------
-        settings : Settings
-            Settings for the optimiser.
-        objective : Objective
-            Objective function to optimise.
-        epsilon : float, optional
-            Model parameter, refer to documentation, by default 0.
-        """
-        super().__init__('DIRECT', settings, objective)
+    def __init__(self, settings: Settings, objective: Objective, epsilon: float = 0.0) -> None:
+        super().__init__(settings, objective, normalise_params=True)
         self.epsilon = epsilon
         self.K = 0
 
-    def __divide_rectangle(self, n_dim, rectangles, j, func):
+    def name(self) -> str:
+        """Name of the optimiser.
+
+        Returns
+        -------
+        str
+            Name of the optimiser.
+        """
+        return "DIRECT"
+
+    def __divide_rectangle(
+        self, n_dim: int, rectangles: list[Rectangle], j: int, func: Callable[[np.ndarray], float]
+    ) -> tuple[np.ndarray, float]:
         """Method for rectangle division.
 
         Parameters
         ----------
-        n_dim : integer
+        n_dim : int
             Number of dimensions of the hyperrectangle.
-        rectangles : array
+        rectangles : list[Rectangle]
             Array of current rectangles. This will be modified.
-        j : integer
+        j : int
             Index of the rectangle to subdivide
-        func : callable
+        func : Callable[[np.ndarray], float]
             Function to call on new rectangle centres.
 
         Returns
         -------
-        best_point : array
+        best_point : np.ndarray
             From all evaluated points in this call, returns the best solution
         best_value : float
             From all evaluated points in this call, returns the best loss
@@ -103,7 +98,7 @@ class DIRECT(ScalarOptimiser):
         dir_vector = np.zeros(n_dim)
 
         # Slope function
-        def slope(d1, d2):
+        def slope(d1: tuple[np.ndarray, float], d2: tuple[np.ndarray, float]) -> float:
             return np.abs(d1[1] - d2[1]) / np.linalg.norm(d1[0] - d2[0])
         for i in max_dims:
             delta_vec = copy.deepcopy(dir_vector)
@@ -116,10 +111,8 @@ class DIRECT(ScalarOptimiser):
             new_samples.append((fp1, fp2))
             w_vec.append(min(fp1, fp2))
             # update slope
-            self.K = max(self.K, max([slope((p1, fp1), (r.center, r.func_val))
-                                      for r in rectangles]))
-            self.K = max(self.K, max([slope((p2, fp2), (r.center, r.func_val))
-                                      for r in rectangles]))
+            self.K = max(self.K, max(slope((p1, fp1), (r.center, r.func_val)) for r in rectangles))
+            self.K = max(self.K, max(slope((p2, fp2), (r.center, r.func_val)) for r in rectangles))
         # Sort dimensions to subdivide
         sorted_dims = np.argsort(w_vec)
         # Subdivide each dimension
@@ -136,19 +129,19 @@ class DIRECT(ScalarOptimiser):
         i_best = np.argmin(w_vec)
         return new_points[i_best][np.argmin(w_vec[i_best])], w_vec[i_best]
 
-    def __potential_optimisers(self, rectangles, best_value):
+    def __potential_optimisers(self, rectangles: list[Rectangle], best_value: float) -> list[int]:
         """Builds the set of potential optimisers.
 
         Parameters
         ----------
-        rectangles : array
+        rectangles : list[Rectangle]
             Array of rectangles.
         best_value : float
             Current best value.
 
         Returns
         -------
-        array
+        list[int]
             Set of potential optimiser rectangles.
         """
         # Sort rectangles firstly by size then by function value
@@ -178,7 +171,7 @@ class DIRECT(ScalarOptimiser):
                 potential.append(j)
 
         # Third pass: filter points after a slope decrease
-        def slope_between(x, y):
+        def slope_between(x: int, y: int) -> float:
             return ((rectangles[y].func_val - rectangles[x].func_val) /
                     (rectangles[y].diagonal() - rectangles[x].diagonal()))
         slopes_bad = True
@@ -214,67 +207,47 @@ class DIRECT(ScalarOptimiser):
                 final_potential.append(j)
         return final_potential
 
-    def _scalar_optimise(
+    def _simple_optimise(
         self,
-        objective: Callable[[np.ndarray, Optional[bool]], float],
-        n_dim: int,
-        n_iter: int,
-        bound: np.ndarray,
-        init_shot: np.ndarray,
-    ) -> Tuple[float, np.ndarray]:
-        """
-        Abstract method for optimising the objective.
+        num_iters: int,
+        initial_guess: np.ndarray,
+        bounds: list[tuple[float, float]],
+        objective: Callable[[np.ndarray], float],
+        callback: Callable[[Any], None],
+    ) -> None:
+        """Optimise the objective function.
 
         Parameters
         ----------
+        num_iters : int
+            Number of iterations for the optimisation.
+        initial_guess : np.ndarray
+            Initial guess for the optimisation.
+        bounds : list[tuple[float, float]]
+            Bounds for the optimisation variables.
         objective : Callable[[np.ndarray], float]
-            Objective function to optimise.
-        n_dim : int
-            Number of parameters to optimise.
-        n_iter : int
-            Maximum number of iterations.
-        bound : np.ndarray
-            Array where first and second columns correspond to lower and upper bounds, respectively.
-        init_shot : np.ndarray
-            Initial shot for the optimisation problem.
-
-        Returns
-        -------
-        float
-            Best observed objective value.
-        np.ndarray
-            Observed optimum of the objective.
+            Objective function to be minimised.
+        callback : Callable[[Any], None]
+            Callback function for reporting the optimiser progress and checking for termination.
+            This function is called at the end of each iteration and will raise StopIteration if
+            the optimisation should be stopped. Keyword arguments are reported from the optimiser.
         """
         # Initialise starting cube
         self.K = 0
-        center = (bound[:, 1] + bound[:, 0]) / 2
-        cube_size = bound[:, 1] - bound[:, 0]
+        n_dim = len(initial_guess)
+        lbounds = np.array([b[0] for b in bounds])
+        ubounds = np.array([b[1] for b in bounds])
+        center = (ubounds + lbounds) / 2
+        cube_size = ubounds - lbounds
         best_value = objective(center)
         rectangles = [Rectangle(cube_size, center, best_value)]
 
-        # Check if this solution is converged
-        if self._progress_check(0, best_value, center):
-            return center, best_value
-
         # Iterations loop
-        for i in range(0, n_iter):
-            # Select potentially optimal rectangles
+        for i in range(num_iters):
+            # Select and subdivide potentially optimal rectangles
             potentially_optimal = self.__potential_optimisers(rectangles, best_value)
-
-            # Subdivide each potentialy optimal rectangle
-            iter_value = np.inf
-            iter_solution = None
             for j in potentially_optimal:
-                new_solution, new_value = self.__divide_rectangle(n_dim, rectangles, j, objective)
-                best_value = min(best_value, new_value)
-                if new_value < iter_value:
-                    iter_value = new_value
-                    iter_solution = new_solution
+                self.__divide_rectangle(n_dim, rectangles, j, objective)
 
-            # Update progress and check convergence
-            if self._progress_check(i+1, iter_value, iter_solution):
-                break
-
-        # Return best value
-        i_best = np.argmin([r.func_val for r in rectangles])
-        return rectangles[i_best].center, rectangles[i_best].func_val
+            # Progress report and termination check
+            callback()

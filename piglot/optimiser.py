@@ -268,11 +268,12 @@ class Optimiser(ABC):
 
         Parameters
         ----------
-        callback : Callable[[OptimisationResult, dict[str, str]], bool]
+        callback : Callable[[int, OptimisationResult, dict[str, str]], bool]
             Callback function for reporting the optimiser progress and checking for termination.
-            The first argument is the current optimisation result, while the second argument is a
-            dictionary with additional information to pass to the user. Call this function at the
-            end of each iteration, and if it returns True, stop the optimisation.
+            The first argument is the iteration number, the second argument is the current
+            optimisation result, and the third argument is a dictionary with additional information
+            to pass to the user. Call this function at the end of each iteration, and if it returns
+            True, stop the optimisation.
 
         Returns
         -------
@@ -340,25 +341,14 @@ class Optimiser(ABC):
         return cls(settings, objective, **config)
 
 
-class ScalarOptimiser(Optimiser):
-    """Base class for scalar optimisers."""
+class SimpleOptimiser(Optimiser):
+    """Simple optimiser for single-objective, non-composite and noiseless problems."""
 
-    def __init__(self, name: str, settings: Settings, objective: Objective) -> None:
+    def __init__(
+        self, settings: Settings, objective: Objective, normalise_params: bool = False
+    ) -> None:
         super().__init__(settings, objective)
-        self.__name = name
-        self.bounds = np.array([[par.lbound, par.ubound] for par in self.parameters])
-        # Lazy callback for the scalar optimiser (TODO: refactor to avoid this)
-        self.__callback: Callable[[int, OptimisationResult, dict[str, str]], bool] = None
-
-    def name(self) -> str:
-        """Name of the optimiser.
-
-        Returns
-        -------
-        str
-            Name of the optimiser.
-        """
-        return self.__name
+        self.normalise_params = normalise_params
 
     @classmethod
     def validate_problem(cls, objective: Objective) -> None:
@@ -368,78 +358,55 @@ class ScalarOptimiser(Optimiser):
         ----------
         objective : Objective
             Objective to optimise.
-
-        Raises
-        ------
-        InvalidOptimiserException
-            With an invalid combination of optimiser and objective function.
         """
+        if objective.is_multi_objective():
+            raise ValueError("This optimiser does not support multi-objective optimisation.")
         if objective.is_composite():
-            raise InvalidOptimiserException('This optimiser does not support composition')
+            raise ValueError("This optimiser does not support composite objectives.")
         if objective.has_variance():
-            raise InvalidOptimiserException('This optimiser does not support stochasticity')
+            raise ValueError("This optimiser does not support objectives with variance.")
 
-    @abstractmethod
-    def _scalar_optimise(
-        self,
-        objective: Callable[[np.ndarray, Optional[bool]], float],
-        n_dim: int,
-        n_iter: int,
-        bound: np.ndarray,
-        init_shot: np.ndarray,
-    ) -> Tuple[float, np.ndarray]:
-        """Abstract method for optimising the objective.
+    @staticmethod
+    def __norm_params(values: np.ndarray, bounds: list[tuple[float, float]]) -> np.ndarray:
+        """Normalise parameters to the range [-1, 1] based on the given bounds.
 
         Parameters
         ----------
-        objective : Callable[[np.ndarray], float]
-            Objective function to optimise.
-        n_dim : int
-            Number of parameters to optimise.
-        n_iter : int
-            Maximum number of iterations.
-        bound : np.ndarray
-            Array where first and second columns correspond to lower and upper bounds, respectively.
-        init_shot : np.ndarray
-            Initial shot for the optimisation problem.
-
-        Returns
-        -------
-        float
-            Best observed objective value.
-        np.ndarray
-            Observed optimum of the objective.
-        """
-
-    def _norm_params(self, params: np.ndarray) -> np.ndarray:
-        """Normalise the parameters.
-
-        Parameters
-        ----------
-        params : np.ndarray
-            Denormalised parameters.
+        values : np.ndarray
+            Parameters to normalize.
+        bounds : list[tuple[float, float]]
+            Bounds for each parameter.
 
         Returns
         -------
         np.ndarray
-            Normalised parameters.
+            Normalized parameters.
         """
-        return 2.0 * (params - self.bounds[:, 0]) / (self.bounds[:, 1] - self.bounds[:, 0]) - 1.0
+        return np.array([
+            2 * (value - bound[0]) / (bound[1] - bound[0]) - 1
+            for value, bound in zip(values, bounds)
+        ])
 
-    def _denorm_params(self, params: np.ndarray) -> np.ndarray:
-        """Denormalise the parameters.
+    @staticmethod
+    def __denorm_params(values: np.ndarray, bounds: list[tuple[float, float]]) -> np.ndarray:
+        """Denormalise parameters from the range [-1, 1] to the original bounds.
 
         Parameters
         ----------
-        params : np.ndarray
-            Normalised parameters.
+        values : np.ndarray
+            Parameters to denormalise.
+        bounds : list[tuple[float, float]]
+            Bounds for each parameter.
 
         Returns
         -------
         np.ndarray
             Denormalised parameters.
         """
-        return self.bounds[:, 0] + (1.0 + params) * (self.bounds[:, 1] - self.bounds[:, 0]) / 2.0
+        return np.array([
+            0.5 * (value + 1) * (bound[1] - bound[0]) + bound[0]
+            for value, bound in zip(values, bounds)
+        ])
 
     def _optimise(
         self, callback: Callable[[int, OptimisationResult, dict[str, str]], bool]
@@ -448,65 +415,106 @@ class ScalarOptimiser(Optimiser):
 
         Parameters
         ----------
-        callback : Callable[[OptimisationResult, dict[str, str]], bool]
+        callback : Callable[[int, OptimisationResult, dict[str, str]], bool]
             Callback function for reporting the optimiser progress and checking for termination.
-            The first argument is the current optimisation result, while the second argument is a
-            dictionary with additional information to pass to the user. Call this function at the
-            end of each iteration, and if it returns True, stop the optimisation.
+            The first argument is the iteration number, the second argument is the current
+            optimisation result, and the third argument is a dictionary with additional information
+            to pass to the user. Call this function at the end of each iteration, and if it returns
+            True, stop the optimisation.
 
         Returns
         -------
         OptimisationResult
             Result of the optimisation.
         """
-        # Set up problem
-        n_dim = len(self.parameters)
-        init_shot = self.parameters.get_initial_vector()
-        n_iter = self.settings.iters
-        self.__callback = callback   # TODO: refactor to avoid this
-        # Optimise the scalarised objective
-        best_value, best_params = self._scalar_optimise(
-            lambda x, concurrent=False: self.objective(
-                self._denorm_params(x),
-                concurrent=concurrent
-            ).obj_values.item(),
-            n_dim,
-            n_iter,
-            np.array([[-1.0, 1.0]]).repeat(n_dim, axis=0),
-            self._norm_params(init_shot),
-        )
-        # Return the best value
-        return OptimisationResult(
-            value=best_value,
-            params=None if best_params is None else self._denorm_params(best_params),
-        )
+        # Set up initial guess and bounds
+        true_x0 = self.settings.parameters.get_initial_vector()
+        true_bounds = [(p[0], p[1]) for p in self.settings.parameters.get_bounds()]
 
-    def _progress_check(
+        # Handle normalisation
+        if self.normalise_params:
+            x0 = self.__norm_params(true_x0, true_bounds)
+            bounds = [(-1.0, 1.0) for _ in true_bounds]
+        else:
+            x0 = true_x0
+            bounds = true_bounds
+
+        # Create storage for number of iterations and objective evaluations
+        num_iters = 0
+        evaluations: list[tuple[np.ndarray, float]] = []
+        curr_best: Optional[tuple[np.ndarray, float]] = None
+
+        # Set up function to update state
+        def update_state() -> OptimisationResult:
+            # Fetch new evaluations and update best result
+            nonlocal num_iters, curr_best
+            if len(evaluations) > 0:
+                best_evaluation = min(evaluations, key=lambda x: x[1])
+                evaluations.clear()
+                if curr_best is None or best_evaluation[1] < curr_best[1]:
+                    curr_best = best_evaluation
+
+            # Create the optimisation result
+            if curr_best is None:
+                raise RuntimeError("No evaluations available to determine the best result.")
+            return OptimisationResult(curr_best[1], params=curr_best[0])
+
+        # Set up inner callback that updates result back and checks for termination
+        def inner_callback(**kwargs) -> None:
+            result = update_state()
+            if callback(num_iters + 1, result, kwargs):
+                raise StopIteration
+
+        # Set up the objective function wrapper
+        def objective_wrapper(x: np.ndarray) -> float:
+            # Handle denormalisation if required
+            if self.normalise_params:
+                x = self.__denorm_params(x, true_bounds)
+
+            # Clip the parameters to the bounds
+            lbounds = np.array([bound[0] for bound in true_bounds])
+            ubounds = np.array([bound[1] for bound in true_bounds])
+            x = np.clip(x, lbounds, ubounds)
+
+            # Evaluate and store the observation
+            value = self.objective.get_objective_value(self.objective(x))
+            evaluations.append((x, value))
+            return value
+
+        # Run the optimisation
+        try:
+            self._simple_optimise(
+                self.settings.iters, x0, bounds, objective_wrapper, inner_callback
+            )
+        except StopIteration:
+            pass
+
+        # Update state before returning
+        return update_state()
+
+    @abstractmethod
+    def _simple_optimise(
         self,
-        i_iter: int,
-        curr_value: float,
-        curr_solution: np.ndarray,
-        extra_info: str = None,
-    ) -> bool:
-        """Report the optimiser progress and check for termination (with parameter denormalisation).
+        num_iters: int,
+        initial_guess: np.ndarray,
+        bounds: list[tuple[float, float]],
+        objective: Callable[[np.ndarray], float],
+        callback: Callable[[Any], None],
+    ) -> None:
+        """Optimise the objective function.
 
         Parameters
         ----------
-        i_iter : int
-            Current iteration number.
-        curr_value : float
-            Current objective value.
-        curr_solution : np.ndarray
-            Current objective minimiser.
-        extra_info : str
-            Additional information to pass to user.
-
-        Returns
-        -------
-        bool
-            Whether any of the stopping criteria is satisfied.
+        num_iters : int
+            Number of iterations for the optimisation.
+        initial_guess : np.ndarray
+            Initial guess for the optimisation.
+        bounds : list[tuple[float, float]]
+            Bounds for the optimisation variables.
+        objective : Callable[[np.ndarray], float]
+            Objective function to be minimised.
+        callback : Callable[[Any], None]
+            Callback function for reporting the optimiser progress and checking for termination.
+            This function is called at the end of each iteration and will raise StopIteration if
+            the optimisation should be stopped. Keyword arguments are reported from the optimiser.
         """
-        solution = None if curr_solution is None else self._denorm_params(curr_solution)
-        result = OptimisationResult(value=curr_value, params=solution)
-        info = {'info': extra_info} if extra_info is not None else None
-        return self.__callback(i_iter, result, info)
