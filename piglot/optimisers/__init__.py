@@ -7,6 +7,7 @@ from piglot.optimisers.direct import DIRECT
 from piglot.optimisers.generic.optimiser import GenericOptimiser
 from piglot.optimisers.query import QueryOptimiser
 from piglot.optimisers.random_search import RandomSearchOptimiser
+from piglot.optimisers.scipy_optim import ScipyOptimiser
 from piglot.optimisers.spsa_adam import SPSA_Adam
 from piglot.optimisers.spsa import SPSA
 from piglot.settings import Settings
@@ -20,6 +21,7 @@ AVAILABLE_OPTIMISERS: Dict[str, Type[Optimiser]] = {
     'generic': GenericOptimiser,
     'query': QueryOptimiser,
     'random': RandomSearchOptimiser,
+    'scipy': ScipyOptimiser,
     'spsa-adam': SPSA_Adam,
     'spsa': SPSA,
 }
