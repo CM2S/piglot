@@ -1,10 +1,13 @@
 """Hybrid SPSA-Adam optimiser module."""
-from typing import Any, Callable
+from typing import Any, Callable, Optional
+from functools import partial
+import warnings
 import numpy as np
 from scipy.stats import bernoulli
 from piglot.objective import Objective
 from piglot.optimiser import SimpleOptimiser
 from piglot.settings import Settings
+from piglot.utils.assorted import parallel_map
 
 
 class SPSA_Adam(SimpleOptimiser):
@@ -25,6 +28,7 @@ class SPSA_Adam(SimpleOptimiser):
         epsilon: float = 1e-8,
         gamma: float = 0.101,
         c: float = 1e-6,
+        num_workers: int = 1,
     ) -> None:
         super().__init__(settings, objective, normalise_params=True)
         self.lr = lr
@@ -33,6 +37,12 @@ class SPSA_Adam(SimpleOptimiser):
         self.epsilon = epsilon
         self.gamma = gamma
         self.c = c
+        self.num_workers = num_workers
+        if num_workers > 2:
+            warnings.warn(
+                f"A total of {num_workers} workers have been specified, "
+                "but the optimiser cannot use more than 2 workers."
+            )
 
     def name(self) -> str:
         """Name of the optimiser.
@@ -49,7 +59,7 @@ class SPSA_Adam(SimpleOptimiser):
         num_iters: int,
         initial_guess: np.ndarray,
         bounds: list[tuple[float, float]],
-        objective: Callable[[np.ndarray], float],
+        objective: Callable[[np.ndarray, Optional[bool]], float],
         callback: Callable[[Any], None],
     ) -> None:
         """Optimise the objective function.
@@ -62,7 +72,7 @@ class SPSA_Adam(SimpleOptimiser):
             Initial guess for the optimisation.
         bounds : list[tuple[float, float]]
             Bounds for the optimisation variables.
-        objective : Callable[[np.ndarray], float]
+        objective : Callable[[np.ndarray, Optional[bool]], float]
             Objective function to be minimised.
         callback : Callable[[Any], None]
             Callback function for reporting the optimiser progress and checking for termination.
@@ -74,10 +84,10 @@ class SPSA_Adam(SimpleOptimiser):
         n_dim = len(initial_guess)
         lbounds = np.array([b[0] for b in bounds])
         ubounds = np.array([b[1] for b in bounds])
+        parallel_objective = partial(objective, concurrent=self.num_workers > 1)
 
         # Initial evaluation
         objective(x)
-        callback()
 
         # First and second moments for Adam
         m = np.zeros(n_dim)
@@ -92,8 +102,7 @@ class SPSA_Adam(SimpleOptimiser):
             # Estimate gradient
             up = np.clip(x + c_k * delta, lbounds, ubounds)
             low = np.clip(x - c_k * delta, lbounds, ubounds)
-            pos_loss = objective(up)
-            neg_loss = objective(low)
+            pos_loss, neg_loss = parallel_map(parallel_objective, [up, low], self.num_workers)
             gradient = (pos_loss - neg_loss) / (up - low)
 
             # Update solution with Adam

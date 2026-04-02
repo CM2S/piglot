@@ -1,10 +1,11 @@
 """Assorted utilities."""
-from typing import List, Dict, Tuple, Type, TypeVar, Any, Union
+from typing import Callable, List, Dict, Tuple, Type, TypeVar, Any, Union, Iterable, Iterator
 import os
 import copy
 import contextlib
 import importlib
 import importlib.util
+from concurrent import futures
 import numpy as np
 from scipy.stats import t
 import torch
@@ -209,6 +210,7 @@ def change_cwd(path: str):
 
 
 T = TypeVar('T')
+U = TypeVar('U')
 
 
 def read_custom_module(config: Dict[str, Any], cls: Type[T]) -> Type[T]:
@@ -266,3 +268,26 @@ class TorchContainer:
             if isinstance(attr, (torch._C._TensorBase, TorchContainer)):  # pylint: disable=W0212
                 setattr(new_object, name, attr.to(device, dtype=dtype))
         return new_object
+
+
+def parallel_map(func: Callable[[T], U], iterable: Iterable[T], num_workers: int) -> Iterator[U]:
+    """Apply a function to each element in an iterable in parallel.
+
+    Parameters
+    ----------
+    func : Callable[[T], U]
+        Function to apply to each element.
+    iterable : Iterable[T]
+        Iterable of elements to process.
+    num_workers : int
+        Number of parallel workers.
+
+    Returns
+    -------
+    Iterator[U]
+        Iterator of results from applying the function.
+    """
+    if num_workers == 1:
+        return (func(x) for x in iterable)
+    with futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+        return executor.map(func, iterable)

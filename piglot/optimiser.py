@@ -466,7 +466,7 @@ class SimpleOptimiser(Optimiser):
                 raise StopIteration
 
         # Set up the objective function wrapper
-        def objective_wrapper(x: np.ndarray) -> float:
+        def objective_wrapper(x: np.ndarray, concurrent: bool = False) -> float:
             # Handle denormalisation if required
             if self.normalise_params:
                 x = self.__denorm_params(x, true_bounds)
@@ -477,7 +477,7 @@ class SimpleOptimiser(Optimiser):
             x = np.clip(x, lbounds, ubounds)
 
             # Evaluate and store the observation
-            value = self.objective.get_objective_value(self.objective(x))
+            value = self.objective.get_objective_value(self.objective(x, concurrent=concurrent))
             evaluations.append((x, value))
             return value
 
@@ -498,7 +498,7 @@ class SimpleOptimiser(Optimiser):
         num_iters: int,
         initial_guess: np.ndarray,
         bounds: list[tuple[float, float]],
-        objective: Callable[[np.ndarray], float],
+        objective: Callable[[np.ndarray, Optional[bool]], float],
         callback: Callable[[Any], None],
     ) -> None:
         """Optimise the objective function.
@@ -511,7 +511,7 @@ class SimpleOptimiser(Optimiser):
             Initial guess for the optimisation.
         bounds : list[tuple[float, float]]
             Bounds for the optimisation variables.
-        objective : Callable[[np.ndarray], float]
+        objective : Callable[[np.ndarray, Optional[bool]], float]
             Objective function to be minimised.
         callback : Callable[[Any], None]
             Callback function for reporting the optimiser progress and checking for termination.

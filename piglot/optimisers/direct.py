@@ -1,10 +1,13 @@
 """DIRECT optimiser module."""
-from typing import Callable, Any
+from typing import Callable, Any, Optional
+from functools import partial
 import copy
+import warnings
 import numpy as np
 from piglot.objective import Objective
 from piglot.optimiser import SimpleOptimiser
 from piglot.settings import Settings
+from piglot.utils.assorted import parallel_map
 
 
 class Rectangle:
@@ -49,10 +52,22 @@ class DIRECT(SimpleOptimiser):
     https://doi.org/10.1007/BF00941892
     """
 
-    def __init__(self, settings: Settings, objective: Objective, epsilon: float = 0.0) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        objective: Objective,
+        epsilon: float = 0.0,
+        num_workers: int = 1,
+    ) -> None:
         super().__init__(settings, objective, normalise_params=True)
         self.epsilon = epsilon
         self.K = 0
+        self.num_workers = num_workers
+        if num_workers > 2:
+            warnings.warn(
+                f"A total of {num_workers} workers have been specified, "
+                "but the optimiser cannot use more than 2 workers."
+            )
 
     def name(self) -> str:
         """Name of the optimiser.
@@ -105,8 +120,7 @@ class DIRECT(SimpleOptimiser):
             delta_vec[i] = delta
             p1 = rectangles[j].center + delta_vec
             p2 = rectangles[j].center - delta_vec
-            fp1 = func(p1)
-            fp2 = func(p2)
+            fp1, fp2 = parallel_map(func, [p1, p2], self.num_workers)
             new_points.append((p1, p2))
             new_samples.append((fp1, fp2))
             w_vec.append(min(fp1, fp2))
@@ -212,7 +226,7 @@ class DIRECT(SimpleOptimiser):
         num_iters: int,
         initial_guess: np.ndarray,
         bounds: list[tuple[float, float]],
-        objective: Callable[[np.ndarray], float],
+        objective: Callable[[np.ndarray, Optional[bool]], float],
         callback: Callable[[Any], None],
     ) -> None:
         """Optimise the objective function.
@@ -225,7 +239,7 @@ class DIRECT(SimpleOptimiser):
             Initial guess for the optimisation.
         bounds : list[tuple[float, float]]
             Bounds for the optimisation variables.
-        objective : Callable[[np.ndarray], float]
+        objective : Callable[[np.ndarray, Optional[bool]], float]
             Objective function to be minimised.
         callback : Callable[[Any], None]
             Callback function for reporting the optimiser progress and checking for termination.
@@ -241,13 +255,14 @@ class DIRECT(SimpleOptimiser):
         cube_size = ubounds - lbounds
         best_value = objective(center)
         rectangles = [Rectangle(cube_size, center, best_value)]
+        parallel_objective = partial(objective, concurrent=self.num_workers > 1)
 
         # Iterations loop
         for i in range(num_iters):
             # Select and subdivide potentially optimal rectangles
             potentially_optimal = self.__potential_optimisers(rectangles, best_value)
             for j in potentially_optimal:
-                self.__divide_rectangle(n_dim, rectangles, j, objective)
+                self.__divide_rectangle(n_dim, rectangles, j, parallel_objective)
 
             # Progress report and termination check
             callback()

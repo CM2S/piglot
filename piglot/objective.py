@@ -536,7 +536,7 @@ class Objective(ABC):
             latent_covariances=latent_covariances,
         )
 
-    def __call__(self, params: np.ndarray, *args: Any, **kwargs: Any) -> ObjectiveResult:
+    def __call__(self, params: np.ndarray, concurrent: bool = False) -> ObjectiveResult:
         """Objective computation for the outside world.
 
         Handles scalarisation, composition and output file writing.
@@ -545,8 +545,8 @@ class Objective(ABC):
         ----------
         params : np.ndarray
             Set of parameters to evaluate the objective for.
-        *args, **kwargs
-            Additional arguments to pass to the evaluation function.
+        concurrent : bool
+            Whether this call may be concurrent to others, by default False.
 
         Returns
         -------
@@ -558,7 +558,7 @@ class Objective(ABC):
 
         # Evaluate objective(s) and build the full result
         begin_time = time.perf_counter()
-        individual_obj = self._objective(param_values, *args, **kwargs)
+        individual_obj = self._objective(param_values, concurrent=concurrent)
         result = self.__build_objective_result(individual_obj)
         end_time = time.perf_counter()
 
