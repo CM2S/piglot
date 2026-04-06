@@ -273,9 +273,6 @@ class Optimiser(ABC):
             os.path.join(self.settings.output_dir, "progress"), settings, objective
         )
 
-        # Lazy initialisation of the progress bar
-        self.pbar: tqdm = None
-
     def optimise(self) -> OptimisationResult:
         """Optimiser for the outside world.
 
@@ -287,18 +284,14 @@ class Optimiser(ABC):
         # Reset state and time
         self.state = OptimiserState()
         self.begin_time = time.time()
-        # Prepare history output files
+
+        # Prepare history output files and optimiser
         self.history_file.prepare()
         self.progress_file.prepare()
-        # Prepare optimiser
         self.objective.prepare()
-        self._progress_report_prepare()
+
         # Optimise
-        result = self._optimise(self.__update_progress)
-        # Output progress
-        self._progress_report_close()
-        # Return the best value
-        return result
+        return self._optimise(self.__update_progress)
 
     def __convergence_check(self, i_iter: int) -> bool:
         """Check the convergence criteria.
@@ -335,9 +328,7 @@ class Optimiser(ABC):
                 return True
         return False
 
-    def __update_progress(
-        self, i_iter: int, result: OptimisationResult, extra_info: dict[str, str] = None
-    ) -> bool:
+    def __update_progress(self, i_iter: int, result: OptimisationResult, extra_info: str) -> bool:
         """Update the optimiser progress and check for termination.
 
         Parameters
@@ -346,7 +337,7 @@ class Optimiser(ABC):
             Current iteration number.
         result : OptimisationResult
             Result of the current iteration.
-        extra_info : dict[str, str]
+        extra_info : str
             Additional information to pass to user.
 
         Returns
@@ -354,20 +345,12 @@ class Optimiser(ABC):
         bool
             Whether any of the stopping criteria is satisfied.
         """
-        # Parse extra info
-        if extra_info is not None and len(extra_info) > 0:
-            extra_info = ', '.join(f'{key}: {value}' for key, value in extra_info.items())
-
         # Update optimiser state
         self.state.update(i_iter, result, self.objective.has_variance())
 
-        # Update progress bar
-        self._progress_report_update(i_iter, extra_info)
-
         # Update progress in output files
-        extra_info_str = extra_info if extra_info is not None else '-'
-        self.progress_file.write(result, extra_info_str)
-        self.history_file.write(result, extra_info_str)
+        self.progress_file.write(result, extra_info)
+        self.history_file.write(result, extra_info)
 
         # Check convergence criteria
         return self.__convergence_check(i_iter)
@@ -395,16 +378,16 @@ class Optimiser(ABC):
 
     @abstractmethod
     def _optimise(
-        self, callback: Callable[[int, OptimisationResult, dict[str, str]], bool]
+        self, callback: Callable[[int, OptimisationResult, str], bool]
     ) -> OptimisationResult:
         """Abstract method for optimising the objective.
 
         Parameters
         ----------
-        callback : Callable[[int, OptimisationResult, dict[str, str]], bool]
+        callback : Callable[[int, OptimisationResult, str], bool]
             Callback function for reporting the optimiser progress and checking for termination.
             The first argument is the iteration number, the second argument is the current
-            optimisation result, and the third argument is a dictionary with additional information
+            optimisation result, and the third argument is a string with additional information
             to pass to the user. Call this function at the end of each iteration, and if it returns
             True, stop the optimisation.
 
@@ -413,44 +396,6 @@ class Optimiser(ABC):
         OptimisationResult
             Result of the optimisation.
         """
-
-    def _progress_report_prepare(self) -> None:
-        """Initialising the progress bar."""
-        if not self.settings.quiet:
-            self.pbar = tqdm(total=self.settings.iters, desc=self.name())
-
-    def _progress_report_update(self, i_iter: int, extra_info: Optional[str]) -> None:
-        """Update the progress bar.
-
-        Parameters
-        ----------
-        i_iter : int
-            Current iteration number.
-        result : OptimisationResult
-            Result of the current iteration.
-        extra_info : Optional[str]
-            Additional information to pass to user.
-        """
-        if self.pbar is not None:
-            info = f'Loss: {self.state.best_result.value:6.3e}'
-            if (
-                self.objective.has_variance()
-                and self.state.best_result.conf_interval
-                and all(self.state.best_result.conf_interval)
-            ):
-                delta = (
-                    self.state.best_result.conf_interval[1]
-                    - self.state.best_result.conf_interval[0]
-                ) / 2
-                info += f' ± {delta:6.3e}'
-            self.pbar.set_postfix_str(info + (f' ({extra_info})' if extra_info else ''))
-            if i_iter > 0:
-                self.pbar.update()
-
-    def _progress_report_close(self) -> None:
-        """Close the progress bar."""
-        if self.pbar is not None:
-            self.pbar.close()
 
     @classmethod
     def read(cls: type[T], config: dict[str, Any], settings: Settings, objective: Objective) -> T:
@@ -482,6 +427,9 @@ class SimpleOptimiser(Optimiser):
     ) -> None:
         super().__init__(settings, objective)
         self.normalise_params = normalise_params
+
+        # Lazy initialisation of the progress bar
+        self.pbar: tqdm = None
 
     @classmethod
     def validate_problem(cls, objective: Objective) -> None:
@@ -542,16 +490,16 @@ class SimpleOptimiser(Optimiser):
         ])
 
     def _optimise(
-        self, callback: Callable[[int, OptimisationResult, dict[str, str]], bool]
+        self, callback: Callable[[int, OptimisationResult, str], bool]
     ) -> OptimisationResult:
         """Abstract method for optimising the objective.
 
         Parameters
         ----------
-        callback : Callable[[int, OptimisationResult, dict[str, str]], bool]
+        callback : Callable[[int, OptimisationResult, str], bool]
             Callback function for reporting the optimiser progress and checking for termination.
             The first argument is the iteration number, the second argument is the current
-            optimisation result, and the third argument is a dictionary with additional information
+            optimisation result, and the third argument is a string with additional information
             to pass to the user. Call this function at the end of each iteration, and if it returns
             True, stop the optimisation.
 
@@ -560,6 +508,10 @@ class SimpleOptimiser(Optimiser):
         OptimisationResult
             Result of the optimisation.
         """
+        # Initialise progress bar
+        if not self.settings.quiet:
+            self.pbar = tqdm(total=self.settings.iters, desc=self.name())
+
         # Set up initial guess and bounds
         true_x0 = self.settings.parameters.get_initial_vector()
         true_bounds = [(p[0], p[1]) for p in self.settings.parameters.get_bounds()]
@@ -579,23 +531,25 @@ class SimpleOptimiser(Optimiser):
 
         # Set up function to update state
         def update_state() -> OptimisationResult:
-            # Fetch new evaluations and update best result
-            nonlocal num_iters, curr_best
-            if len(evaluations) > 0:
-                best_evaluation = min(evaluations, key=lambda x: x[1])
-                evaluations.clear()
-                if curr_best is None or best_evaluation[1] < curr_best[1]:
-                    curr_best = best_evaluation
+            # Update best result
+            nonlocal curr_best
+            if len(evaluations) == 0:
+                raise RuntimeError("No evaluations available to determine the best result.")
+            curr_best = min(evaluations, key=lambda x: x[1])
+
+            # Update progress bar
+            if self.pbar is not None:
+                self.pbar.set_postfix_str(f'Objective: {curr_best[1]:6.3e}')
 
             # Create the optimisation result
-            if curr_best is None:
-                raise RuntimeError("No evaluations available to determine the best result.")
             return OptimisationResult(curr_best[1], params=curr_best[0])
 
         # Set up inner callback that updates result back and checks for termination
         def inner_callback(**kwargs) -> None:
             result = update_state()
-            if callback(num_iters + 1, result, kwargs):
+            if self.pbar is not None:
+                self.pbar.update()
+            if callback(num_iters + 1, result, ""):
                 raise StopIteration
 
         # Set up the objective function wrapper
@@ -623,7 +577,10 @@ class SimpleOptimiser(Optimiser):
             pass
 
         # Update state before returning
-        return update_state()
+        result = update_state()
+        if self.pbar is not None:
+            self.pbar.close()
+        return result
 
     @abstractmethod
     def _simple_optimise(

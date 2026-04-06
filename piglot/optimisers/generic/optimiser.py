@@ -32,23 +32,8 @@ class GenericOptimiser(Optimiser):
         self.policies = policies
         self.total_iters = sum(policy.get_num_rounds() for policy in policies.values())
 
-    def _progress_report_prepare(self) -> None:
-        """Initialising the progress bar."""
-        if not self.settings.quiet:
-            self.pbar = tqdm(total=self.total_iters, desc=self.name())
-
-    def _progress_report_update(self, i_iter: int, extra_info: dict[str, str]) -> None:
-        """Update the progress bar.
-
-        Parameters
-        ----------
-        i_iter : int
-            Current iteration number.
-        result : OptimisationResult
-            Result of the current iteration.
-        extra_info : dict[str, str]
-            Additional information to pass to user.
-        """
+        # Lazy initialisation of the progress bar
+        self.pbar: tqdm = None
 
     def name(self) -> str:
         """Name of the optimiser.
@@ -72,10 +57,11 @@ class GenericOptimiser(Optimiser):
         round_num : int
             The number of the current round.
         """
-        description = name
-        if policy.get_num_rounds() > 1:
-            description += f' (round {round_num}/{policy.get_num_rounds()})'
-        self.pbar.set_description(description)
+        if self.pbar is not None:
+            description = name
+            if policy.get_num_rounds() > 1:
+                description += f' (round {round_num}/{policy.get_num_rounds()})'
+            self.pbar.set_description(description)
 
     @classmethod
     def validate_problem(cls, objective: Objective) -> None:
@@ -88,23 +74,26 @@ class GenericOptimiser(Optimiser):
         """
 
     def _optimise(
-        self, callback: Callable[[int, OptimisationResult, dict[str, str]], bool]
+        self, callback: Callable[[int, OptimisationResult, str], bool]
     ) -> OptimisationResult:
         """Abstract method for optimising the objective.
 
         Parameters
         ----------
-        callback : Callable[[OptimisationResult, dict[str, str]], bool]
+        callback : Callable[[int, OptimisationResult, str], bool]
             Callback function for reporting the optimiser progress and checking for termination.
-            The first argument is the current optimisation result, while the second argument is a
-            dictionary with additional information to pass to the user. Call this function at the
-            end of each iteration, and if it returns True, stop the optimisation.
+            The first argument is the iteration number, the second argument is the current
+            optimisation result, and the third argument is a string with additional information
+            to pass to the user. Call this function at the end of each iteration, and if it returns
+            True, stop the optimisation.
 
         Returns
         -------
         OptimisationResult
             Result of the optimisation.
         """
+        if not self.settings.quiet:
+            self.pbar = tqdm(total=self.total_iters, desc=self.name())
 
         # Set up callbacks
         def report_evaluation(candidate: np.ndarray, result: ObjectiveResult) -> None:
@@ -119,14 +108,21 @@ class GenericOptimiser(Optimiser):
             """
             if self.pbar is not None:
                 state = self.campaign.state.get_result()
-                info = f'Loss: {state.value:6.3e}'
-                if (
-                    self.objective.has_variance()
-                    and state.conf_interval
-                    and all(state.conf_interval)
-                ):
-                    delta = (state.conf_interval[1] - state.conf_interval[0]) / 2
-                    info += f' ± {delta:6.3e}'
+                if self.objective.is_multi_objective():
+                    info = (
+                        f'Hypervolume: {state.value:6.3e} (Num. Pareto: {len(state.pareto_params)})'
+                    )
+                else:
+                    info = f'Objective: {state.value:6.3e}'
+                    if (
+                        self.objective.has_variance()
+                        and state.conf_interval
+                        and all(state.conf_interval)
+                    ):
+                        delta = (state.conf_interval[1] - state.conf_interval[0]) / 2
+                        info += f' ± {delta:6.3e}'
+                if len(self.campaign.state.extra_info) > 0:
+                    info += f' ({self.campaign.state.extra_info})'
                 self.pbar.set_postfix_str(info)
 
         def report_round(
@@ -156,7 +152,9 @@ class GenericOptimiser(Optimiser):
             if self.pbar is not None:
                 self.update_progress_name(name, policy, round_num + 1)
                 self.pbar.update(1)
-            return callback(round_num, self.campaign.state.get_result(), {})
+            return callback(
+                round_num, self.campaign.state.get_result(), self.campaign.state.extra_info
+            )
 
         # Run the campaign
         for name, policy in self.policies.items():
@@ -167,6 +165,8 @@ class GenericOptimiser(Optimiser):
                 break
 
         # Return the best result found
+        if self.pbar is not None:
+            self.pbar.close()
         return self.campaign.state.get_result()
 
     @classmethod
@@ -190,7 +190,6 @@ class GenericOptimiser(Optimiser):
         # Mandatory fields
         if 'policies' not in config:
             raise ValueError('Missing "policies" field in optimiser configuration')
-        policies = []
         policies_dict = config.pop('policies')
         policies = {
             name: read_policy(policy_config) for name, policy_config in policies_dict.items()

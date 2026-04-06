@@ -143,6 +143,7 @@ class OptimisationState:
     best_result: Optional[ObjectiveResult] = None
     mo_state: Optional[MultiObjectiveStateData] = None
     conf_interval: Optional[tuple[float, float]] = None
+    extra_info: Optional[str] = None
 
     def get_result(self) -> OptimisationResult:
         """Get the current best result as an optimisation result instance.

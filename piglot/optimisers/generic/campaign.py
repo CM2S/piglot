@@ -90,9 +90,29 @@ class OptimisationCampaign:
             )
         return self.__model
 
+    def get_extra_info(self) -> dict[str, str]:
+        """Get extra information from the optimisation campaign.
+
+        Returns
+        -------
+        dict[str, str]
+            Extra information from the optimisation campaign.
+        """
+        extra_info: dict[str, str] = {}
+        if self.__model is not None:
+            # Number of PCA components with composition
+            if self.objective.is_composite():
+                extra_info['PCs'] = str(self.__model.gp.num_outputs)
+        return extra_info
+
     def update_state(self) -> None:
         """Update the state of the optimisation campaign."""
         self.state.num_evaluations = len(self.dataset.data)
+
+        # Extract extra info from the model
+        self.state.extra_info = ", ".join(
+            f"{key}: {value}" for key, value in self.get_extra_info().items()
+        )
 
         # Flag the model as outdated
         self.__model = None
