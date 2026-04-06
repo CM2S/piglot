@@ -364,7 +364,7 @@ class ComputedParameter(Parameter):
         """
         if "expression" not in config:
             raise ValueError(f"Missing 'expression' in configuration for parameter {name}.")
-        expression = config["expression"]
+        expression = str(config["expression"])
         return cls(name, expression, optim_params)
 
 
