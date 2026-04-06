@@ -41,7 +41,12 @@ class SyntheticIndividualObjective(SimpleIndividualObjective):
                 f'Unknown function {function}. Must be one of {list(test_functions.keys())}'
             )
         self.func = test_functions[function](**kwargs)
-        with open(os.path.join(settings.output_dir, 'optimum_value'), 'w', encoding='utf8') as file:
+
+    def prepare(self) -> None:
+        """Prepare the objective for optimisation."""
+        super().prepare()
+        optimum_file = os.path.join(self.settings.output_dir, 'optimum_value')
+        with open(optimum_file, 'w', encoding='utf8') as file:
             file.write(f'{self.func.optimal_value}')
 
     @staticmethod
