@@ -3,7 +3,7 @@ iters: 4
 
 optimiser:
   name: query
-  param_list_file: query_params_1d.txt
+  file: query_params_1d.txt
   reference_point: [10.0, 1.0]
 
 parameters:

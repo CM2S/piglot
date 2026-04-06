@@ -62,7 +62,7 @@ class QueryCandidatePolicy(CandidatePolicy):
             List of parameters for the next candidates to evaluate.
         """
         # Sanitise parameter dimensions
-        if self.points[0].ndim != dataset.settings.parameters.num_optim_parameters():
+        if len(self.points[0]) != dataset.settings.parameters.num_optim_parameters():
             raise ValueError("Query points have incorrect dimensions.")
 
         return [next(self.generator) for _ in range(num_candidates)]

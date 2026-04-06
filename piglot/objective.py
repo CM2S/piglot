@@ -278,7 +278,7 @@ class FunctionCallsFileManager:
                 if objective.has_variance():
                     obj_columns.append(obj_spec(f"Variance_{i + 1}"))
         # Scalar objective value and variance (if available)
-        if self.scalarisation is not None or len(self.objectives) == 1:
+        if self.scalarisation or len(self.objectives) == 1:
             obj_columns.append(obj_spec("Objective"))
             if any(obj.has_variance() for obj in self.objectives):
                 obj_columns.append(obj_spec("Variance"))

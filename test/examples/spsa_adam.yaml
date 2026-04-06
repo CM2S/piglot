@@ -3,7 +3,7 @@ iters: 1
 
 optimiser:
   name: spsa-adam
-  alpha: 1
+  lr: 0.01
 
 
 parameters:

@@ -4,7 +4,7 @@ max_func_calls: 0
 
 optimiser:
   name: spsa-adam
-  alpha: 1
+  lr: 0.01
 
 
 parameters:
