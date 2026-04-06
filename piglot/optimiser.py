@@ -125,7 +125,7 @@ class Optimiser(ABC):
         extra_info : str
             Additional information to pass to user.
         """
-        elapsed = time.perf_counter() - self.begin_time
+        elapsed = time.time() - self.begin_time
         skip_pars = result.params is None
         if not skip_pars:
             param_dict = self.settings.parameters.to_values(self.state.best_result.params)
