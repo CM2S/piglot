@@ -249,6 +249,159 @@ class IndividualObjective(ABC):
         raise NotImplementedError("Single case plotting not implemented for this objective")
 
 
+class FunctionCallsFileManager:
+    """Manager for the function calls file."""
+
+    def __init__(
+        self,
+        file_path: str,
+        settings: Settings,
+        objectives: list[IndividualObjective],
+        scalarisation: bool,
+    ) -> None:
+        self.file_path = file_path
+        self.settings = settings
+        self.objectives = objectives
+        self.scalarisation = scalarisation
+
+        # Base output formats
+        time_spec = partial(TabularFloatColumn, width=15, notation='e', precision=8)
+        obj_spec = partial(TabularFloatColumn, width=15, notation='e', precision=8)
+        param_spec = partial(TabularFloatColumn, width=15, notation='f', precision=6)
+        hash_spec = partial(TabularStringColumn, width=64)
+
+        # Objective columns
+        obj_columns = []
+        if len(self.objectives) > 1:
+            for i, objective in enumerate(self.objectives):
+                obj_columns.append(obj_spec(f"Objective_{i + 1}"))
+                if objective.has_variance():
+                    obj_columns.append(obj_spec(f"Variance_{i + 1}"))
+        # Scalar objective value and variance (if available)
+        if self.scalarisation is not None or len(self.objectives) == 1:
+            obj_columns.append(obj_spec("Objective"))
+            if any(obj.has_variance() for obj in self.objectives):
+                obj_columns.append(obj_spec("Variance"))
+
+        # Parameter columns
+        param_columns = [param_spec(name) for name in self.settings.parameters.get_scalar_names()]
+
+        # Build the full column list
+        self.file = TabularFile(
+            file_path,
+            columns=[
+                time_spec("Start Time /s"),
+                time_spec("Run Time /s"),
+                *obj_columns,
+                *param_columns,
+                hash_spec("Hash"),
+            ],
+        )
+
+    def prepare(self) -> None:
+        """Prepare the function calls file."""
+        self.file.prepare()
+
+    def write(
+        self,
+        begin_time: float,
+        run_time: float,
+        result: ObjectiveResult,
+        params: ParameterValues,
+    ) -> None:
+        """Write the function call information to the function calls file.
+
+        Parameters
+        ----------
+        begin_time : float
+            Start time of the function call.
+        run_time : float
+            Run time of the function call.
+        result : ObjectiveResult
+            Result of the objective evaluation.
+        params : ParameterValues
+            Named set of parameter values at which the objective was evaluated.
+        """
+        # Objective values and variances
+        obj_values = []
+        if len(self.objectives) > 1:
+            for i in range(len(self.objectives)):
+                obj_values.append(result.obj_values[i])
+                if self.objectives[i].has_variance():
+                    obj_values.append(result.obj_variances[i])
+        elif not self.scalarisation:
+            obj_values.append(result.obj_values[0])
+            if self.objectives[0].has_variance():
+                obj_values.append(result.obj_variances[0])
+
+        # Scalar objective value and variance (if available)
+        if self.scalarisation and len(self.objectives) > 1:
+            obj_values.append(result.scalar_value)
+            if any(obj.has_variance() for obj in self.objectives):
+                obj_values.append(result.scalar_variance)
+
+        # Write to file
+        self.file.write_row([
+            begin_time,
+            run_time,
+            *obj_values,
+            *params.scalar_values.values(),
+            params.param_hash,
+        ])
+
+    def read(self) -> FunctionCallsData:
+        """Read and parse the function calls file into a dictionary.
+
+        Returns
+        -------
+        FunctionCallsData
+            Data of the function calls file.
+        """
+        # Read the function calls file
+        data = self.file.read()
+
+        # Parse mandatory fields
+        start_times = np.array(data["Start Time /s"])
+        run_times = np.array(data["Run Time /s"])
+        param_names = self.settings.parameters.get_scalar_names(include_computed=False)
+        params = np.array([
+            [data[name][i] for name in param_names] for i in range(len(data["Hash"]))
+        ])
+        hashes = data["Hash"]
+
+        # Parse optional fields
+        obj_variances = None
+        scalar_values = None
+        scalar_variances = None
+        if len(self.objectives) > 1:
+            obj_values = np.array([
+                data[f"Objective_{i + 1}"] for i in range(self.num_objectives())
+            ]).T
+            if self.has_variance():
+                obj_variances = np.array([
+                    data[f"Variance_{i + 1}"] for i in range(self.num_objectives())
+                ]).T
+        else:
+            obj_values = np.array(data["Objective"])
+            if self.has_variance():
+                obj_variances = np.array(data["Variance"])
+            if self.scalarisation is not None:
+                scalar_values = np.array(data["Objective"])
+                if self.has_variance():
+                    scalar_variances = np.array(data["Variance"])
+
+        return FunctionCallsData(
+            start_times=start_times,
+            run_times=run_times,
+            params=params,
+            hashes=hashes,
+            obj_values=obj_values,
+            obj_variances=obj_variances,
+            scalar_values=scalar_values,
+            scalar_variances=scalar_variances,
+        )
+
+
 class Scalarisation(ABC):
     """Base class for scalarisations."""
 
@@ -335,8 +488,11 @@ class Objective(ABC):
         # Set up the output file for function calls
         self.func_calls_file = None
         if self.settings.output_dir:
-            self.func_calls_file = self.__prepare_func_calls(
-                os.path.join(self.settings.output_dir, "func_calls")
+            self.func_calls_file = FunctionCallsFileManager(
+                os.path.join(self.settings.output_dir, "func_calls"),
+                settings,
+                objectives,
+                scalarisation is not None,
             )
 
     def prepare(self) -> None:
@@ -565,100 +721,11 @@ class Objective(ABC):
         # Update outputs
         with self.mutex:
             self.num_calls += 1
-            self.__dump_call(
-                begin_time - self.begin_time, end_time - begin_time, result, param_values
-            )
+            if self.func_calls_file is not None:
+                self.func_calls_file.write(
+                    begin_time - self.begin_time, end_time - begin_time, result, param_values
+                )
         return result
-
-    def __prepare_func_calls(self, file_path: str) -> TabularFile:
-        """Prepare the function calls file based on the objectives and settings.
-
-        Returns
-        -------
-        TabularFile
-            list of columns for the function calls file.
-        """
-        # Base output formats
-        time_spec = partial(TabularFloatColumn, width=15, notation='e', precision=8)
-        obj_spec = partial(TabularFloatColumn, width=15, notation='e', precision=8)
-        param_spec = partial(TabularFloatColumn, width=15, notation='f', precision=6)
-        hash_spec = partial(TabularStringColumn, width=64)
-
-        # Objective columns
-        obj_columns = []
-        if self.num_objectives() > 1:
-            for i, objective in enumerate(self.objectives):
-                obj_columns.append(obj_spec(f"Objective_{i + 1}"))
-                if objective.has_variance():
-                    obj_columns.append(obj_spec(f"Variance_{i + 1}"))
-        # Scalar objective value and variance (if available)
-        if self.scalarisation is not None or self.num_objectives() == 1:
-            obj_columns.append(obj_spec("Objective"))
-            if self.has_variance():
-                obj_columns.append(obj_spec("Variance"))
-
-        # Parameter columns
-        param_columns = [param_spec(name) for name in self.settings.parameters.get_scalar_names()]
-
-        # Build the full column list
-        return TabularFile(
-            file_path,
-            columns=[
-                time_spec("Start Time /s"),
-                time_spec("Run Time /s"),
-                *obj_columns,
-                *param_columns,
-                hash_spec("Hash"),
-            ],
-        )
-
-    def __dump_call(
-        self,
-        begin_time: float,
-        run_time: float,
-        result: ObjectiveResult,
-        params: ParameterValues,
-    ) -> None:
-        """Dump the function call information to the function calls file.
-
-        Parameters
-        ----------
-        begin_time : float
-            Start time of the function call.
-        run_time : float
-            Run time of the function call.
-        result : ObjectiveResult
-            Result of the objective evaluation.
-        params : ParameterValues
-            Named set of parameter values at which the objective was evaluated.
-        """
-        if self.func_calls_file is not None:
-            # Objective values and variances
-            obj_values = []
-            if self.num_objectives() > 1:
-                for i in range(self.num_objectives()):
-                    obj_values.append(result.obj_values[i])
-                    if self.objectives[i].has_variance():
-                        obj_values.append(result.obj_variances[i])
-            else:
-                obj_values.append(result.obj_values[0])
-                if self.objectives[0].has_variance():
-                    obj_values.append(result.obj_variances[0])
-
-            # Scalar objective value and variance (if available)
-            if self.scalarisation is not None:
-                obj_values.append(result.scalar_value)
-                if self.has_variance():
-                    obj_values.append(result.scalar_variance)
-
-            # Write to file
-            self.func_calls_file.write_row([
-                begin_time,
-                run_time,
-                *obj_values,
-                *params.scalar_values.values(),
-                params.param_hash,
-            ])
 
     def read_func_calls(self) -> FunctionCallsData:
         """Read and parse the function calls file into a dictionary.
@@ -668,53 +735,9 @@ class Objective(ABC):
         FunctionCallsData
             Data of the function calls file.
         """
-        # Initial sanity check
         if self.func_calls_file is None:
             raise RuntimeError("No function calls file available for this objective.")
-
-        # Read the function calls file
-        data = self.func_calls_file.read()
-
-        # Parse mandatory fields
-        start_times = np.array(data["Start Time /s"])
-        run_times = np.array(data["Run Time /s"])
-        param_names = self.settings.parameters.get_scalar_names(include_computed=False)
-        params = np.array([
-            [data[name][i] for name in param_names] for i in range(len(data["Hash"]))
-        ])
-        hashes = data["Hash"]
-
-        # Parse optional fields
-        obj_variances = None
-        scalar_values = None
-        scalar_variances = None
-        if len(self.objectives) > 1:
-            obj_values = np.array([
-                data[f"Objective_{i + 1}"] for i in range(self.num_objectives())
-            ]).T
-            if self.has_variance():
-                obj_variances = np.array([
-                    data[f"Variance_{i + 1}"] for i in range(self.num_objectives())
-                ]).T
-        else:
-            obj_values = np.array(data["Objective"])
-            if self.has_variance():
-                obj_variances = np.array(data["Variance"])
-            if self.scalarisation is not None:
-                scalar_values = np.array(data["Objective"])
-                if self.has_variance():
-                    scalar_variances = np.array(data["Variance"])
-
-        return FunctionCallsData(
-            start_times=start_times,
-            run_times=run_times,
-            params=params,
-            hashes=hashes,
-            obj_values=obj_values,
-            obj_variances=obj_variances,
-            scalar_values=scalar_values,
-            scalar_variances=scalar_variances,
-        )
+        return self.func_calls_file.read()
 
     def plot_case(self, case_hash: str, **kwargs) -> list[Figure]:
         """Plot a given function call given the parameter hash.

@@ -153,15 +153,10 @@ class GenericOptimiser(Optimiser):
             bool
                 If we should stop the campaign after this round.
             """
-            result = OptimisationResult(
-                value=self.campaign.state.best_value,
-                params=self.campaign.state.best_params,
-                conf_interval=self.campaign.state.conf_interval,
-            )
             if self.pbar is not None:
                 self.update_progress_name(name, policy, round_num + 1)
                 self.pbar.update(1)
-            return callback(round_num, result, {})
+            return callback(round_num, self.campaign.state.get_result(), {})
 
         # Run the campaign
         for name, policy in self.policies.items():

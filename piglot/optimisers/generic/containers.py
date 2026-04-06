@@ -152,6 +152,18 @@ class OptimisationState:
         OptimisationResult
             Current best result.
         """
+        # Multi-objective results
+        if self.mo_state is not None:
+            return OptimisationResult(
+                value=self.mo_state.hypervolume,
+                params=None,
+                conf_interval=None,
+                pareto_params=self.mo_state.pareto_x.numpy(),
+                pareto_values=self.mo_state.pareto_y.numpy(),
+                ref_point=self.mo_state.partitioning.ref_point.numpy(),
+            )
+
+        # Single-objective results
         return OptimisationResult(
             value=self.best_value,
             params=self.best_params,

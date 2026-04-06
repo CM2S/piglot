@@ -1,4 +1,5 @@
 """Main optimiser module"""
+from functools import partial
 from typing import Tuple, Callable, Optional, TypeVar, Any
 import os
 import time
@@ -7,8 +8,14 @@ from abc import ABC, abstractmethod
 import numpy as np
 from tqdm import tqdm
 from piglot.settings import Settings
-from piglot.utils.assorted import pretty_time, str_to_numeric
 from piglot.objective import Objective
+from piglot.utils.assorted import pretty_time, str_to_numeric
+from piglot.utils.tabular import (
+    TabularFile,
+    TabularStringColumn,
+    TabularFloatColumn,
+    TabularIntColumn,
+)
 
 
 T = TypeVar('T', bound='Optimiser')
@@ -21,6 +28,9 @@ class OptimisationResult:
     value: float
     params: Optional[np.ndarray] = None
     conf_interval: Tuple[float, float] = (None, None)
+    pareto_params: Optional[list[np.ndarray]] = None
+    pareto_values: Optional[list[np.ndarray]] = None
+    ref_point: Optional[np.ndarray] = None
 
 
 @dataclass
@@ -52,8 +62,196 @@ class OptimiserState:
             self.iters_without_improvement = 0
 
 
-class InvalidOptimiserException(Exception):
-    """Exception signaling invalid combination of optimiser and objective function."""
+@dataclass
+class HistoryFileData:
+    """Container for history file data."""
+    iteration: list[int]
+    elapsed_time: np.ndarray
+    best_value: np.ndarray
+    best_lbound: Optional[np.ndarray]
+    best_ubound: Optional[np.ndarray]
+    best_params: Optional[np.ndarray]
+    ref_point: Optional[np.ndarray]
+    info: list[str]
+
+
+class HistoryFileManager:
+    """Manager for the optimiser's history file."""
+
+    def __init__(self, file_path: str, settings: Settings, objective: Objective) -> None:
+        self.file_path = file_path
+        self.settings = settings
+        self.objective = objective
+
+        # State
+        self.num_iters = 0
+        self.start_time = time.time()
+
+        # Base output formats
+        iter_spec = partial(TabularIntColumn, width=11)
+        pareto_spec = partial(TabularIntColumn, width=15)
+        time_spec = partial(TabularFloatColumn, width=15, notation='e', precision=8)
+        obj_spec = partial(TabularFloatColumn, width=15, notation='e', precision=8)
+        param_spec = partial(TabularFloatColumn, width=15, notation='f', precision=6)
+        info_spec = partial(TabularStringColumn, width=64, align='<')
+
+        # Set up objective and parameter columns based on the objective type
+        if objective.is_multi_objective():
+            param_columns = []
+            obj_columns = [
+                obj_spec("Hypervolume"),
+                *[obj_spec(f"Ref. point {i + 1}") for i in range(objective.num_objectives())],
+                pareto_spec("Num. Pareto"),
+            ]
+        else:
+            param_columns = self.settings.parameters.get_scalar_names()
+            obj_columns = [obj_spec('Best objective')]
+            if objective.has_variance():
+                obj_columns.extend([obj_spec('Lower CI'), obj_spec('Upper CI')])
+
+        # Build the full column list
+        self.file = TabularFile(
+            file_path,
+            columns=[
+                iter_spec("Iteration"),
+                time_spec("Time /s"),
+                *obj_columns,
+                *map(param_spec, param_columns),
+                info_spec("Optimiser info"),
+            ],
+        )
+
+    def prepare(self) -> None:
+        """Prepare the optimisation history file."""
+        self.file.prepare()
+
+    def write(self, result: OptimisationResult, extra_info: str) -> None:
+        """Write history data to the file.
+
+        Parameters
+        ----------
+        result : OptimisationResult
+            Data to write to the history file.
+        extra_info : str
+            Additional information to write to the history file.
+        """
+        # Populate output fields
+        if self.objective.is_multi_objective():
+            obj_values = [result.value, *result.ref_point, len(result.pareto_params)]
+            param_values = []
+        else:
+            obj_values = [result.value]
+            param_values = self.settings.parameters.to_values(result.params).scalar_values.values()
+            if self.objective.has_variance():
+                obj_values.extend(result.conf_interval)
+
+        # Write row
+        self.file.write_row([
+            self.num_iters,
+            time.time() - self.start_time,
+            *obj_values,
+            *param_values,
+            extra_info,
+        ])
+
+        # Update state
+        self.num_iters += 1
+
+    def read(self) -> HistoryFileData:
+        """Read history data from the file.
+
+        Returns
+        -------
+        HistoryFileData
+            Data read from the history file.
+        """
+        data = self.file.read()
+
+        # Parse data
+        num_entries = len(data["Iteration"])
+        if self.objective.is_multi_objective():
+            value_name = "Hypervolume"
+            param_names = []
+            ref_point = np.array([
+                [data[f"Ref. point {i + 1}"][j] for i in range(self.objective.num_objectives())]
+                for j in range(num_entries)
+            ])
+        else:
+            value_name = "Best objective"
+            param_names = self.settings.parameters.get_scalar_names(include_computed=False)
+            ref_point = None
+
+        return HistoryFileData(
+            iteration=np.array(data['Iteration']),
+            elapsed_time=np.array(data['Time /s']),
+            best_value=np.array(data[value_name]),
+            best_lbound=np.array(data['Lower CI']) if self.objective.has_variance() else None,
+            best_ubound=np.array(data['Upper CI']) if self.objective.has_variance() else None,
+            best_params=np.array([
+                [data[name][i] for name in param_names] for i in range(num_entries)
+            ]),
+            ref_point=ref_point,
+            info=data['Optimiser info']
+        )
+
+
+class ProgressFileManager:
+    """Manager for the progress file."""
+
+    def __init__(self, file_path: str, settings: Settings, objective: Objective) -> None:
+        self.file_path = file_path
+        self.settings = settings
+        self.objective = objective
+
+        # State
+        self.num_iters = 0
+        self.start_time = time.time()
+
+    def prepare(self) -> None:
+        """Prepare the progress file."""
+        with open(self.file_path, 'w', encoding='utf8') as file:
+            file.write("Starting...\n")
+
+    def write(self, result: OptimisationResult, extra_info: str) -> None:
+        """Write progress data to the file.
+
+        Parameters
+        ----------
+        result : OptimisationResult
+            Current optimisation result.
+        extra_info : str
+            Additional information to pass to user.
+        """
+        elapsed = time.time() - self.start_time
+        # Update progress file
+        with open(self.file_path, 'w', encoding='utf8') as file:
+            file.write(f'Iteration: {self.num_iters}\n')
+            file.write(f'Function calls: {self.objective.num_calls}\n')
+
+            # Single- or multi-objective data
+            if self.objective.is_multi_objective():
+                file.write(f'Hypervolume: {result.value}\n')
+                file.write(f'Reference point: {result.ref_point.tolist()}\n')
+            else:
+                # Scalar objective value
+                file.write(f'Best objective: {result.value}\n')
+                if self.objective.has_variance():
+                    file.write(
+                        'Confidence interval (95%): '
+                        f'[{result.conf_interval[0]}, {result.conf_interval[1]}]\n'
+                    )
+                # Parameters
+                file.write('Best parameters:\n')
+                param_dict = self.settings.parameters.to_values(result.params)
+                for name, value in param_dict.scalar_values.items():
+                    file.write(f'\t{name}: {value}\n')
+
+            # Timing and extra info
+            file.write(f'\nElapsed time: {pretty_time(elapsed)}\n')
+            file.write(f'Optimiser info: {extra_info}\n')
+
+        # Update state
+        self.num_iters += 1
 
 
 class Optimiser(ABC):
@@ -68,6 +266,12 @@ class Optimiser(ABC):
         self.parameters = settings.parameters
         self.state = OptimiserState()
         self.begin_time = time.time()
+        self.history_file = HistoryFileManager(
+            os.path.join(self.settings.output_dir, "history"), settings, objective
+        )
+        self.progress_file = ProgressFileManager(
+            os.path.join(self.settings.output_dir, "progress"), settings, objective
+        )
 
         # Lazy initialisation of the progress bar
         self.pbar: tqdm = None
@@ -84,20 +288,8 @@ class Optimiser(ABC):
         self.state = OptimiserState()
         self.begin_time = time.time()
         # Prepare history output files
-        with open(os.path.join(self.settings.output_dir, "history"), 'w', encoding='utf8') as file:
-            file.write(f'{"Iteration":>10}\t')
-            file.write(f'{"Time /s":>15}\t')
-            if self.objective.has_variance():
-                file.write(f'{"Current Loss":>15}\t')
-                file.write(f'{"Lower CI":>15}\t')
-                file.write(f'{"Upper CI":>15}\t')
-            else:
-                file.write(f'{"Best Loss":>15}\t')
-                file.write(f'{"Current Loss":>15}\t')
-            for name in self.parameters.get_scalar_names():
-                file.write(f'{name:>15}\t')
-            file.write('\tOptimiser info')
-            file.write('\n')
+        self.history_file.prepare()
+        self.progress_file.prepare()
         # Prepare optimiser
         self.objective.prepare()
         self._progress_report_prepare()
@@ -107,67 +299,6 @@ class Optimiser(ABC):
         self._progress_report_close()
         # Return the best value
         return result
-
-    def __update_progress_files(
-        self,
-        i_iter: int,
-        result: OptimisationResult,
-        extra_info: str,
-    ) -> None:
-        """Update progress on output files.
-
-        Parameters
-        ----------
-        i_iter : int
-            Current iteration number.
-        result : OptimisationResult
-            Current optimisation result.
-        extra_info : str
-            Additional information to pass to user.
-        """
-        elapsed = time.time() - self.begin_time
-        skip_pars = result.params is None
-        if not skip_pars:
-            param_dict = self.settings.parameters.to_values(self.state.best_result.params)
-        # Update progress file
-        with open(os.path.join(self.settings.output_dir, "progress"), 'w', encoding='utf8') as file:
-            file.write(f'Iteration: {i_iter}\n')
-            file.write(f'Function calls: {self.objective.num_calls}\n')
-            file.write(f'Best loss: {self.state.best_result.value}\n')
-            if self.objective.has_variance() and result.conf_interval and all(result.conf_interval):
-                file.write(
-                    'Confidence interval (95%): '
-                    f'[{result.conf_interval[0]}, {result.conf_interval[1]}]\n'
-                )
-            if extra_info is not None:
-                file.write(f'Optimiser info: {extra_info}\n')
-            if not skip_pars:
-                file.write('Best parameters:\n')
-                for name, value in param_dict.scalar_values.items():
-                    file.write(f'\t{name}: {value}\n')
-            file.write(f'\nElapsed time: {pretty_time(elapsed)}\n')
-        # Update history file
-        with open(os.path.join(self.settings.output_dir, "history"), 'a', encoding='utf8') as file:
-            file.write(f'{i_iter:>10}\t')
-            file.write(f'{elapsed:>15.8e}\t')
-            if self.objective.has_variance():
-                file.write(f'{result.value:>15.8e}\t')
-                if result.conf_interval and all(result.conf_interval):
-                    file.write(f'{result.conf_interval[0]:>15.8e}\t')
-                    file.write(f'{result.conf_interval[1]:>15.8e}\t')
-                else:
-                    file.write(''.rjust(15) + '\t')
-                    file.write(''.rjust(15) + '\t')
-            else:
-                file.write(f'{self.state.best_result.value:>15.8e}\t')
-                file.write(f'{result.value:>15.8e}\t')
-            if skip_pars:
-                file.write('None\t'.rjust(16) * len(self.settings.parameters.get_scalar_names()))
-            else:
-                for value in param_dict.scalar_values.values():
-                    file.write(f'{value:>15.8f}\t')
-            file.write(f"\t{'-' if extra_info is None else extra_info}")
-            file.write('\n')
 
     def __convergence_check(self, i_iter: int) -> bool:
         """Check the convergence criteria.
@@ -234,7 +365,9 @@ class Optimiser(ABC):
         self._progress_report_update(i_iter, extra_info)
 
         # Update progress in output files
-        self.__update_progress_files(i_iter, result, extra_info)
+        extra_info_str = extra_info if extra_info is not None else '-'
+        self.progress_file.write(result, extra_info_str)
+        self.history_file.write(result, extra_info_str)
 
         # Check convergence criteria
         return self.__convergence_check(i_iter)
@@ -286,7 +419,7 @@ class Optimiser(ABC):
         if not self.settings.quiet:
             self.pbar = tqdm(total=self.settings.iters, desc=self.name())
 
-    def _progress_report_update(self, i_iter: int, extra_info: dict[str, str]) -> None:
+    def _progress_report_update(self, i_iter: int, extra_info: Optional[str]) -> None:
         """Update the progress bar.
 
         Parameters
@@ -295,7 +428,7 @@ class Optimiser(ABC):
             Current iteration number.
         result : OptimisationResult
             Result of the current iteration.
-        extra_info : dict[str, str]
+        extra_info : Optional[str]
             Additional information to pass to user.
         """
         if self.pbar is not None:
