@@ -249,6 +249,7 @@ class FittingSingleObjective(ResponseSingleObjective):
         reduction = read_reduction(config.pop('reduction', 'mse'))
         weight = float(config.pop('weight', 1.0))
         bounds = config.pop('bounds', None)
+        variance = bool(config.pop('variance', False))
         mean_dist = bool(config.pop('mean_dist', False))
         composite = bool(config.get('composite', False))
         # Read the reference and return the objective
@@ -259,6 +260,7 @@ class FittingSingleObjective(ResponseSingleObjective):
             prediction,
             reduction,
             mean_dist=mean_dist,
+            variance=variance,
             weight=weight,
             composite=composite,
             bounds=bounds,
