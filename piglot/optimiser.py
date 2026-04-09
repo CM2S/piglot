@@ -306,9 +306,6 @@ class Optimiser(ABC):
         bool
             Whether any of the stopping criteria is satisfied.
         """
-        # Iteration number
-        if self.settings.iters is not None and i_iter > self.settings.iters:
-            return True
         # Time
         if self.settings.max_timeout is not None:
             elapsed = time.time() - self.begin_time

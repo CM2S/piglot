@@ -8,55 +8,6 @@ from typing import Union
 from piglot.parameter import ParameterSet
 
 
-def extract_parameters(input_file: str) -> ParameterSet:
-    """Extract a ParameterSet from an input file.
-
-    Parameters
-    ----------
-    input_file : str
-        Input file path.
-
-    Returns
-    -------
-    ParameterSet
-        Set of parameters discovered in the input file.
-
-    Raises
-    ------
-    RuntimeError
-        When a repeated pattern is found.
-    RuntimeError
-        When a pattern is referenced but never defined.
-    """
-    parameters = ParameterSet()
-    full_parameters = []
-    short_parameters = []
-    with open(input_file, 'r', encoding='utf8') as file:
-        for line in file:
-            full_expression = re.findall(r"\<.*?\(.*?\>", line)
-            short_expression = re.findall(r"\<\w+\>", line)
-            for a in full_expression:
-                full_parameters.append(a)
-            for a in short_expression:
-                short_parameters.append(a)
-
-    for value in full_parameters:
-        pattern = value[value.find("<")+1:value.find("(")]
-        if pattern in [a.name for a in parameters]:
-            raise RuntimeError(f"Repeated pattern {pattern} in file!")
-        init = float(value[value.find("(")+1:value.find(",")])
-        low_bound = float(value[value.find(",")+1:value.rfind(",")])
-        up_bound = float(value[value.rfind(",")+1:value.rfind(")")])
-        parameters.add(pattern, init, low_bound, up_bound)
-
-    for value in short_parameters:
-        pattern = value[value.find("<")+1:value.find(">")]
-        if pattern not in [a.name for a in parameters]:
-            raise RuntimeError(f"Pattern {pattern} referenced but not defined!")
-
-    return parameters
-
-
 def get_case_name(input_file: str) -> str:
     """Extracts the name of a given case.
 

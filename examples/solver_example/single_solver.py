@@ -33,12 +33,12 @@ class SampleSingleCaseSolver(SingleCaseSolver):
         """
         super().__init__([field_name], parameters, output_dir, tmp_dir, verbosity)
 
-    def _solve(self, values: np.ndarray, concurrent: bool) -> Dict[str, OutputResult]:
+    def _solve(self, values: dict[str, float], concurrent: bool) -> Dict[str, OutputResult]:
         """Internal solver for the prescribed problems.
 
         Parameters
         ----------
-        values : array
+        values : dict[str, float]
             Current parameters to evaluate.
         concurrent : bool
             Whether this run may be concurrent to another one (so use unique file names).
@@ -48,10 +48,9 @@ class SampleSingleCaseSolver(SingleCaseSolver):
         Dict[str, OutputResult]
             Evaluated results for each output field.
         """
-        param_dict = self.parameters.to_dict(values)
         # Build the output response: [0, 1] time grid with the parameter values
-        time = np.linspace(0, 1, len(param_dict))
-        response = np.array(list(param_dict.values()))
+        time = np.linspace(0, 1, len(values))
+        response = np.array(list(values.values()))
         return {self.output_fields[0]: OutputResult(time, response)}
 
     @classmethod

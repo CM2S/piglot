@@ -4,6 +4,8 @@ iters: 1
 optimiser:
   name: botorch
   acquisition: qhvkg
+  num_fantasies: 2
+  mc_samples: 16
 
 parameters:
   a: [1, -2, 2]

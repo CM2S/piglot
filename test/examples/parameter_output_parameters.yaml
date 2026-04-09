@@ -5,9 +5,9 @@ optimiser: random
 
 parameters:
   Young2: [20, 10, 30]
-
-output_parameters:
-  Young: Young2*10
+  Young:
+    type: computed
+    expression: Young2 * 10
 
 objective:
   name: analytical

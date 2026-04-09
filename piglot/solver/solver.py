@@ -314,7 +314,9 @@ class SingleCaseSolver(Solver, ABC):
             Parameters for this hash.
         """
         result = self.get_case_result(param_hash)
-        return {param.name: result.values[i] for i, param in enumerate(self.parameters)}
+        return {
+            param.name: result.parameters[param.name] for i, param in enumerate(self.parameters)
+        }
 
     def get_output_response(self, param_hash: str) -> Dict[str, OutputResult]:
         """Get the responses from all output fields for a given case.

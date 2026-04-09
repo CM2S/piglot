@@ -1,6 +1,9 @@
 """Basic plotting modules for piglot."""
 from argparse import Namespace, ArgumentParser
+import numpy as np
+import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
+from piglot.optimisers.generic.optimiser import GenericOptimiser
 from piglot.plots.module import PlottingModuleConfigFile
 from piglot.utils.yaml_parser import ProblemConfig
 
@@ -136,4 +139,29 @@ class ParetoPlot(PlottingModuleConfigFile):
         list[Figure]
             A list of generated figures.
         """
-        raise NotImplementedError("ParetoPlot is not implemented yet.")
+        # Initial sanity check
+        if not problem.objective.is_multi_objective():
+            raise ValueError("Pareto plotting can only be used for multi-objective problems.")
+        if problem.objective.num_objectives() != 2:
+            raise ValueError("Pareto plotting can only be used for 2-objective problems.")
+        if not isinstance(problem.optimiser, GenericOptimiser):
+            raise ValueError("Pareto plotting can only be used with data-driven optimisers.")
+
+        # Load data from the previous run and fetch MO state
+        problem.optimiser.campaign.load()
+        mo_state = problem.optimiser.campaign.state.mo_state
+        evaluations = np.array(
+            [obs.result.obj_values.tolist() for obs in problem.optimiser.campaign.dataset.data]
+        )
+        if mo_state is None:
+            raise ValueError("No multi-objective state data available for Pareto plotting.")
+    
+        fig, ax = plt.subplots(layout='constrained')
+        ax.scatter(mo_state.pareto_y[:, 0], mo_state.pareto_y[:, 1], label='Pareto front')
+        if args.all:
+            ax.scatter(evaluations[:, 0], evaluations[:, 1], label='Dominated points')
+        if args.log:
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+        ax.legend()
+        return [fig]

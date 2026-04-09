@@ -97,18 +97,23 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
         Figure
             Figure with the plot.
         """
-        # TODO: fixme
-        raise NotImplementedError()
         fig, axis = plt.subplots()
+        axis: plt.Axes
         x = np.linspace(self.parameters[0].lbound, self.parameters[0].ubound, 1000)
-        evals = np.array([self.evaluate(np.array([x_i]), use_random=False) for x_i in x])
-        curr_eval, curr_var = self.evaluate(values)
-        axis.plot(x, evals[:, 0], c="black", label="Analytical Objective")
+        x_results = [
+            self.evaluate(self.parameters.to_values(x_i), concurrent=False)
+            for x_i in x.reshape(-1, 1)
+        ]
+        evals = np.array([res.value for res in x_results])
+        variances = np.array([res.variance if res.variance is not None else 0 for res in x_results])
+        curr_result = self.evaluate(self.parameters.to_values(values), concurrent=False)
+        curr_eval, curr_var = curr_result.value, curr_result.variance
+        axis.plot(x, evals, c="black", label="Analytical Objective")
         if self.variance is not None:
             axis.fill_between(
                 x,
-                evals[:, 0] - 2 * np.sqrt(evals[:, 1]),
-                evals[:, 0] + 2 * np.sqrt(evals[:, 1]),
+                evals - 2 * np.sqrt(variances),
+                evals + 2 * np.sqrt(variances),
                 color="black",
                 alpha=0.2,
                 label="Analytical Variance",
@@ -145,16 +150,22 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
         Figure
             Figure with the plot
         """
-        # TODO: fixme
-        raise NotImplementedError()
         fig, axis = plt.subplots(subplot_kw={"projection": "3d"})
         x = np.linspace(self.parameters[0].lbound, self.parameters[0].ubound, 100)
         y = np.linspace(self.parameters[1].lbound, self.parameters[1].ubound, 100)
         X, Y = np.meshgrid(x, y)
         evals = np.array(
-            [[self.evaluate(np.array([x_i, y_i]), use_random=False) for x_i in x] for y_i in y]
+            [
+                [
+                    self.evaluate(
+                        self.parameters.to_values(np.array([x_i, y_i])), concurrent=False
+                    ).value
+                    for x_i in x
+                ]
+                for y_i in y
+            ]
         )
-        curr_eval, _ = self.evaluate(values)
+        curr_eval = self.evaluate(self.parameters.to_values(values), concurrent=False).value
         axis.scatter(
             values[0],
             values[1],
@@ -163,7 +174,7 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
             label="Case",
             s=50,
         )
-        axis.plot_surface(X, Y, evals[:, :, 0], alpha=0.7, label="Analytical Objective")
+        axis.plot_surface(X, Y, evals[:, :], alpha=0.7, label="Analytical Objective")
         axis.set_xlabel(self.parameters[0].name)
         axis.set_ylabel(self.parameters[1].name)
         axis.set_zlabel("Analytical Objective")
@@ -215,36 +226,34 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
 class AnalyticalObjective(SimpleObjective[AnalyticalIndividualObjective]):
     """Objective function derived from an analytical expression."""
 
-    # def plot_case(self, case_hash: str, options: dict[str, Any] = None) -> list[Figure]:
-    #     """Plot a given function call given the parameter hash.
+    def plot_case(self, case_hash: str, **kwargs) -> list[Figure]:
+        """Plot a given function call given the parameter hash
 
-    #     Parameters
-    #     ----------
-    #     case_hash : str, optional
-    #         Parameter hash for the case to plot.
-    #     options : dict[str, Any], optional
-    #         Options to pass to the plotting function, by default None.
+        Parameters
+        ----------
+        case_hash : str, optional
+            Parameter hash for the case to plot
+        **kwargs : dict, optional
+            Additional keyword arguments to pass to the plotting function
 
-    #     Returns
-    #     -------
-    #     list[Figure]
-    #         list of figures with the plot.
-    #     """
-    #     # Find parameters associated with the hash
-    #     df = pd.read_table(self.func_calls_file)
-    #     df.columns = df.columns.str.strip()
-    #     df = df[df["Hash"] == case_hash]
-    #     values = df[[param.name for param in self.parameters]].to_numpy()[0, :]
-    #     # Build title
-    #     append_title = ''
-    #     if options is not None and 'append_title' in options:
-    #         append_title = f'{options["append_title"]}'
-    #     # Plot depending on the dimensions
-    #     if len(self.parameters) not in (1, 2):
-    #         raise RuntimeError("Plotting only supported for one or two dimensions.")
-    #     if len(self.parameters) == 1:
-    #         return [self.expression.plot_1d(values, append_title)]
-    #     return [self.expression.plot_2d(values, append_title)]
+        Returns
+        -------
+        list[Figure]
+            List of figures with the plot
+        """
+        # Read function calls file and find parameters associated with the hash
+        data = self.read_func_calls()
+        idx = data.hashes.index(case_hash)
+        params = data.params[idx, :]
+        # Build title
+        append_title = kwargs.get('append_title', '')
+        # Plot depending on the dimensions
+        num_params = data.params.shape[1]
+        if num_params not in (1, 2):
+            raise RuntimeError("Plotting only supported for one or two dimensions.")
+        if num_params == 1:
+            return [obj.plot_1d(params, append_title) for obj in self.objectives]
+        return [obj.plot_2d(params, append_title) for obj in self.objectives]
 
     @classmethod
     def individual_objective_type(cls) -> type[AnalyticalIndividualObjective]:

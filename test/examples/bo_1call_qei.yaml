@@ -1,11 +1,9 @@
 
-iters: 2
-max_func_calls: 0
+iters: 1
 
 optimiser:
   name: botorch
   acquisition: qei
-  beta: 0.9
 
 
 parameters:

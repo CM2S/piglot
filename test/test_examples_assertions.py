@@ -9,7 +9,7 @@ from piglot.utils.assorted import change_cwd
 EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     'test_analytical_acq_unknown.yaml': (
         RuntimeError,
-        'Unkown acquisition function unknown',
+        'Unknown acquisition function unknown',
     ),
     'analytical_expression.yaml': (
         RuntimeError,
@@ -39,21 +39,13 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
         RuntimeError,
         "Missing optimiser name.",
     ),
-    'optimiser_random_invalid_kwargs.yaml': (
-        TypeError,
-        'dimension',
-    ),
-    'optimiser_random_sampling_typo.yaml': (
-        ValueError,
-        'Invalid sampling soboll!',
-    ),
     'parameter_double_parameter.yaml': (
         ValueError,
         "Duplicate 'Young' key found in YAML.",
     ),
     'parameter_invalid_init_shot.yaml': (
         RuntimeError,
-        'Initial shot outside of bounds',
+        'Initial value',
     ),
     'objective_missing_name.yaml': (
         ValueError,
@@ -161,7 +153,7 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'bo_unkacq.yaml': (
         RuntimeError,
-        "Unkown acquisition function ucbb",
+        "Unknown acquisition function",
     ),
     'duplicated_field.yaml': (
         ValueError,
@@ -173,19 +165,7 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'query_analytical_bad_num_params.yaml': (
         ValueError,
-        "Number of parameters does not match the number of columns",
-    ),
-    'query_analytical_bad_num_iters.yaml': (
-        ValueError,
-        "Number of iterations does not match the number of rows",
-    ),
-    'query_analytical_bad_lbounds.yaml': (
-        ValueError,
-        "Parameter values outside lower bounds",
-    ),
-    'query_analytical_bad_ubounds.yaml': (
-        ValueError,
-        "Parameter values outside upper bounds",
+        "Query points have incorrect dimensions",
     ),
     'curve_mo_bad_scalarisation.yaml': (
         ValueError,

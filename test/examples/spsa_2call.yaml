@@ -1,6 +1,5 @@
 
 iters: 2
-max_func_calls: 1
 
 optimiser:
   name: spsa

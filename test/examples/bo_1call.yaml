@@ -1,10 +1,9 @@
 
-iters: 2
-max_func_calls: 0
+iters: 1
 
 optimiser:
   name: botorch
-  acquisition: ucb
+  acquisition: qucb
   beta: 0.9
 
 

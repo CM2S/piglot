@@ -1,22 +1,19 @@
 """Sample input file generator."""
 from __future__ import annotations
 import os
-import numpy as np
-from piglot.parameter import ParameterSet
+from piglot.parameter import ParameterValues
 from piglot.solver.input_file_solver import InputData, InputDataGenerator, write_parameters
 
 
 class SampleInputGenerator(InputDataGenerator):
     """Default input data generator for input file-based solvers."""
 
-    def generate(self, parameters: ParameterSet, values: np.ndarray, tmp_dir: str) -> InputData:
+    def generate(self, values: ParameterValues, tmp_dir: str) -> InputData:
         """Generate the input data for the given set of parameters.
 
         Parameters
         ----------
-        parameters : ParameterSet
-            Parameter set for this problem.
-        values : np.ndarray
+        values : ParameterValues
             Current parameters to evaluate.
         tmp_dir : str
             Temporary directory to run the problem.
@@ -26,7 +23,7 @@ class SampleInputGenerator(InputDataGenerator):
         InputData
             Input data for this problem.
         """
-        param_dict = parameters.to_dict(values * 2)
+        param_dict = {name: 2 * value for name, value in values.scalar_values.items()}
         # Replace parameters in the input file
         input_file = 'input.dat'
         gen_input_file = os.path.join(tmp_dir, input_file)
@@ -37,14 +34,12 @@ class SampleInputGenerator(InputDataGenerator):
 class SampleInputGeneratorBadTmp(InputDataGenerator):
     """Default input data generator for input file-based solvers."""
 
-    def generate(self, parameters: ParameterSet, values: np.ndarray, tmp_dir: str) -> InputData:
+    def generate(self, values: ParameterValues, tmp_dir: str) -> InputData:
         """Generate the input data for the given set of parameters.
 
         Parameters
         ----------
-        parameters : ParameterSet
-            Parameter set for this problem.
-        values : np.ndarray
+        values : ParameterValues
             Current parameters to evaluate.
         tmp_dir : str
             Temporary directory to run the problem.
@@ -54,7 +49,7 @@ class SampleInputGeneratorBadTmp(InputDataGenerator):
         InputData
             Input data for this problem.
         """
-        param_dict = parameters.to_dict(values * 2)
+        param_dict = {name: 2 * value for name, value in values.scalar_values.items()}
         # Replace parameters in the input file
         input_file = 'input.dat'
         gen_input_file = os.path.join(tmp_dir, input_file)
@@ -65,14 +60,12 @@ class SampleInputGeneratorBadTmp(InputDataGenerator):
 class SampleInputGeneratorBadFile(InputDataGenerator):
     """Default input data generator for input file-based solvers."""
 
-    def generate(self, parameters: ParameterSet, values: np.ndarray, tmp_dir: str) -> InputData:
+    def generate(self, values: ParameterValues, tmp_dir: str) -> InputData:
         """Generate the input data for the given set of parameters.
 
         Parameters
         ----------
-        parameters : ParameterSet
-            Parameter set for this problem.
-        values : np.ndarray
+        values : ParameterValues
             Current parameters to evaluate.
         tmp_dir : str
             Temporary directory to run the problem.
@@ -82,7 +75,7 @@ class SampleInputGeneratorBadFile(InputDataGenerator):
         InputData
             Input data for this problem.
         """
-        param_dict = parameters.to_dict(values * 2)
+        param_dict = {name: 2 * value for name, value in values.scalar_values.items()}
         # Replace parameters in the input file
         input_file = 'input.dat'
         gen_input_file = os.path.join(tmp_dir, input_file)

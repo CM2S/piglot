@@ -25,6 +25,7 @@ from botorch.acquisition.multi_objective.logei import (
     qLogNoisyExpectedHypervolumeImprovement,
 )
 from botorch.acquisition.multi_objective.objective import GenericMCMultiOutputObjective
+from botorch.models.converter import batched_to_model_list
 from botorch.optim import optimize_acqf, optimize_acqf_mixed, optimize_acqf_discrete
 from botorch.sampling import SobolQMCNormalSampler
 from piglot.data.surrogate import ObjectiveModel
@@ -86,6 +87,10 @@ MULTI_OBJECTIVE_ACQUISITIONS: list[str] = [
 MULTI_OBJECTIVE_WITH_PARTITIONING: list[str] = [
     'qehvi',
     'qlogehvi',
+]
+KNOWLEDGE_GRADIENT: list[str] = [
+    'qkg',
+    'qhvkg',
 ]
 
 
@@ -152,10 +157,13 @@ def get_acquisition(
     # Inject acquisition options, depending on the acquisition
     acq_options = {}
 
-    # Sampler options
-    acq_options['sampler'] = SobolQMCNormalSampler(
-        torch.Size([settings.mc_samples]), seed=settings.seed
-    )
+    # Sampler and knowledge gradient fantasied
+    sampler = SobolQMCNormalSampler(torch.Size([settings.mc_samples]), seed=settings.seed)
+    if settings.name in KNOWLEDGE_GRADIENT:
+        acq_options['inner_sampler'] = sampler
+        acq_options['num_fantasies'] = settings.num_fantasies
+    else:
+        acq_options['sampler'] = sampler
 
     # Objective and multi-objective options
     if settings.name in MULTI_OBJECTIVE_ACQUISITIONS:
@@ -183,10 +191,14 @@ def get_acquisition(
     if pending is not None:
         acq_options['X_pending'] = pending
 
+    # Check if we need to convert the model
+    gp = model.gp
+    if settings.name in MULTI_OBJECTIVE_ACQUISITIONS:
+        gp = batched_to_model_list(gp)
+
     # Build and return the acquisition function
     cls = AVAILABLE_ACQUISITIONS[settings.name]
-    return cls(model=model.gp, **acq_options)
-
+    return cls(model=gp, **acq_options)
 
 def optimise_acquisition(
     acq: AcquisitionFunction,

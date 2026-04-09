@@ -2,7 +2,7 @@
 from typing import List, Dict, Any
 from abc import ABC, abstractmethod
 import os
-from piglot.parameter import ParameterSet, ParameterValues
+from piglot.parameter import ParameterSet
 from piglot.solver.solver import OutputResult, SingleCaseSolver
 from piglot.utils.assorted import read_custom_module
 
@@ -65,12 +65,12 @@ class ScriptSolver(SingleCaseSolver):
         super().__init__(script.get_output_fields(), parameters, output_dir, tmp_dir, verbosity)
         self.script = script
 
-    def _solve(self, values: ParameterValues, concurrent: bool) -> dict[str, OutputResult]:
+    def _solve(self, values: dict[str, float], concurrent: bool) -> dict[str, OutputResult]:
         """Internal solver for the prescribed problems.
 
         Parameters
         ----------
-        values : ParameterValues
+        values : dict[str, float]
             Named set of parameter values for this evaluation.
         concurrent : bool
             Whether this run may be concurrent to another one (so use unique file names).
@@ -81,7 +81,7 @@ class ScriptSolver(SingleCaseSolver):
             Evaluated results for each output field.
         """
         # Run the solver
-        results = self.script.solve(values.scalar_values)
+        results = self.script.solve(values)
         # Sanitise output fields before returning
         for field in self.output_fields:
             if field not in results:

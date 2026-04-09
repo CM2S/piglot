@@ -3,7 +3,7 @@ iters: 1
 
 optimiser:
   name: botorch
-  acquisition: ucb
+  acquisition: qucb
   beta: 0.9
 
 

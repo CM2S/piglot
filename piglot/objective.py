@@ -375,19 +375,19 @@ class FunctionCallsFileManager:
         scalar_variances = None
         if len(self.objectives) > 1:
             obj_values = np.array([
-                data[f"Objective_{i + 1}"] for i in range(self.num_objectives())
+                data[f"Objective_{i + 1}"] for i in range(len(self.objectives))
             ]).T
-            if self.has_variance():
+            if any(obj.has_variance() for obj in self.objectives):
                 obj_variances = np.array([
-                    data[f"Variance_{i + 1}"] for i in range(self.num_objectives())
+                    data[f"Variance_{i + 1}"] for i in range(len(self.objectives))
                 ]).T
         else:
             obj_values = np.array(data["Objective"])
-            if self.has_variance():
+            if any(obj.has_variance() for obj in self.objectives):
                 obj_variances = np.array(data["Variance"])
             if self.scalarisation is not None:
                 scalar_values = np.array(data["Objective"])
-                if self.has_variance():
+                if any(obj.has_variance() for obj in self.objectives):
                     scalar_variances = np.array(data["Variance"])
 
         return FunctionCallsData(

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, Any, List, Type
 import time
 import numpy as np
-from piglot.parameter import ParameterSet
+from piglot.parameter import ParameterValues
 from piglot.solver.solver import CaseResult, OutputResult
 from piglot.solver.multi_case_solver import MultiCaseSolver, Case
 
@@ -41,20 +41,13 @@ class SampleCase(Case):
         """
         return [self.output_name]
 
-    def run(
-        self,
-        parameters: ParameterSet,
-        values: np.ndarray,
-        tmp_dir: str,
-    ) -> CaseResult:
+    def run(self, values: ParameterValues, tmp_dir: str) -> CaseResult:
         """Run the case for the given set of parameters.
 
         Parameters
         ----------
-        parameters : ParameterSet
-            Parameter set for this problem.
-        values : np.ndarray
-            Current parameters to evaluate.
+        values : ParameterValues
+            Named set of parameter values for this evaluation.
         tmp_dir : str
             Temporary directory to run the problem.
 
@@ -65,7 +58,7 @@ class SampleCase(Case):
         """
         begin_time = time.time()
         # Evaluate the response
-        param_values = parameters.to_dict(values)
+        param_values = values.scalar_values
         grid = np.linspace(0, 1, len(param_values))
         curve = np.array(list(param_values.values())) * self.multiplier
         # Return the result
@@ -73,9 +66,9 @@ class SampleCase(Case):
         return CaseResult(
             begin_time=begin_time,
             run_time=run_time,
-            values=values,
+            parameters=param_values,
             success=True,
-            param_hash=parameters.hash(values),
+            param_hash=values.param_hash,
             responses={self.output_name: OutputResult(grid, curve)},
         )
 

@@ -342,8 +342,9 @@ class AnimationPlot(PlottingModuleConfigFile):
         list[Figure]
             A list of generated figures.
         """
-        # Hacky: we start by plotting the best case to figure out the number of figures per plot
-        first_figs = problem.objective.plot_best()
+        # Hacky: we start by plotting the first run to figure out the number of figures per plot
+        func_calls = problem.objective.read_func_calls()
+        first_figs = problem.objective.plot_case(func_calls.hashes[0])
         num_plots = len(first_figs)
         for fig in first_figs:
             plt.close(fig)

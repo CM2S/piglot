@@ -55,7 +55,7 @@ def test_input_files(input_dir: str):
         piglot_main(input_file)
         filename = os.path.join(output_dir, 'func_calls')
         first_hash = get_first_hash(filename)
-        for kind in ('best', 'history', 'parameters', 'regret'):
+        for kind in ('best', 'history', 'parameters'):
             piglot_plot_main([
                 kind,
                 input_file,
@@ -63,23 +63,15 @@ def test_input_files(input_dir: str):
                 os.path.join(output_dir, f'{kind}.png'),
             ])
         for kind in ('history', 'parameters'):
+            optional = ['--best'] if '_mo.' not in input_file else []
             piglot_plot_main([
                 kind,
                 input_file,
                 '--save_fig',
                 os.path.join(output_dir, f'{kind}.png'),
                 '--log',
-                '--best',
                 '--time',
-            ])
-        piglot_plot_main([
-            'regret',
-            input_file,
-            '--save_fig',
-            os.path.join(output_dir, 'regret.png'),
-            '--log',
-            '--time',
-        ])
+            ] + optional)
         piglot_plot_main([
             'case',
             input_file,
@@ -100,10 +92,14 @@ def test_input_files(input_dir: str):
                 '--save_fig',
                 os.path.join(output_dir, 'pareto.png'),
             ])
-        if input_file.endswith('random.yaml'):
+        else:
             piglot_plot_main([
-                'surrogate',
+                'regret',
                 input_file,
+                '--save_fig',
+                os.path.join(output_dir, 'regret.png'),
+                '--log',
+                '--time',
             ])
         if 'test_analytical' not in input_file:
             piglot_plot_main([

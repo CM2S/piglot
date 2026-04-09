@@ -115,8 +115,9 @@ class TestExtractParameters(unittest.TestCase):
             ])
         if os.path.isdir(output_dir):
             shutil.rmtree(output_dir)
-        self.assertEqual(str(ex.exception),
-                         "Can only plot the Pareto front for a two-objective optimisation problem.")
+        self.assertEqual(
+            str(ex.exception), "Pareto plotting can only be used for 2-objective problems."
+        )
 
 
 if __name__ == '__main__':
