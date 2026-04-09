@@ -21,6 +21,10 @@ class RandomSearchOptimiser(GenericOptimiser):
         seed: Optional[int] = None,
         num_workers: Optional[int] = None,
     ) -> None:
+        # Sanity check on input data
+        if settings.iters is None:
+            raise ValueError("Number of iterations must be specified in the config file.")
+
         policies = {
             'Random': RandomCandidatePolicy(
                 rounds=settings.iters,

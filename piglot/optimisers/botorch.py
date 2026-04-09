@@ -26,6 +26,10 @@ class BoTorchOptimiser(GenericOptimiser):
         mode: Optional[Literal['sequential', 'batched', 'async']] = None,
         n_initial: Optional[int] = None
     ) -> None:
+        # Sanity check on input data
+        if settings.iters is None:
+            raise ValueError("Number of iterations must be specified in the config file.")
+
         # Set up initial heuristics
         num_workers = optim_settings.num_workers
         if n_initial is None:

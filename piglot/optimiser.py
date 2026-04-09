@@ -307,7 +307,7 @@ class Optimiser(ABC):
             Whether any of the stopping criteria is satisfied.
         """
         # Iteration number
-        if i_iter > self.settings.iters:
+        if self.settings.iters is not None and i_iter > self.settings.iters:
             return True
         # Time
         if self.settings.max_timeout is not None:
@@ -425,6 +425,10 @@ class SimpleOptimiser(Optimiser):
     def __init__(
         self, settings: Settings, objective: Objective, normalise_params: bool = False
     ) -> None:
+        # Sanity check on input data
+        if settings.iters is None:
+            raise ValueError("Number of iterations must be specified in the config file.")
+
         super().__init__(settings, objective)
         self.normalise_params = normalise_params
 

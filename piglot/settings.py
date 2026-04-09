@@ -44,14 +44,14 @@ class ExpectedResult(ReadableModel):
 class Settings:
     """Container for global settings and configuration."""
 
-    # Number of iterations to run
-    iters: int
-
     # Directory to store outputs
     output_dir: str
 
     # Parameter set for the problem
     parameters: ParameterSet
+
+    # Number of iterations to run
+    iters: int = None
 
     # Compute device
     device: str = 'cpu'

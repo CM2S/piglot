@@ -106,8 +106,6 @@ def build_problem(config_path: str) -> tuple[ProblemConfig, dict[str, Any]]:
         config = build_sample_problem(config["sample_problem"]) | config
 
     # Check required terms
-    if 'iters' not in config:
-        raise RuntimeError("Missing number of iterations from the config file")
     if 'objective' not in config:
         raise RuntimeError("Missing objective from the config file")
     if 'optimiser' not in config:
