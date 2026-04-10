@@ -142,8 +142,7 @@ class OptimisationCampaign:
             self.state.best_params = self.dataset.data[0].params
             self.state.best_result = self.dataset.data[0].result
             self.state.conf_interval = (
-                -(value + 1.96 * np.sqrt(variance)),
-                -(value - 1.96 * np.sqrt(variance))
+                value - 1.96 * np.sqrt(variance), value + 1.96 * np.sqrt(variance)
             )
 
         # Stochastic single-objective case: find the value by optimising the model's posterior mean
@@ -152,16 +151,16 @@ class OptimisationCampaign:
             best_params, best_value = get_best_posterior_mean(
                 model, self.settings.parameters, self.state
             )
-            self.state.best_value = float(best_value.item())
             self.state.best_params = best_params.cpu().reshape(-1).numpy()
             self.state.best_result = None
             # Sample from the model to estimate the confidence interval for the best point
             samples = model.objective_samples(
                 best_params, sample_shape=torch.Size([1024]), seed=self.settings.seed
             )
+            self.state.best_value = float(torch.mean(samples).item())
             self.state.conf_interval = (
-                -float(torch.quantile(samples, 0.975).item()),
-                -float(torch.quantile(samples, 0.025).item()),
+                float(torch.quantile(samples, 0.025).item()),
+                float(torch.quantile(samples, 0.975).item()),
             )
     
     def load(self) -> None:
