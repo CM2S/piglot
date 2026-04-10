@@ -167,12 +167,12 @@ def get_acquisition(
 
     # Objective and multi-objective options
     if settings.name in MULTI_OBJECTIVE_ACQUISITIONS:
-        acq_options['objective'] = GenericMCMultiOutputObjective(model.composition)
+        acq_options['objective'] = GenericMCMultiOutputObjective(model.composition_from_raw)
         acq_options['ref_point'] = state.mo_state.partitioning.ref_point
         if settings.name in MULTI_OBJECTIVE_WITH_PARTITIONING:
             acq_options['partitioning'] = state.mo_state.partitioning
     else:
-        acq_options['objective'] = GenericMCObjective(model.composition)
+        acq_options['objective'] = GenericMCObjective(model.composition_from_raw)
 
     # Exact or noisy improvement-based acquisitions
     if settings.name in EXACT_IMPROVEMENT_BASED:

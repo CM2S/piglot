@@ -561,8 +561,11 @@ class ObjectiveModel(GPModel):
             samples = self.dataset.objective.composition(samples, input_data)
         return samples
 
-    def composition(self, samples: torch.Tensor, X: torch.Tensor) -> torch.Tensor:
-        """Evaluate the composition function of a composite objective.
+    def composition_from_raw(self, samples: torch.Tensor, X: torch.Tensor) -> torch.Tensor:
+        """Evaluate the composition function of a composite objective from raw model outputs.
+
+        Note that this function assumes the input samples are in the transformed space (raw model
+        outputs) and will untransform them before applying the composition function.
 
         This also converts the minimisation problem to maximisation by negating the output.
 
@@ -578,10 +581,12 @@ class ObjectiveModel(GPModel):
         torch.Tensor
             A `(batch_shape) x q x o` tensor of composition function values.
         """
+        # Untransform the samples back to the original space
+        samples = self.output_transform.untransform(samples)
+
         # For non-composite objectives, just negate the samples to minimise
         if not self.dataset.objective.is_composite():
             return -samples.squeeze(-1)
 
-        # Untransform the samples back to the original space and apply the composition function
-        samples = self.output_transform.untransform(samples)
+        # Otherwise, apply the composition function
         return -self.dataset.objective.composition(samples, X)
