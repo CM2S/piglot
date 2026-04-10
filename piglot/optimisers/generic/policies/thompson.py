@@ -1,6 +1,7 @@
 """Module for Thompson sampling policies."""
 from typing import Optional, TypeVar, Literal
 import numpy as np
+import torch
 from botorch.generation import MaxPosteriorSampling
 from piglot.data.dataset import ObjectiveDataset
 from piglot.data.surrogate import ObjectiveModel
@@ -74,4 +75,4 @@ class ThompsonSamplingCandidatePolicy(CandidatePolicy):
         )
         sampler = MaxPosteriorSampling(model.gp)
         candidates = sampler.maximize_samples(grid, -samples, num_samples=num_candidates)
-        return [c.cpu().numpy() for c in candidates]
+        return [c.to(torch.float64).cpu().numpy() for c in candidates]

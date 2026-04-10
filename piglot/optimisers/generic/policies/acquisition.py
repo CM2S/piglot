@@ -64,7 +64,7 @@ class AcquisitionCandidatePolicy(CandidatePolicy):
         candidates, _ = optimise_acquisition(
             acq, dataset.settings.parameters, model, self.settings, q=num_candidates
         )
-        return [c.numpy() for c in candidates]
+        return [c.to(torch.float64).cpu().numpy() for c in candidates]
 
     @classmethod
     def read(cls: type[T], config: dict[str, Any]) -> T:
