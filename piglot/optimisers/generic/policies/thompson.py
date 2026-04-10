@@ -73,6 +73,6 @@ class ThompsonSamplingCandidatePolicy(CandidatePolicy):
             seed=self.seed,
             strategy=self.strategy,
         )
-        sampler = MaxPosteriorSampling(model.gp)
+        sampler = MaxPosteriorSampling(model.gp, replacement=False)
         candidates = sampler.maximize_samples(grid, -samples, num_samples=num_candidates)
         return [c.to(torch.float64).cpu().numpy() for c in candidates]
