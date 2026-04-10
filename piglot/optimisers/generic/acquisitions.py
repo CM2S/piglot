@@ -339,5 +339,5 @@ def get_best_posterior_mean(
     settings = AcquisitionSettings(name='qsr', q=1)
     acq = get_acquisition(model, settings, state)
     return optimise_acquisition(
-        acq, parameters, model, settings, q=1, batch_initial_conditions=model.inputs
+        acq, parameters, model, settings, q=1
     )
