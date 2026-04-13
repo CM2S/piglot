@@ -127,3 +127,5 @@ def readable_from_constructor(cls: type[ConstructorModelT]) -> type[ConstructorM
         },
     )
     return cast(type, new_cls)
+
+

@@ -233,9 +233,9 @@ def read_custom_module(config: Dict[str, Any], cls: Type[T]) -> Type[T]:
     """
     # Sanitise the configuration
     if 'script' not in config:
-        raise ValueError("Missing 'script' field for reading the custom module script.")
+        raise ValueError(f"Missing 'script' field for reading the script of type `{cls.__name__}`.")
     if 'class' not in config:
-        raise ValueError("Missing 'class' field for reading the custom module script.")
+        raise ValueError(f"Missing 'class' field for reading the script of type `{cls.__name__}`.")
     # Load the module
     module_name = f'piglot_{os.path.basename(config["script"]).replace(".", "_")}'
     spec = importlib.util.spec_from_file_location(module_name, config['script'])
@@ -244,7 +244,9 @@ def read_custom_module(config: Dict[str, Any], cls: Type[T]) -> Type[T]:
     module_class = getattr(module, config['class'])
     # Sanitise the class
     if not issubclass(module_class, cls):
-        raise ValueError(f"Custom class '{module_class}' is not a subclass of '{cls}'.")
+        raise ValueError(
+            f"Custom class '{module_class.__name__}' is not a subclass of '{cls.__name__}'."
+        )
     return module_class
 
 
@@ -357,3 +359,21 @@ class InlineFileManager:
         
         # Update the configuration with the inline file paths
         return self.__update_node(config)
+
+
+def convert_simple_spec(data: Union[str, dict[str, Any]]) -> dict[str, Any]:
+    """Convert a simple specification to a dictionary with the detailed format.
+
+    Parameters
+    ----------
+    data : Union[str, dict[str, Any]]
+        The simple specification, either as a string or a dictionary.
+
+    Returns
+    -------
+    dict[str, Any]
+        The detailed specification as a dictionary.
+    """
+    if isinstance(data, str):
+        return {"name": data}
+    return data

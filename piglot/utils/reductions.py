@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import torch
 from torch.autograd.gradcheck import gradcheck, GradcheckError
-from piglot.utils.assorted import read_custom_module
+from piglot.utils.assorted import read_custom_module, convert_simple_spec
 
 
 class Reduction(ABC):
@@ -212,15 +212,9 @@ def read_reduction(config: Union[str, Dict[str, Any]]) -> Reduction:
     Reduction
         Reduction function.
     """
-    # Parse the reduction in the simple format
-    if isinstance(config, str):
-        name = config
-        if name == 'script':
-            raise ValueError('Need to pass the file path for the "script" reduction.')
-        if name not in AVAILABLE_REDUCTIONS:
-            raise ValueError(f'Reduction function "{name}" is not available.')
-        return AVAILABLE_REDUCTIONS[name]
-    # Detailed format
+    # If needed, convert simple specification to detailed format
+    config = convert_simple_spec(config)
+    # Mandatory fields
     if 'name' not in config:
         raise ValueError('Need to pass the name of the reduction function.')
     name = config['name']
@@ -233,8 +227,8 @@ def read_reduction(config: Union[str, Dict[str, Any]]) -> Reduction:
         return instance
     # Read parameter "reduction"
     if name == 'parameter':
-        if 'index' not in config:
-            raise ValueError("Missing index for the parameter reduction.")
+        if 'param' not in config:
+            raise ValueError("Missing parameter name `param` for the parameter reduction.")
         return ParameterReduction(config['param'], int(config.get('index', 0)))
     if name not in AVAILABLE_REDUCTIONS:
         raise ValueError(f'Reduction function "{name}" is not available.')

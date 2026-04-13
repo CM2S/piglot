@@ -2,7 +2,7 @@
 from typing import Union, Dict, Any, Type, List, Tuple
 from abc import ABC, abstractmethod
 import numpy as np
-from piglot.utils.assorted import read_custom_module
+from piglot.utils.assorted import read_custom_module, convert_simple_spec
 from piglot.solver.solver import OutputResult
 from piglot.utils.responses import interpolate_response
 
@@ -268,15 +268,9 @@ def read_response_transformer(config: Union[str, Dict[str, Any]]) -> ResponseTra
     ResponseTransformer
         Response transformer.
     """
-    # Parse the transformer in the simple format
-    if isinstance(config, str):
-        name = config
-        if name == 'script':
-            raise ValueError('Need to pass the file path for the "script" transformer.')
-        if name not in AVAILABLE_RESPONSE_TRANSFORMERS:
-            raise ValueError(f'Response transformer "{name}" is not available.')
-        return AVAILABLE_RESPONSE_TRANSFORMERS[name]()
-    # Detailed format
+    # If needed, convert simple specification to detailed format
+    config = convert_simple_spec(config)
+    # Mandatory fields
     if 'name' not in config:
         raise ValueError('Need to pass the name of the response transformer.')
     name = config.pop('name')

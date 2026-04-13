@@ -3,7 +3,7 @@ from typing import Optional, Tuple, Dict, Union, Any, Type, List
 from abc import ABC, abstractmethod
 import torch
 from botorch.utils.sampling import draw_sobol_normal_samples
-from piglot.utils.assorted import read_custom_module
+from piglot.utils.assorted import read_custom_module, convert_simple_spec
 from piglot.objective import Scalarisation, IndividualObjective
 
 
@@ -188,15 +188,9 @@ def read_scalarisation(
     Scalarisation
         Scalarisation function.
     """
-    # Parse the scalarisation in the simple format
-    if isinstance(config, str):
-        name = config
-        if name == 'script':
-            raise ValueError('Need to pass the file path for the "script" scalarisation.')
-        if name not in AVALIABLE_SCALARISATIONS:
-            raise ValueError(f'Scalarisation function "{name}" is not available.')
-        return AVALIABLE_SCALARISATIONS[name](objectives)
-    # Detailed format
+    # If needed, convert simple specification to detailed format
+    config = convert_simple_spec(config)
+    # Mandatory fields
     if 'name' not in config:
         raise ValueError('Need to pass the name of the scalarisation function.')
     name = config.pop('name')

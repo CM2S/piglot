@@ -81,7 +81,7 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'invalid_syntax.yaml': (
         RuntimeError,
-        "Failed to parse the config file: YAML syntax seems invalid.",
+        "Failed to parse the YAML file: syntax seems invalid.",
     ),
     'missing_solver_name.yaml': (
         ValueError,
@@ -133,11 +133,11 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'design_missing_quantity_script.yaml': (
         ValueError,
-        "Missing 'script' field for reading the custom module script.",
+        "Missing 'script' field for reading.",
     ),
     'design_missing_quantity_class.yaml': (
         ValueError,
-        "Missing 'class' field for reading the custom module script.",
+        "Missing 'class' field for reading.",
     ),
     'design_missing_solver.yaml': (
         ValueError,
@@ -177,7 +177,7 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'curve_mo_bad_scalarisation_script.yaml': (
         ValueError,
-        'Need to pass the file path for the "script" scalarisation.',
+        "Missing 'script' field for reading.",
     ),
     'curve_mo_scalarisation_missing_name.yaml': (
         ValueError,
@@ -193,7 +193,7 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'curve_bad_reduction_script.yaml': (
         ValueError,
-        'Need to pass the file path for the "script" reduction.',
+        "Missing 'script' field for reading.",
     ),
     'curve_reduction_missing_name.yaml': (
         ValueError,
@@ -221,7 +221,7 @@ EXAMPLES_ASSERTIONS: Dict[str, Exception] = {
     ),
     'transformer_script.yaml': (
         ValueError,
-        'Need to pass the file path for the "script" transformer.',
+        "Missing 'script' field for reading.",
     ),
     'transformer_missing_name.yaml': (
         ValueError,

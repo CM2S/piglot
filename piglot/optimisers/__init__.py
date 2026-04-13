@@ -11,6 +11,7 @@ from piglot.optimisers.scipy_optim import ScipyOptimiser
 from piglot.optimisers.spsa_adam import SPSA_Adam
 from piglot.optimisers.spsa import SPSA
 from piglot.settings import Settings
+from piglot.utils.assorted import convert_simple_spec
 
 
 AVAILABLE_OPTIMISERS: Dict[str, Type[Optimiser]] = {
@@ -42,17 +43,13 @@ def read_optimiser(config: Dict[str, Any], settings: Settings, objective: Object
     Optimiser
         Optimiser to use.
     """
-    if isinstance(config, str):
-        # Parse the simple specification: optimiser name
-        name = config
-        kwargs = {}
-    else:
-        # Parse the detailed specification
-        if 'name' not in config:
-            raise RuntimeError("Missing optimiser name.")
-        name = config.pop("name")
-        kwargs = config
+    # If needed, convert simple specification to detailed format
+    config = convert_simple_spec(config)
+    # Mandatory fields
+    if 'name' not in config:
+        raise RuntimeError("Missing optimiser name.")
+    name = config.pop("name")
     # Build optimiser instance
     if name not in AVAILABLE_OPTIMISERS:
         raise RuntimeError(f"Unknown optimiser '{name}'.")
-    return AVAILABLE_OPTIMISERS[name].read(kwargs, settings, objective)
+    return AVAILABLE_OPTIMISERS[name].read(config, settings, objective)
