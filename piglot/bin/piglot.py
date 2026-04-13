@@ -1,12 +1,12 @@
 """Driver script for piglot."""
-from typing import Optional
+from typing import Any, Optional
 import os
 import os.path
 import argparse
 import shutil
-from yaml import safe_dump
+from tempfile import TemporaryDirectory
 import torch
-from piglot.utils.yaml_parser import build_problem
+from piglot.utils.yaml_parser import build_problem, dump_yaml
 
 
 def parse_args():
@@ -46,6 +46,34 @@ def parse_args():
     return parser.parse_args()
 
 
+def run_config(config: dict[str, Any], config_path: Optional[str] = None, *args, **kwargs) -> None:
+    """Run the optimisation based on the given configuration.
+
+    This writes the configuration to the output directory. If not specified, a temporary directory
+    is used.
+
+    Parameters
+    ----------
+    config : dict[str, Any]
+        Configuration dictionary
+    config_path : Optional[str], optional
+        Path to the configuration file, by default None
+    *args
+        Additional positional arguments to pass to the main function
+    **kwargs
+        Additional keyword arguments to pass to the main function
+    """
+    if config_path is None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = os.path.join(temp_dir, "config.yaml")
+            print(f"Running 'config.yaml' in temporary directory: {temp_dir}")
+            dump_yaml(config, config_path)
+            main(config_path, *args, **kwargs)
+    else:
+        dump_yaml(config, config_path)
+        main(config_path, *args, **kwargs)
+
+
 def main(
     config_path: Optional[str] = None, device: str = 'cpu', torch_num_threads: int = 1
 ) -> None:
@@ -81,8 +109,7 @@ def main(
     os.makedirs(output_dir)
 
     # Create a copy of the configuration file in the output directory
-    with open(os.path.join(output_dir, "config"), 'w', encoding='utf8') as file:
-        safe_dump(config, file)
+    dump_yaml(config, os.path.join(output_dir, "config"))
 
     # Set up PyTorch
     torch.set_default_device(device)

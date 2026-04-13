@@ -39,6 +39,40 @@ class UniqueKeyLoader(yaml.SafeLoader):
         return super().construct_mapping(node, deep)
 
 
+def read_yaml(file_path: str) -> dict[str, Any]:
+    """Read a YAML file and return its contents as a dictionary.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to the YAML file.
+
+    Returns
+    -------
+    dict[str, Any]
+        Contents of the YAML file.
+    """
+    try:
+        with open(file_path, 'r', encoding='utf8') as file:
+            return yaml.load(file, Loader=UniqueKeyLoader)  # nosec B506
+    except (ParserError, ScannerError) as exc:
+        raise RuntimeError("Failed to parse the YAML file: syntax seems invalid.") from exc
+
+
+def dump_yaml(config: dict[str, Any], file_path: str) -> None:
+    """Dump a dictionary to a YAML file.
+
+    Parameters
+    ----------
+    config : dict[str, Any]
+        Configuration dictionary to dump.
+    file_path : str
+        Path to the YAML file.
+    """
+    with open(file_path, 'w', encoding='utf8') as file:
+        yaml.safe_dump(config, file)
+
+
 def build_sample_problem(problem_name: str) -> dict[str, Any]:
     """Construct an optimisation problem from a synthetic test function.
 
@@ -95,11 +129,7 @@ def build_problem(config_path: str) -> tuple[ProblemConfig, dict[str, Any]]:
         A tuple containing the ProblemConfig and the raw configuration dictionary.
     """
     # Parse the configuration file
-    try:
-        with open(config_path, 'r', encoding='utf8') as file:
-            config = yaml.load(file, Loader=UniqueKeyLoader)  # nosec B506
-    except (ParserError, ScannerError) as exc:
-        raise RuntimeError("Failed to parse the config file: YAML syntax seems invalid.") from exc
+    config = read_yaml(config_path)
 
     # Check if this is a sample problem: inject the sample configuration
     if "sample_problem" in config:
