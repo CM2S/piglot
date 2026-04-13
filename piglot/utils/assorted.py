@@ -1,5 +1,8 @@
 """Assorted utilities."""
-from typing import Callable, List, Dict, Tuple, Type, TypeVar, Any, Union, Iterable, Iterator
+from tempfile import TemporaryDirectory
+from typing import (
+    Callable, List, Dict, Optional, Tuple, Type, TypeVar, Any, Union, Iterable, Iterator
+)
 import os
 import copy
 import contextlib
@@ -291,3 +294,66 @@ def parallel_map(func: Callable[[T], U], iterable: Iterable[T], num_workers: int
         return (func(x) for x in iterable)
     with futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
         return executor.map(func, iterable)
+
+
+class InlineFileManager:
+    """Context manager for creating and managing inline temporary files."""
+    INLINE_URI = 'inline://'
+
+    def __init__(self, inline_files: dict[str, str]) -> None:
+        self.inline_files = inline_files
+        self.temp_dir: Optional[TemporaryDirectory] = None
+
+    def __enter__(self) -> 'InlineFileManager':
+        if len(self.inline_files) > 0:
+            if self.temp_dir is not None:
+                raise RuntimeError("InlineFileManager is already in use.")
+            self.temp_dir = TemporaryDirectory(prefix='piglot-inline-')
+            for filename, content in self.inline_files.items():
+                file_path = os.path.join(self.temp_dir.name, filename)
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        if self.temp_dir is not None:
+            self.temp_dir.cleanup()
+            self.temp_dir = None
+
+    def __update_node(self, node: Any) -> Any:
+        if isinstance(node, dict):
+            return {self.__update_node(k): self.__update_node(v) for k, v in node.items()}
+        if isinstance(node, list):
+            return [self.__update_node(x) for x in node]
+        if isinstance(node, tuple):
+            return tuple(self.__update_node(x) for x in node)
+        if isinstance(node, str):
+            if node.startswith(self.INLINE_URI):
+                filename = node[len(self.INLINE_URI):]
+                if filename in self.inline_files:
+                    return os.path.join(self.temp_dir.name, filename)
+        return node
+
+    def update_config(self, config: Any) -> Any:
+        """Update the configuration with the inline file paths.
+
+        Parameters
+        ----------
+        config : Any
+            Configuration to update.
+
+        Returns
+        -------
+        Any
+            Updated configuration.
+        """
+        # Nothing to update if there are no inline files
+        if len(self.inline_files) == 0:
+            return config
+    
+        # Sanity check
+        if self.temp_dir is None:
+            raise RuntimeError("InlineFileManager is not in use.")
+        
+        # Update the configuration with the inline file paths
+        return self.__update_node(config)

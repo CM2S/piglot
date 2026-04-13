@@ -11,6 +11,7 @@ from piglot.settings import read_settings, Settings
 from piglot.objectives import read_objective, Objective
 from piglot.optimisers import read_optimiser, Optimiser
 from piglot.objectives.synthetic import SyntheticIndividualObjective
+from piglot.utils.assorted import InlineFileManager
 
 
 @dataclass
@@ -147,8 +148,14 @@ def build_problem(config_path: str) -> tuple[ProblemConfig, dict[str, Any]]:
     if 'output_dir' not in config:
         config['output_dir'], _ = os.path.splitext(config_path)
 
-    # Build the settings, objective, and optimiser
-    settings = read_settings(config)
-    objective = read_objective(config["objective"], settings)
-    optimiser = read_optimiser(config["optimiser"], settings, objective)
-    return ProblemConfig(config_path, settings, objective, optimiser), config
+    # Handle inline files and keep a copy of the raw configuration to return later
+    raw_config = config.copy()
+    inline_manager = InlineFileManager(config.pop('inline_files', {}))
+
+    # Build the settings, objective, and optimiser within the inline file context
+    with inline_manager:
+        config = inline_manager.update_config(config)
+        settings = read_settings(config)
+        objective = read_objective(config["objective"], settings)
+        optimiser = read_optimiser(config["optimiser"], settings, objective)
+    return ProblemConfig(config_path, settings, objective, optimiser), raw_config
