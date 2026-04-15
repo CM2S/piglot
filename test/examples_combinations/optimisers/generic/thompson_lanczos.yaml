@@ -1,0 +1,18 @@
+optimiser:
+  name: generic
+  policies:
+    initial_guess:
+      name: initial
+    random:
+      name: random
+      rounds: 1
+      seed: 1
+      num_workers: 1
+      num_candidates_per_round: 1
+    thompson:
+     name: thompson
+     num_points: 64
+     rounds: 2
+     seed: 1
+     num_candidates_per_round: 1
+     strategy: lanczos

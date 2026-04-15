@@ -95,28 +95,6 @@ def find_keyword(file: str, keyword: str) -> str:
     raise RuntimeError(f"Keyword {keyword} not found!")
 
 
-def load_module_from_file(filename: str, attribute) -> object:
-    """Loads a module from a given file.
-
-    Parameters
-    ----------
-    filename : str
-        Path for the file.
-    attribute : str
-        Attribute to load from the module.
-
-    Returns
-    -------
-    object
-        Module loaded from the file.
-    """
-    module_name = f'piglot_{os.path.basename(filename).replace(".", "_")}'
-    spec = importlib.util.spec_from_file_location(module_name, filename)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return getattr(module, attribute)
-
-
 class VerbosityManager:
     """Class to manage output streams based on verbosity levels."""
 

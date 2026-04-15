@@ -1,0 +1,3 @@
+optimiser:
+  name: spsa
+  lr: 1e-2

@@ -30,7 +30,7 @@ T = TypeVar('T', bound='SurrogateSettings')
 class SurrogateSettings(ReadableModel):
     """Options for surrogate model construction."""
 
-    noise: Literal['infer', 'fixed', 'none'] = 'none'
+    noise: Optional[Literal['infer', 'fixed', 'none']] = None
     noise_model: Literal['homoscedastic', 'heteroscedastic'] = 'homoscedastic'
     pca_variance: float = 1e-6
     std_tol: float = 1e-6
@@ -438,6 +438,13 @@ class ObjectiveModel(GPModel):
             output_transform = Standardiser(
                 raw_dataset.outputs, raw_dataset.covariances, std_tol=settings.std_tol
             )
+
+        # Sanitise noise model
+        if settings.noise is None:
+            if dataset.objective.is_noisy():
+                settings.noise = 'fixed' if dataset.objective.has_variance() else 'infer'
+            else:
+                settings.noise = 'none'
 
         # Build model
         super().__init__(raw_dataset, settings, output_transform=output_transform)

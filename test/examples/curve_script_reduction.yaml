@@ -1,29 +1,60 @@
+iters: 16
 
-iters: 10
-
-optimiser: botorch
-
-
-parameters:
-  a: [2, 0.5, 4]
-
-
+optimiser:
+  name: generic
+  policies:
+    initial_guess:
+      name: initial
+    random:
+      name: random
+      rounds: 2
+      seed: 1
+    acquisition:
+      name: acquisition
+      type: qlogei
+      rounds: 1
+      seed: 1
 
 objective:
   name: design
+  composite: true
   solver:
     name: curve
     cases:
       'case_1':
-        expression: <a> * x ** 2
+        expression: <sum> * cos(x) + (<sum>)**2 * sin(x)
         parametric: x
-        bounds: [-5, 5]
-        points: 100
+        bounds: [-2, 2]
+        points: 21
   targets:
-    'integral_quantity':
+    'minimum_value':
       quantity:
         name: script
-        script: script_reduction.py
-        class: SampleReduction
+        script: inline://script.py
+        class: TestReduction
       prediction: ['case_1']
-      n_points: 20
+      maximise: False
+      n_points: 21
+
+parameters:
+  a:
+    type: real
+    initial: 1.0
+    lbound: -1.0
+    ubound: 2.0
+    num_components: 4
+  sum:
+    type: computed
+    expression: sum(abs(a))
+
+
+inline_files:
+  script.py: |
+    import torch
+    from piglot.utils.reductions import Reduction
+
+    class TestReduction(Reduction):
+        def reduce_torch(
+            self, time: torch.Tensor, data: torch.Tensor, params: dict[str, torch.Tensor]
+        ) -> torch.Tensor:
+            return torch.mean(torch.square(data), dim=-1)

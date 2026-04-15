@@ -1,0 +1,6 @@
+iters: 4
+objective:
+  name: analytical
+  expression: (sum - 0.0) ** 2
+  variance_expr: sum
+  variance: true

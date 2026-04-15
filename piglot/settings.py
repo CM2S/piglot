@@ -11,6 +11,7 @@ T = TypeVar('T')
 
 class ExpectedResult(ReadableModel):
     """Readable container for the expected result of the optimisation."""
+    num_calls: Optional[int] = None
     value: Optional[float] = None
     parameters: Optional[list[float]] = None
     value_atol: float = 1e-2
@@ -18,7 +19,7 @@ class ExpectedResult(ReadableModel):
     parameters_atol: float = 1e-2
     parameters_rtol: float = 1e-2
 
-    def check(self, value: float, parameters: Optional[np.ndarray]) -> None:
+    def check(self, value: float, parameters: Optional[np.ndarray], num_calls: int) -> None:
         """Check if the given value and parameters match the expected result within tolerances.
 
         Parameters
@@ -27,7 +28,14 @@ class ExpectedResult(ReadableModel):
             The value to check.
         parameters : Optional[np.ndarray]
             The parameters to check.
+        num_calls : int
+            The number of function calls to check.
         """
+        if self.num_calls is not None:
+            if num_calls != self.num_calls:
+                raise ValueError(
+                    f"Number of function calls {num_calls} does not match expected {self.num_calls}"
+                )
         if self.value is not None:
             if not np.isclose(value, self.value, atol=self.value_atol, rtol=self.value_rtol):
                 raise ValueError(f"Value {value} does not match expected {self.value}")

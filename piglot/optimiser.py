@@ -106,7 +106,7 @@ class HistoryFileManager:
         else:
             param_columns = self.settings.parameters.get_scalar_names()
             obj_columns = [obj_spec('Best objective')]
-            if objective.has_variance():
+            if objective.is_noisy():
                 obj_columns.extend([obj_spec('Lower CI'), obj_spec('Upper CI')])
 
         # Build the full column list
@@ -142,7 +142,7 @@ class HistoryFileManager:
         else:
             obj_values = [result.value]
             param_values = self.settings.parameters.to_values(result.params).scalar_values.values()
-            if self.objective.has_variance():
+            if self.objective.is_noisy():
                 obj_values.extend(result.conf_interval)
 
         # Write row
@@ -185,8 +185,8 @@ class HistoryFileManager:
             iteration=np.array(data['Iteration']),
             elapsed_time=np.array(data['Time /s']),
             best_value=np.array(data[value_name]),
-            best_lbound=np.array(data['Lower CI']) if self.objective.has_variance() else None,
-            best_ubound=np.array(data['Upper CI']) if self.objective.has_variance() else None,
+            best_lbound=np.array(data['Lower CI']) if self.objective.is_noisy() else None,
+            best_ubound=np.array(data['Upper CI']) if self.objective.is_noisy() else None,
             best_params=np.array([
                 [data[name][i] for name in param_names] for i in range(num_entries)
             ]),
@@ -235,7 +235,7 @@ class ProgressFileManager:
             else:
                 # Scalar objective value
                 file.write(f'Best objective: {result.value}\n')
-                if self.objective.has_variance():
+                if self.objective.is_noisy():
                     file.write(
                         'Confidence interval (95%): '
                         f'[{result.conf_interval[0]}, {result.conf_interval[1]}]\n'
@@ -343,7 +343,7 @@ class Optimiser(ABC):
             Whether any of the stopping criteria is satisfied.
         """
         # Update optimiser state
-        self.state.update(i_iter, result, self.objective.has_variance())
+        self.state.update(i_iter, result, self.objective.is_noisy())
 
         # Update progress in output files
         self.progress_file.write(result, extra_info)
@@ -445,8 +445,8 @@ class SimpleOptimiser(Optimiser):
             raise ValueError("This optimiser does not support multi-objective optimisation.")
         if objective.is_composite():
             raise ValueError("This optimiser does not support composite objectives.")
-        if objective.has_variance():
-            raise ValueError("This optimiser does not support objectives with variance.")
+        if objective.is_noisy():
+            raise ValueError("This optimiser does not support noisy objectives.")
 
     @staticmethod
     def __norm_params(values: np.ndarray, bounds: list[tuple[float, float]]) -> np.ndarray:

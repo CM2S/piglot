@@ -1,0 +1,3 @@
+optimiser:
+  name: scipy
+  method: differential_evolution

@@ -47,6 +47,7 @@ class ResponseSingleObjective(IndividualObjective, ABC):
             maximise=maximise,
             variance=variance,
             composite=composite,
+            noisy=len(prediction) > 1,
             bounds=bounds,
         )
         self.name = name

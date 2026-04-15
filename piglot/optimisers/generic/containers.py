@@ -20,7 +20,6 @@ T = TypeVar('T', bound='OptimisationSettings')
 
 class OptimisationSettings(ReadableModel):
     """Container for settings related to optimisation."""
-    noisy: bool = False
     num_workers: int = 1
     nadir_scale: float = 0.1
     ref_point: Optional[list[float]] = None

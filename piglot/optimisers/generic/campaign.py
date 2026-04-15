@@ -47,7 +47,7 @@ class OptimisationCampaign:
         bool
             True if the campaign is stochastic, False otherwise.
         """
-        return self.objective.has_variance() or self.optim_settings.noisy
+        return self.objective.is_noisy()
 
     def evaluate(self, params: np.ndarray) -> ObjectiveResult:
         """Evaluate the objective for the given parameters and store the observation.
@@ -137,7 +137,10 @@ class OptimisationCampaign:
         # Stochastic single-objective case with a single observation: it is our best guess
         elif self.state.num_evaluations == 1:
             value = self.objective.get_objective_value(self.dataset.data[0].result)
-            variance = self.objective.get_objective_variance(self.dataset.data[0].result)
+            if self.objective.has_variance():
+                variance = self.objective.get_objective_variance(self.dataset.data[0].result)
+            else:
+                variance = np.inf
             self.state.best_value = value
             self.state.best_params = self.dataset.data[0].params
             self.state.best_result = self.dataset.data[0].result

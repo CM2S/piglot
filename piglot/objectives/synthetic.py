@@ -33,6 +33,7 @@ class SyntheticIndividualObjective(SimpleIndividualObjective):
             maximise=maximise,
             variance=variance,
             composite=False,
+            noisy=variance,
             bounds=bounds,
         )
         test_functions = self.get_test_functions()

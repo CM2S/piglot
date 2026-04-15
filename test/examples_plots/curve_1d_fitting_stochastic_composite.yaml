@@ -1,0 +1,58 @@
+iters: 16
+
+optimiser:
+  name: generic
+  policies:
+    initial_guess:
+      name: initial
+    random:
+      name: random
+      rounds: 4
+      seed: 1
+    acquisition:
+      name: acquisition
+      type: qlogei
+      rounds: 1
+      seed: 1
+
+objective:
+  name: fitting
+  composite: true
+  variance: true
+  solver:
+    name: curve
+    cases:
+      'case_1':
+        expression: <sum> * cos(x)
+        parametric: x
+        bounds: [-2, 2]
+        points: 21
+      'case_2':
+        expression: (<sum> - 0.1) * cos(x)
+        parametric: x
+        bounds: [-2, 2]
+        points: 21
+      'case_3':
+        expression: (<sum> + 0.1) * cos(x)
+        parametric: x
+        bounds: [-2, 2]
+        points: 21
+  references:
+    'inline://reference.txt':
+      prediction: ['case_1', 'case_2', 'case_3']
+
+parameters:
+  a:
+    type: real
+    initial: 1.0
+    lbound: -1.0
+    ubound: 2.0
+    num_components: 1
+  sum:
+    type: computed
+    expression: sum(abs(a))
+
+inline_files:
+  reference.txt: |
+    0 1
+    1.57079632679489661923 0

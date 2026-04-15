@@ -154,7 +154,11 @@ class ScipyOptimiser(SimpleOptimiser):
         """
         if self.method in self.AVAILABLE_OPTIMIZE_METHODS:
             minimize(
-                objective, initial_guess, method=self.method, bounds=bounds, callback=callback
+                objective,
+                initial_guess,
+                method=self.method,
+                bounds=bounds,
+                callback=lambda *args, **kwargs: callback(),
             )
         elif self.method == "differential_evolution":
             differential_evolution(

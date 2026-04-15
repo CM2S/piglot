@@ -1,0 +1,53 @@
+iters: 16
+
+optimiser:
+  name: generic
+  policies:
+    initial_guess:
+      name: initial
+    random:
+      name: random
+      rounds: 8
+      seed: 1
+    acquisition:
+      name: acquisition
+      type: qlogei
+      rounds: 1
+      seed: 1
+
+objective:
+  name: fitting
+  # composite: true
+  solver:
+    name: curve
+    cases:
+      'case_1':
+        expression: <sum> * cos(x)
+        parametric: x
+        bounds: [-2, 2]
+        points: 21
+  references:
+    'inline://reference.txt':
+      prediction: ['case_1']
+      transformer:
+        name: chain
+        transformers:
+          - name: affine
+            y_scale: -2
+          - name: negate
+
+parameters:
+  a:
+    type: real
+    initial: 1.0
+    lbound: -1.0
+    ubound: 2.0
+    num_components: 2
+  sum:
+    type: computed
+    expression: sum(abs(a))
+
+inline_files:
+  reference.txt: |
+    0 1
+    1.57079632679489661923 0

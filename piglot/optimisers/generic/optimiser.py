@@ -115,7 +115,7 @@ class GenericOptimiser(Optimiser):
                 else:
                     info = f'Objective: {state.value:6.3e}'
                     if (
-                        self.objective.has_variance()
+                        self.objective.is_noisy()
                         and state.conf_interval
                         and all(state.conf_interval)
                     ):

@@ -1,0 +1,8 @@
+iters: 4
+objective:
+  name: analytical
+  expression: (sum - 0.0) ** 2
+  variance_expr: sum
+  variance: false
+  use_random: true
+  random_evals: 1

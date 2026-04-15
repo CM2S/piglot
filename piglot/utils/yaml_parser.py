@@ -71,7 +71,7 @@ def dump_yaml(config: dict[str, Any], file_path: str) -> None:
         Path to the YAML file.
     """
     with open(file_path, 'w', encoding='utf8') as file:
-        yaml.safe_dump(config, file)
+        yaml.safe_dump(config, file, sort_keys=False)
 
 
 def build_sample_problem(problem_name: str) -> dict[str, Any]:

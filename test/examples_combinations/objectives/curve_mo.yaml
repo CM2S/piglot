@@ -1,0 +1,29 @@
+objective:
+  name: design
+  # variance: true
+  # composite: true
+  solver:
+    name: curve
+    verbosity: all
+    cases:
+      'case_1':
+        expression: <sum> * cos(x)
+        parametric: x
+        bounds: [-2, 2]
+        points: 21
+      'case_2':
+        expression: (<sum> - 0.5)**2 * sin(x)
+        parametric: x
+        bounds: [-2, 2]
+        points: 21
+  targets:
+    'minimum_value_1':
+      quantity: square_integral
+      prediction: ['case_1']
+      maximise: False
+      n_points: 21
+    'minimum_value_2':
+      quantity: square_integral
+      prediction: ['case_2']
+      maximise: False
+      n_points: 21

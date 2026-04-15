@@ -1,0 +1,5 @@
+iters: 20
+
+optimiser: direct
+
+sample_problem: hartmann

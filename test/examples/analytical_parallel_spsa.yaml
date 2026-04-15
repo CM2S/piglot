@@ -1,0 +1,20 @@
+iters: 4
+
+objective:
+  name: analytical
+  expression: (sum - 0.0) ** 2
+
+optimiser:
+  name: spsa
+  num_workers: 2
+
+parameters:
+  a:
+    type: real
+    initial: 0.0
+    lbound: -2.0
+    ubound: 2.0
+    num_components: 1
+  sum:
+    expression: 2 * a
+    type: computed

@@ -1,0 +1,35 @@
+iters: 4
+
+objective:
+  name: analytical
+  expression: (sum - 0.0) ** 2
+  variance_expr: sum
+  variance: false
+  use_random: true
+  random_evals: 1
+
+optimiser:
+  name: generic
+  policies:
+    initial_guess:
+      name: initial
+    random:
+      name: random
+      rounds: 2
+      seed: 1
+    acquisition:
+      name: acquisition
+      rounds: 1
+      seed: 1
+      type: qlogei
+
+parameters:
+  a:
+    initial: 0.0
+    lbound: -2.0
+    num_components: 1
+    type: real
+    ubound: 2.0
+  sum:
+    expression: sum(abs(a))
+    type: computed

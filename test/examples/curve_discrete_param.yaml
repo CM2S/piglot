@@ -1,0 +1,44 @@
+iters: 16
+
+optimiser:
+  name: generic
+  policies:
+    initial_guess:
+      name: initial
+    random:
+      name: random
+      rounds: 2
+      seed: 1
+    acquisition:
+      name: acquisition
+      type: qlogei
+      rounds: 1
+      seed: 1
+
+objective:
+  name: design
+  composite: true
+  solver:
+    name: curve
+    cases:
+      'case_1':
+        expression: <sum> * cos(x) + (<sum>)**2 * sin(x)
+        parametric: x
+        bounds: [-2, 2]
+        points: 21
+  targets:
+    'minimum_value':
+      quantity: square_integral
+      prediction: ['case_1']
+      maximise: False
+      n_points: 21
+
+parameters:
+  a:
+    type: discrete
+    initial: 1.0
+    values: [0.0, 1.0, 2.0]
+    num_components: 4
+  sum:
+    type: computed
+    expression: sum(abs(a))

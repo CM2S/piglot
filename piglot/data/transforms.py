@@ -238,7 +238,8 @@ class PCA(Transform):
             Untransformed data.
         """
         if self.inject_noise:
-            noise_shape = data.shape[:-1] + (self.transformation.shape[0],)
+            num_dropped = self.vecs.shape[1] - self.num_components
+            noise_shape = data.shape[:-1] + (num_dropped,)
             samples = torch.randn(noise_shape, dtype=data.dtype, device=data.device)
             samples = samples * torch.sqrt(self.vals[self.num_components:])
             data = torch.cat([data, samples], dim=-1)

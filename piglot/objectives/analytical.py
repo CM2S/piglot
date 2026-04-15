@@ -36,6 +36,7 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
             maximise=maximise,
             variance=variance,
             composite=False,
+            noisy=variance_expr is not None,
             bounds=bounds,
         )
         # Sanitise the stochastic and random_evals combination
@@ -99,7 +100,9 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
         """
         fig, axis = plt.subplots()
         axis: plt.Axes
-        x = np.linspace(self.parameters[0].lbound, self.parameters[0].ubound, 1000)
+        names = self.parameters.get_scalar_names()
+        bounds = self.parameters.get_bounds()
+        x = np.linspace(bounds[0, 0], bounds[0, 1], 1000)
         x_results = [
             self.evaluate(self.parameters.to_values(x_i), concurrent=False)
             for x_i in x.reshape(-1, 1)
@@ -109,7 +112,7 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
         curr_result = self.evaluate(self.parameters.to_values(values), concurrent=False)
         curr_eval, curr_var = curr_result.value, curr_result.variance
         axis.plot(x, evals, c="black", label="Analytical Objective")
-        if self.variance is not None:
+        if self.has_variance():
             axis.fill_between(
                 x,
                 evals - 2 * np.sqrt(variances),
@@ -127,9 +130,9 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
             )
         else:
             axis.scatter(values[0], curr_eval, label="Case")
-        axis.set_xlabel(self.parameters[0].name)
+        axis.set_xlabel(names[0])
         axis.set_ylabel("Analytical Objective")
-        axis.set_xlim(self.parameters[0].lbound, self.parameters[0].ubound)
+        axis.set_xlim(bounds[0, 0], bounds[0, 1])
         axis.legend()
         axis.grid()
         axis.set_title(append_title)
@@ -151,8 +154,10 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
             Figure with the plot
         """
         fig, axis = plt.subplots(subplot_kw={"projection": "3d"})
-        x = np.linspace(self.parameters[0].lbound, self.parameters[0].ubound, 100)
-        y = np.linspace(self.parameters[1].lbound, self.parameters[1].ubound, 100)
+        names = self.parameters.get_scalar_names()
+        bounds = self.parameters.get_bounds()
+        x = np.linspace(bounds[0, 0], bounds[0, 1], 100)
+        y = np.linspace(bounds[1, 0], bounds[1, 1], 100)
         X, Y = np.meshgrid(x, y)
         evals = np.array(
             [
@@ -175,11 +180,11 @@ class AnalyticalIndividualObjective(SimpleIndividualObjective):
             s=50,
         )
         axis.plot_surface(X, Y, evals[:, :], alpha=0.7, label="Analytical Objective")
-        axis.set_xlabel(self.parameters[0].name)
-        axis.set_ylabel(self.parameters[1].name)
+        axis.set_xlabel(names[0])
+        axis.set_ylabel(names[1])
         axis.set_zlabel("Analytical Objective")
-        axis.set_xlim(self.parameters[0].lbound, self.parameters[0].ubound)
-        axis.set_ylim(self.parameters[1].lbound, self.parameters[1].ubound)
+        axis.set_xlim(bounds[0, 0], bounds[0, 1])
+        axis.set_ylim(bounds[1, 0], bounds[1, 1])
         axis.legend()
         axis.grid()
         axis.set_title(append_title)

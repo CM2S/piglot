@@ -1,0 +1,11 @@
+iters: 4
+
+objective:
+  name: analytical
+  expression: (a - 0.0) ** 2
+
+optimiser:
+  name: spsa
+
+parameters:
+  a: [0.0, -2.0, 2.0]

@@ -71,8 +71,8 @@ class BoTorchOptimiser(GenericOptimiser):
             The default acquisition type.
         """
         if objective.is_multi_objective():
-            return 'qlognehvi' if settings.noisy else 'qlogehvi'
-        if settings.noisy:
+            return 'qlognehvi' if objective.is_noisy() else 'qlogehvi'
+        if objective.is_noisy():
             return 'qlognei'
         return 'qlogei'
 

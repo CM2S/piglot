@@ -249,8 +249,6 @@ class TabularFile:
         header = [a.strip() for a in lines[0].strip().split(self.table.sep)]
         expected_header = [column.name for column in self.table.columns]
         if header != expected_header:
-            print(header)
-            print(expected_header)
             raise ValueError(f"Header of file {self.path} does not match expected columns.")
 
         # Read the data

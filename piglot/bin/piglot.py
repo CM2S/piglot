@@ -120,12 +120,12 @@ def main(
 
     # Re-run the best case
     if not problem.settings.skip_last_run:
-        if result.params is not None and not objective.has_variance():
+        if result.params is not None and not objective.is_noisy():
             objective(result.params)
 
     # If we have an expected solution, compare the results
     if problem.settings.expected is not None:
-        problem.settings.expected.check(result.value, result.params)
+        problem.settings.expected.check(result.value, result.params, objective.num_calls)
 
 
 if __name__ == '__main__':

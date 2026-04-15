@@ -77,6 +77,7 @@ class IndividualObjective(ABC):
         maximise: bool = False,
         variance: bool = False,
         composite: bool = False,
+        noisy: bool = False,
         bounds: tuple[float, float] = None,
     ) -> None:
         self.name = name
@@ -84,6 +85,7 @@ class IndividualObjective(ABC):
         self.weight = float(weight)
         self.variance = variance
         self.composite = composite
+        self.noisy = noisy
         self.bounds = None
         if bounds is not None:
             self.bounds = tuple(float(b) for b in bounds)
@@ -101,6 +103,16 @@ class IndividualObjective(ABC):
             True if this objective supports composition, False otherwise.
         """
         return self.composite
+
+    def is_noisy(self) -> bool:
+        """Check if this objective may be noisy.
+
+        Returns
+        -------
+        bool
+            True if this objective is noisy, False otherwise.
+        """
+        return self.noisy
 
     def composition(
         self, latent: torch.Tensor, params: dict[str, torch.Tensor]  # pylint: disable=W0613
@@ -385,10 +397,10 @@ class FunctionCallsFileManager:
             obj_values = np.array(data["Objective"])
             if any(obj.has_variance() for obj in self.objectives):
                 obj_variances = np.array(data["Variance"])
-            if self.scalarisation is not None:
-                scalar_values = np.array(data["Objective"])
-                if any(obj.has_variance() for obj in self.objectives):
-                    scalar_variances = np.array(data["Variance"])
+        if self.scalarisation and len(self.objectives) > 1:
+            scalar_values = np.array(data["Objective"])
+            if any(obj.has_variance() for obj in self.objectives):
+                scalar_variances = np.array(data["Variance"])
 
         return FunctionCallsData(
             start_times=start_times,
@@ -509,6 +521,16 @@ class Objective(ABC):
             True if this objective supports composition, False otherwise.
         """
         return self.composite
+
+    def is_noisy(self) -> bool:
+        """Check if this objective may be noisy.
+
+        Returns
+        -------
+        bool
+            True if this objective is noisy, False otherwise.
+        """
+        return any(obj.is_noisy() for obj in self.objectives)
 
     def num_objectives(self) -> int:
         """Get the number of objectives.

@@ -1,0 +1,14 @@
+optimiser:
+  name: generic
+  policies:
+    initial_guess:
+      name: initial
+    random:
+      name: random
+      rounds: 2
+      seed: 1
+    acquisition:
+      name: acquisition
+      type: qlogehvi
+      rounds: 1
+      seed: 1

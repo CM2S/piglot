@@ -87,34 +87,6 @@ class Reduction(ABC):
             raise ValueError(f"Gradient check failed for {type(self)}.") from exc
 
 
-class NegateReduction(Reduction):
-    """Negate the result of another reduction function."""
-
-    def __init__(self, reduction: Reduction) -> None:
-        self.reduction = reduction
-
-    def reduce_torch(
-        self, time: torch.Tensor, data: torch.Tensor, params: dict[str, torch.Tensor]
-    ) -> torch.Tensor:
-        """Reduce the input data to a single value.
-
-        Parameters
-        ----------
-        time : torch.Tensor
-            Time points of the response.
-        data : torch.Tensor
-            Data points of the response.
-        params : dict[str, torch.Tensor]
-            Named parameters for the given responses.
-
-        Returns
-        -------
-        torch.Tensor
-            Reduced value of the data.
-        """
-        return -self.reduction.reduce_torch(time, data, params)
-
-
 class ParameterReduction(Reduction):
     """Simply output one of the parameters as the reduction.
 
