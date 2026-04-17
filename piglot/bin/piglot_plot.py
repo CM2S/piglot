@@ -3,6 +3,7 @@ import argparse
 from piglot.plots.module import PlottingModuleConfigFile
 from piglot.plots.modules.basic import CasePlot, BestCasePlot, ParetoPlot
 from piglot.plots.modules.gp import GPPlot, CompositeGPPlot
+from piglot.plots.modules.inference import InferencePlot
 from piglot.plots.modules.history import (
     ObjectiveHistoryPlot,
     ParameterHistoryPlot,
@@ -21,6 +22,7 @@ AVAILABLE_PLOTTING_MODULES: list[type[PlottingModuleConfigFile]] = [
     ParameterHistoryPlot,
     RegretHistoryPlot,
     AnimationPlot,
+    InferencePlot,
 ]
 
 
