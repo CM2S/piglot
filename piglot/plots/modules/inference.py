@@ -1,17 +1,13 @@
 """Module for Bayesian inference plots."""
 from argparse import Namespace, ArgumentParser
-from typing import Optional
-import numpy as np
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import torch
 from tqdm import tqdm
-from botorch.sampling.qmc import MultivariateNormalQMCEngine
-from piglot.data.dataset import RawDataset
 from piglot.data.sampling import draw_function_samples, PathwiseSamplingModel, find_pathwise_optima
-from piglot.data.surrogate import GPModel, SurrogateSettings
 from piglot.optimisers.generic.optimiser import GenericOptimiser
 from piglot.plots.module import PlottingModuleConfigFile
+from piglot.utils.tabular import TabularFile, TabularFloatColumn
 from piglot.utils.yaml_parser import ProblemConfig
 
 
@@ -82,6 +78,12 @@ class InferencePlot(PlottingModuleConfigFile):
             default=20,
             help="Number of bins to use for the histograms.",
         )
+        parser.add_argument(
+            "--save_samples",
+            type=str,
+            default=None,
+            help="Path to save the sampled data.",
+        )
         return parser
 
     def plot_run(self, problem: ProblemConfig, args: Namespace) -> list[Figure]:
@@ -139,6 +141,19 @@ class InferencePlot(PlottingModuleConfigFile):
                     samples.append(values[i].item())
         grids = torch.stack(grids, dim=0)
         samples = torch.tensor(samples)
+
+        # Save the sampled data if a path is provided
+        if args.save_samples is not None:
+            names = problem.settings.parameters.get_scalar_names()
+            columns = [
+                TabularFloatColumn("Objective", 16),
+                *[TabularFloatColumn(name, 16) for name in names],
+            ]
+            tabular_file = TabularFile(args.save_samples, columns)
+            tabular_file.prepare()
+            for i in range(grids.shape[0]):
+                values = problem.settings.parameters.to_values(grids[i, :].numpy())
+                tabular_file.write_row([samples[i].item()] + list(values.scalar_values.values()))
 
         # Build the histograms: values
         figures = []
