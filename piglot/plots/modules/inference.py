@@ -180,9 +180,10 @@ class InferencePlot(PlottingModuleConfigFile):
         figures.append(fig)
 
         # Build the histograms: parameters
+        param_names = problem.settings.parameters.get_scalar_names()
+        bounds = problem.settings.parameters.get_bounds()
         for i in range(grids.shape[-1]):
-            bounds = problem.settings.parameters[i].get_bounds()
-            lbound, ubound = bounds[0, 0], bounds[0, 1]
+            lbound, ubound = bounds[i, 0], bounds[i, 1]
             fig, ax = plt.subplots(layout='constrained')
             ax.hist(
                 grids[..., i],
@@ -190,7 +191,7 @@ class InferencePlot(PlottingModuleConfigFile):
                 density=True,
                 range=(lbound, ubound),
             )
-            ax.set_xlabel(problem.settings.parameters[i].name)
+            ax.set_xlabel(param_names[i])
             ax.set_ylabel("Probability")
             ax.set_xlim(lbound, ubound)
             figures.append(fig)
