@@ -2,11 +2,13 @@
 from argparse import Namespace, ArgumentParser
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 from tqdm import tqdm
 from piglot.data.sampling import draw_function_samples, PathwiseSamplingModel, find_pathwise_optima
 from piglot.optimisers.generic.optimiser import GenericOptimiser
 from piglot.plots.module import PlottingModuleConfigFile
+from piglot.plots.modules.gp import GPPlot, CompositeGPPlot
 from piglot.utils.tabular import TabularFile, TabularFloatColumn
 from piglot.utils.yaml_parser import ProblemConfig
 
@@ -75,8 +77,11 @@ class InferencePlot(PlottingModuleConfigFile):
         parser.add_argument(
             "--bins",
             type=int,
-            default=20,
-            help="Number of bins to use for the histograms.",
+            default=None,
+            help=(
+                "Number of bins to use for the histograms. "
+                "If None, the number of bins will be determined automatically.",
+            ),
         )
         parser.add_argument(
             "--save_samples",
@@ -152,13 +157,24 @@ class InferencePlot(PlottingModuleConfigFile):
             tabular_file = TabularFile(args.save_samples, columns)
             tabular_file.prepare()
             for i in range(grids.shape[0]):
-                values = problem.settings.parameters.to_values(grids[i, :].numpy())
+                param_values = grids[i, :].tolist()
+                values = problem.settings.parameters.to_values(np.array(param_values))
                 tabular_file.write_row([samples[i].item()] + list(values.scalar_values.values()))
+
+        # Set up number of bins
+        def num_bins(data: torch.Tensor, range: tuple[float, float] = None) -> int:
+            if args.bins is not None:
+                return args.bins
+            if range is None:
+                range = (torch.min(data).item(), torch.max(data).item())
+            # Freedman–Diaconis rule
+            h = 2 * (torch.quantile(data, 0.75) - torch.quantile(data, 0.25)) * len(data) ** (-1/3)
+            return min(128, int((range[1] - range[0]) / h))
 
         # Build the histograms: values
         figures = []
         fig, ax = plt.subplots(layout='constrained')
-        ax.hist(samples, bins=args.bins, density=True)
+        ax.hist(samples, bins=num_bins(samples), density=True)
         ax.set_xlabel("Objective values")
         ax.set_ylabel("Probability")
         figures.append(fig)
@@ -168,10 +184,60 @@ class InferencePlot(PlottingModuleConfigFile):
             bounds = problem.settings.parameters[i].get_bounds()
             lbound, ubound = bounds[0, 0], bounds[0, 1]
             fig, ax = plt.subplots(layout='constrained')
-            ax.hist(grids[..., i], bins=args.bins, density=True, range=(lbound, ubound))
+            ax.hist(
+                grids[..., i],
+                bins=num_bins(grids[..., i], range=(lbound, ubound)),
+                density=True,
+                range=(lbound, ubound),
+            )
             ax.set_xlabel(problem.settings.parameters[i].name)
             ax.set_ylabel("Probability")
             ax.set_xlim(lbound, ubound)
+            figures.append(fig)
+
+        # For 1D problems, make the joint plot with the GP and the histograms
+        if grids.shape[-1] == 1:
+            fig, axes = plt.subplots(
+                nrows=2, ncols=2, sharex='col', sharey='row', layout='constrained'
+            )
+
+            # Plot the GP
+            gp_plot = CompositeGPPlot() if problem.objective.is_composite() else GPPlot()
+            parser = ArgumentParser()
+            new_args = gp_plot.setup_parser(parser).parse_args([args.config])
+            gp_plot.single_plot(axes[0, :1], problem, new_args)
+            axes[0, 0].set_xlabel(None)
+            axes[0, 0].set_title(None)
+            axes[0, 0].set_ylabel("Objective value")
+
+            # Find the bounds for each axis based on the GP plot
+            param_lbound, param_ubound = axes[0, 0].get_xlim()
+            obj_lbound, obj_ubound = axes[0, 0].get_ylim()
+
+            # Plot parameter distribution
+            bounds = problem.settings.parameters[0].get_bounds()
+            lbound, ubound = bounds[0, 0], bounds[0, 1]
+            axes[1, 0].hist(
+                grids[..., 0],
+                bins=num_bins(grids[..., 0], range=(param_lbound, param_ubound)),
+                density=True,
+                range=(param_lbound, param_ubound),
+            )
+            axes[1, 0].set_xlabel(problem.settings.parameters[0].name)
+            axes[1, 0].set_ylabel("Probability")
+
+            # Plot objective distribution (rotated)
+            axes[0, 1].hist(
+                samples,
+                bins=num_bins(samples, range=(obj_lbound, obj_ubound)),
+                density=True,
+                orientation='horizontal',
+                range=(obj_lbound, obj_ubound),
+            )
+            axes[0, 1].set_xlabel("Probability")
+
+            # Clean up the unused axis and the temporary GP figure
+            axes[1, 1].axis('off')
             figures.append(fig)
 
         return figures

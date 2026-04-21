@@ -85,8 +85,32 @@ class GPPlot(PlottingModuleConfigFile):
         list[Figure]
             A list of generated figures.
         """
-        if problem.settings.parameters.num_optim_parameters() != 1:
-            raise ValueError("Can only plot a Gaussian process regression for a single parameter.")
+        num_objectives = (
+            problem.objective.num_problem.objectives()
+            if problem.objective.is_multi_objective() else 1
+        )
+        figures = []
+        axes = []
+        for _ in range(num_objectives):
+            fig, ax = plt.subplots(layout="constrained")
+            figures.append(fig)
+            axes.append(ax)
+        self.single_plot(axes, problem, args)
+        return figures
+
+    @classmethod
+    def single_plot(cls, axes: list[plt.Axes], problem: ProblemConfig, args: Namespace) -> None:
+        """Generate a single plot for the given GP model.
+
+        Parameters
+        ----------
+        axes : list[plt.Axes]
+            The axes to plot on.
+        problem : ProblemConfig
+            The optimisation problem built from the configuration file.
+        args : Namespace
+            The arguments parsed from the command line.
+        """
 
         # Build x-grid
         parameters = problem.settings.parameters
@@ -124,9 +148,12 @@ class GPPlot(PlottingModuleConfigFile):
                 None if func_calls.obj_variances is None else func_calls.obj_variances,
             )
 
+        # Sanitise number of axes
+        if len(axes) != len(data):
+            raise ValueError("Number of axes does not match number of objectives.")
+
         # Plot each case
-        figures: list[Figure] = []
-        for name, (x_vals, y_vals, y_vars) in data.items():
+        for idx, (name, (x_vals, y_vals, y_vars)) in enumerate(data.items()):
             # Clamp to max_calls and build dataset
             max_calls = len(x_vals) if args.max_calls is None else min(len(x_vals), args.max_calls)
             x_vals = x_vals[:max_calls]
@@ -160,7 +187,7 @@ class GPPlot(PlottingModuleConfigFile):
             y_ub = torch.quantile(noisy_samples, 0.975, dim=0).squeeze()
 
             # Plot the GP
-            fig, ax = plt.subplots(layout='constrained')
+            ax = axes[idx]
             ax.plot(x.squeeze(), f_mean, label='f mean')
             ax.fill_between(x.squeeze(), f_lb, f_ub, alpha=0.2, label='f 95% CI')
 
@@ -189,9 +216,6 @@ class GPPlot(PlottingModuleConfigFile):
             ax.set_xlim(x_min, x_max)
             ax.set_title(name)
             ax.legend()
-            figures.append(fig)
-
-        return figures
 
 
 class CompositeGPPlot(PlottingModuleConfigFile):
@@ -271,6 +295,32 @@ class CompositeGPPlot(PlottingModuleConfigFile):
         -------
         list[Figure]
             A list of generated figures.
+        """
+        num_objectives = (
+            problem.objective.num_problem.objectives()
+            if problem.objective.is_multi_objective() else 1
+        )
+        figures = []
+        axes = []
+        for _ in range(num_objectives):
+            fig, ax = plt.subplots(layout="constrained")
+            figures.append(fig)
+            axes.append(ax)
+        self.single_plot(axes, problem, args)
+        return figures
+
+    @classmethod
+    def single_plot(cls, axes: list[plt.Axes], problem: ProblemConfig, args: Namespace) -> None:
+        """Generate a single plot for the given GP model.
+
+        Parameters
+        ----------
+        axes : list[plt.Axes]
+            The axes to plot on.
+        problem : ProblemConfig
+            The optimisation problem built from the configuration file.
+        args : Namespace
+            The arguments parsed from the command line.
         """
         if problem.settings.parameters.num_optim_parameters() != 1:
             raise ValueError("Can only plot a Gaussian process regression for a single parameter.")
@@ -359,10 +409,13 @@ class CompositeGPPlot(PlottingModuleConfigFile):
                 -1, dataset.outputs.shape[0], num_objectives
             )
 
+        # Sanitise number of axes
+        if len(axes) != num_objectives:
+            raise ValueError("Number of axes does not match number of objectives")
+
         # Plot for each objective
-        figures = []
         for i in range(num_objectives):
-            fig, ax = plt.subplots(layout='constrained')
+            ax = axes[i]
 
             # Set up the plot depending on whether this is stochastic or not
             if obs_y_lb is None:
@@ -455,6 +508,3 @@ class CompositeGPPlot(PlottingModuleConfigFile):
             ax.set_xlim(x_min, x_max)
             ax.set_title(f"Objective {i+1}" if num_objectives > 1 else "Objective")
             ax.legend()
-            figures.append(fig)
-
-        return figures
