@@ -242,3 +242,150 @@ class InferencePlot(PlottingModuleConfigFile):
             figures.append(fig)
 
         return figures
+
+
+class CornerPlot(PlottingModuleConfigFile):
+    """Corner plot for visualising parameter distributions and correlations."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="corner",
+            help_str="plot Corner plots for Bayesian inference results",
+            description="Plot Corner plots for Bayesian inference results.",
+            allow_save_fig=True,
+        )
+
+    def setup_parser(self, parser: ArgumentParser) -> ArgumentParser:
+        """Set up the argument parser for this plotting module.
+
+        Parameters
+        ----------
+        parser : ArgumentParser
+            The argument parser to set up.
+
+        Returns
+        -------
+        ArgumentParser
+            The argument parser with the added arguments.
+        """
+        parser = super().setup_parser(parser)
+        parser.add_argument(
+            "samples_file",
+            type=str,
+            help="Path to the file containing the sampled data.",
+        )
+        parser.add_argument(
+            "--bins",
+            type=int,
+            default=64,
+            help="Number of bins to use for the histograms.",
+        )
+        parser.add_argument(
+            "--mode",
+            default="contourf",
+            choices=["hist", "scatter", "contour", "contourf"],
+            help="Mode of the corner plot."
+        )
+        return parser
+
+    def plot_run(self, problem: ProblemConfig, args: Namespace) -> list[Figure]:
+        """Generate the plot based on the provided config file and arguments.
+
+        Parameters
+        ----------
+        problem : ProblemConfig
+            The optimisation problem built from the configuration file.
+        args : Namespace
+            The arguments parsed from the command line.
+
+        Returns
+        -------
+        list[Figure]
+            A list of generated figures.
+        """
+        if problem.objective.is_multi_objective():
+            raise ValueError("Can only run Bayesian inference with single-objective problems.")
+        param_names = problem.settings.parameters.get_scalar_names() + ["Objective"]
+        
+        # Load the samples and put objective in the last column
+        samples = np.genfromtxt(args.samples_file, skip_header=1)
+        samples = np.concatenate((samples[:, 1:], samples[:, :1]), axis=1)
+        num_samples = samples.shape[0]
+
+        # Sanitise number of parameters
+        num_vars = len(param_names)
+        if samples.shape[1] != num_vars:
+            raise ValueError(
+                "Number of parameters in the samples does not match the problem configuration."
+            )
+
+        # Set up bounds (inject parameter bounds for optimisable parameters)
+        param_bounds = problem.settings.parameters.get_bounds()
+        lbounds = np.min(samples, axis=0)
+        ubounds = np.max(samples, axis=0)
+        for i, (lb, ub) in enumerate(param_bounds):
+            lbounds[i] = lb
+            ubounds[i] = ub
+
+        # Construct the plots
+        fig, axes = plt.subplots(
+            nrows=num_vars,
+            ncols=num_vars,
+            sharex='col',
+            layout='compressed',
+            subplot_kw=dict(box_aspect=1),
+        )
+
+        for i in range(num_vars):
+            # Plot the histogram
+            axes[i, i].hist(
+                samples[:, i], bins=args.bins, density=True, range=(lbounds[i], ubounds[i])
+            )
+            axes[i, i].set_xlim(lbounds[i], ubounds[i])
+            axes[i, i].set_yticks([])
+
+            # Corner plots
+            for j in range(i):
+                if args.mode == "scatter":
+                    axes[i, j].scatter(samples[:, j], samples[:, i], s=1, alpha=128 / num_samples)
+                elif args.mode == "hist":
+                    axes[i, j].hist2d(
+                        samples[:, j],
+                        samples[:, i],
+                        bins=int(np.sqrt(4 * args.bins)),
+                        density=True,
+                        range=[[lbounds[j], ubounds[j]], [lbounds[i], ubounds[i]]],
+                    )
+                elif args.mode in ["contour", "contourf"]:
+                    H, xedges, yedges = np.histogram2d(
+                        samples[:, j],
+                        samples[:, i],
+                        bins=int(np.sqrt(4 * args.bins)),
+                        range=[[lbounds[j], ubounds[j]], [lbounds[i], ubounds[i]]],
+                    )
+                    if args.mode == "contour":
+                        axes[i, j].contour(
+                            0.5 * (xedges[1:] + xedges[:-1]),
+                            0.5 * (yedges[1:] + yedges[:-1]),
+                            H.T
+                        )
+                    else:
+                        axes[i, j].contourf(
+                            0.5 * (xedges[1:] + xedges[:-1]),
+                            0.5 * (yedges[1:] + yedges[:-1]),
+                            H.T
+                        )
+                axes[i, j].set_xlim(lbounds[j], ubounds[j])
+                axes[i, j].set_ylim(lbounds[i], ubounds[i])
+                if j > 0:
+                    axes[i, j].set_yticks([])
+
+            # Delete upper triangle
+            for j in range(i + 1, num_vars):
+                axes[i, j].axis('off')
+
+            # Set up labels
+            axes[-1, i].set_xlabel(param_names[i])
+            axes[i, 0].set_ylabel(param_names[i] if i > 0 else "Frequency")
+        
+        return [fig]
