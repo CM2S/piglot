@@ -236,7 +236,7 @@ def optimise_acquisition(
     num_continuous = len(parameters) - num_discrete
     raw_samples = settings.raw_samples or max(256, 16 * num_continuous * num_continuous)
     options = {
-        "sample_around_best": True,
+        "sample_around_best": not model.is_multi_task(),
         "seed": settings.seed,
         "init_batch_limit": settings.batch_size,
     }

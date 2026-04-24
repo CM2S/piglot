@@ -11,7 +11,7 @@ from gpytorch.likelihoods import FixedNoiseGaussianLikelihood
 from botorch.acquisition.objective import PosteriorTransform
 from botorch.exceptions import ModelFittingError
 from botorch.fit import fit_gpytorch_mll
-from botorch.models import SingleTaskGP
+from botorch.models import SingleTaskGP, MultiTaskGP, KroneckerMultiTaskGP
 from botorch.models.model import FantasizeMixin
 from botorch.models.gpytorch import BatchedMultiOutputGPyTorchModel
 from botorch.models.transforms.input import InputTransform, Normalize
@@ -32,6 +32,7 @@ class SurrogateSettings(ReadableModel):
 
     noise: Optional[Literal['infer', 'fixed', 'none']] = None
     noise_model: Literal['homoscedastic', 'heteroscedastic'] = 'homoscedastic'
+    model: Literal['single_task', 'multi_task'] = 'single_task'
     pca_variance: float = 1e-6
     std_tol: float = 1e-6
     min_variance: float = 1e-6
@@ -345,6 +346,10 @@ class GPModel:
 
         # Build and fit the GP model
         if settings.noise == 'infer' and settings.noise_model == 'heteroscedastic':
+            if settings.model == "multi_task":
+                raise ValueError(
+                    'Heteroscedastic noise inference is not supported for multi-task models'
+                )
             self.gp = fit_most_likely_heteroscedastic_gp(
                 self.inputs,
                 self.outputs,
@@ -354,23 +359,53 @@ class GPModel:
                 tol_var=settings.hetero_tol_var,
             )
         else:
-            model_cls = (
-                SingleTaskGPWithNoise if settings.noise_model == 'homoscedastic'
-                else PseudoHeteroscedasticSingleTaskGP
-            )
-            self.gp = model_cls(
-                self.inputs,
-                self.outputs,
-                train_Yvar=self.output_variances,
-                input_transform=Normalize(d=self.inputs.shape[-1]),
-                outcome_transform=None,
-            )
+            if settings.model == 'single_task':
+                model_cls = (
+                    SingleTaskGPWithNoise if settings.noise_model == 'homoscedastic'
+                    else PseudoHeteroscedasticSingleTaskGP
+                )
+                self.gp = model_cls(
+                    self.inputs,
+                    self.outputs,
+                    train_Yvar=self.output_variances,
+                    input_transform=Normalize(d=self.inputs.shape[-1]),
+                    outcome_transform=None,
+                )
+            elif settings.model == 'multi_task':
+                if settings.noise_model == 'heteroscedastic':
+                    raise ValueError(
+                        'Heteroscedastic noise inference is not supported for multi-task models'
+                    )
+                new_inputs = self.inputs.repeat(self.outputs.shape[-1], 1)
+                features = torch.arange(self.outputs.shape[-1]).repeat_interleave(
+                    self.inputs.shape[0]
+                )
+                self.gp = MultiTaskGP(
+                    torch.concatenate([new_inputs, features.unsqueeze(-1)], dim=-1),
+                    self.outputs.transpose(0, 1).reshape(-1, 1),
+                    train_Yvar=self.output_variances.transpose(0, 1).reshape(-1, 1),
+                    task_feature=-1,
+                    input_transform=Normalize(
+                        d=self.inputs.shape[-1] + 1, indices=list(range(self.inputs.shape[-1]))
+                    ),
+                    outcome_transform=None,
+                )
             mll = ExactMarginalLogLikelihood(self.gp.likelihood, self.gp)
             try:
                 fit_gpytorch_mll(mll)
             except ModelFittingError:
                 warnings.warn('Optimisation of the MLL failed, falling back to PyTorch optimiser')
                 fit_mll_pytorch_loop(mll)
+
+    def is_multi_task(self) -> bool:
+        """Check if the model is a multi-task model.
+        
+        Returns
+        -------
+        bool
+            True if the model is a multi-task model, False otherwise.
+        """
+        return self.settings.model == 'multi_task'
 
     def sample(
         self,
@@ -483,6 +518,49 @@ class ObjectiveModel(GPModel):
             "Do not call `sample()` directly for ObjectiveModel. "
             "Use `latent_samples()` or `objective_samples()` instead."
         )
+
+    def pc_samples(
+        self,
+        input_data: torch.Tensor,
+        sampler: Optional[MCSampler] = None,
+        sample_shape: Optional[torch.Size] = None,
+        seed: Optional[int] = None,
+        observation_noise: Union[bool, torch.Tensor] = False,
+    ) -> torch.Tensor:
+        """Draw samples from the model at the provided input locations.
+
+        Parameters
+        ----------
+        input_data : torch.Tensor
+            A `(batch_shape) x q x d` tensor of input locations.
+        sampler : Optional[MCSampler], optional
+            Sampler to use when drawing samples. If `None`, a SobolQMCNormalSampler is used.
+        sample_shape : Optional[torch.Size], optional
+            Shape of the samples to draw. If `sampler` is provided, this is ignored.
+        seed : Optional[int], optional
+            Random seed to use when creating the default sampler. Only used if `sampler` is `None`.
+        observation_noise : Union[bool, torch.Tensor], optional
+            Whether to include observation noise in the samples. If a tensor is provided,
+            it is used as the observation noise.
+
+        Returns
+        -------
+        torch.Tensor
+            A `(sample_shape) x (batch_shape) x q x o` tensor of model samples.
+        """
+        # Sanitise sampler options
+        if sampler is not None and sample_shape is not None:
+            raise ValueError('Both sampler and sample_shape were provided')
+        if sampler is None and sample_shape is None:
+            raise ValueError('Either sampler or sample_shape must be provided')
+
+        # Create default sampler if needed
+        if sampler is None:
+            sampler = SobolQMCNormalSampler(sample_shape, seed=seed)
+
+        # Draw samples from the GP posterior (reduced latent space)
+        posterior = self.gp.posterior(input_data, observation_noise=observation_noise)
+        return sampler(posterior)
 
     def latent_samples(
         self,
