@@ -13,6 +13,78 @@ from piglot.plots.module import PlottingModuleConfigFile
 from piglot.utils.yaml_parser import ProblemConfig
 
 
+def gp_plot(
+    ax: plt.Axes,
+    samples_x: torch.Tensor,
+    samples_y: torch.Tensor,
+    label: str,
+    obs_x: Optional[torch.Tensor] = None,
+    obs_y: Optional[torch.Tensor] = None,
+    obs_yvar: Optional[torch.Tensor] = None,
+    obs_ysamples: Optional[torch.Tensor] = None,
+) -> None:
+    """Plot a Gaussian process regression curve.
+
+    Parameters
+    ----------
+    ax : plt.Axes
+        The axes to plot on.
+    samples_x : torch.Tensor
+        The input samples for the GP.
+    samples_y : torch.Tensor
+        The output samples for the GP.
+    label : str
+        The label for the GP curve.
+    obs_x : Optional[torch.Tensor], optional
+        The observed input points, by default None
+    obs_y : Optional[torch.Tensor], optional
+        The observed output points, by default None
+    obs_yvar : Optional[torch.Tensor], optional
+        The variance of the observed outputs, by default None
+    obs_ysamples : Optional[torch.Tensor], optional
+        The samples of the observed outputs, by default None
+    """
+    mean = samples_y.mean(dim=0)
+    lbound = samples_y.quantile(0.025, dim=0)
+    ubound = samples_y.quantile(0.975, dim=0)
+    obs_lbound = None
+    obs_ubound = None
+    if obs_yvar is None:
+        if  obs_ysamples is not None:
+            obs_lbound = obs_ysamples.quantile(0.025, dim=0)
+            obs_ubound = obs_ysamples.quantile(0.975, dim=0)
+    if obs_yvar is not None:
+        if obs_ysamples is not None:
+            raise ValueError("Only one of obs_yvar or obs_ysamples can be provided.")
+        obs_lbound = obs_y - 1.96 * obs_yvar.sqrt()
+        obs_ubound = obs_y + 1.96 * obs_yvar.sqrt()
+    if (obs_x is None) != (obs_y is None):
+        raise ValueError("Both obs_x and obs_y must be provided together.")
+
+    # Plots
+    p, = ax.plot(samples_x.squeeze(), mean.squeeze(), label=label)
+    ax.fill_between(samples_x.squeeze(), lbound.squeeze(), ubound.squeeze(), alpha=0.2)
+    if obs_x is not None:
+        if obs_lbound is None:
+            ax.scatter(
+                obs_x.squeeze(),
+                obs_y.squeeze(),
+                color=p.get_color(),
+                label=f"Observations - {label}",
+            )
+        else:
+            ax.errorbar(
+                obs_x.squeeze(),
+                obs_y.squeeze(),
+                yerr=[
+                    obs_y.squeeze() - obs_lbound.squeeze(),
+                    obs_ubound.squeeze() - obs_y.squeeze(),
+                ],
+                fmt='o',
+                color=p.get_color(),
+                label=f"Observations - {label}",
+            )
+
 class GPPlot(PlottingModuleConfigFile):
     """Plotting module for Gaussian process regression."""
 
@@ -279,6 +351,12 @@ class CompositeGPPlot(PlottingModuleConfigFile):
             default="mean",
             help="Specify whether to sample from the mean estimator or the objective.",
         )
+        parser.add_argument(
+            "--num_pcs",
+            type=int,
+            default=0,
+            help="Number of principal components to plot.",
+        )
         return parser
 
     def plot_run(self, problem: ProblemConfig, args: Namespace) -> list[Figure]:
@@ -302,7 +380,7 @@ class CompositeGPPlot(PlottingModuleConfigFile):
         )
         figures = []
         axes = []
-        for _ in range(num_objectives):
+        for _ in range(num_objectives + args.num_pcs):
             fig, ax = plt.subplots(layout="constrained")
             figures.append(fig)
             axes.append(ax)
@@ -350,20 +428,17 @@ class CompositeGPPlot(PlottingModuleConfigFile):
             objective_of_mean = objective.composition(
                 model.latent_samples(x, sample_shape=sample_shape, seed=args.seed).mean(dim=0), x
             )
+            if args.num_pcs > 0:
+                pc_samples = model.pc_samples(x, sample_shape=sample_shape, seed=args.seed)
+                noisy_pc_samples = model.pc_samples(
+                    x, sample_shape=sample_shape, seed=args.seed, observation_noise=True
+                )
 
         # Ensure sample shapes are consistent with the problem
         num_objectives = objective.num_objectives() if objective.is_multi_objective() else 1
         samples = samples.reshape(args.num_samples, args.num_points, 1, num_objectives)
         noisy_samples = noisy_samples.reshape(args.num_samples, args.num_points, 1, num_objectives)
         objective_of_mean = objective_of_mean.reshape(args.num_points, 1, num_objectives)
-
-        # Derive mean and confidence intervals
-        f_mean = torch.mean(samples, dim=0)
-        y_mean = torch.mean(noisy_samples, dim=0)
-        f_lb = torch.quantile(samples, 0.025, dim=0)
-        f_ub = torch.quantile(samples, 0.975, dim=0)
-        y_lb = torch.quantile(noisy_samples, 0.025, dim=0)
-        y_ub = torch.quantile(noisy_samples, 0.975, dim=0)
 
         # If function samples are requested, evaluate them
         if args.num_func_samples > 0:
@@ -386,8 +461,6 @@ class CompositeGPPlot(PlottingModuleConfigFile):
             obs_y_vals = objective.composition(dataset.outputs, obs_x_vals).reshape(
                 -1, num_objectives
             )
-            obs_y_lb = None
-            obs_y_ub = None
             obs_y_mean_vals = None
         else:
             obs_latent_samples = torch.stack(
@@ -399,18 +472,23 @@ class CompositeGPPlot(PlottingModuleConfigFile):
                 ],
                 dim=1,
             )
-            obj_samples = objective.composition(obs_latent_samples, obs_x_vals).reshape(
+            obs_y_samples = objective.composition(obs_latent_samples, obs_x_vals).reshape(
                 -1, dataset.outputs.shape[0], num_objectives
             )
-            obs_y_vals = torch.mean(obj_samples, dim=0)
-            obs_y_lb = torch.quantile(obj_samples, 0.025, dim=0)
-            obs_y_ub = torch.quantile(obj_samples, 0.975, dim=0)
+            obs_y_vals = torch.mean(obs_y_samples, dim=0)
             obs_y_mean_vals = objective.composition(dataset.outputs, obs_x_vals).reshape(
                 -1, dataset.outputs.shape[0], num_objectives
             )
 
+        # Sanitise number of PCs
+        if args.num_pcs < 0:
+            raise ValueError("Number of principal components cannot be negative")
+        if args.num_pcs > 0:
+            if pc_samples.shape[-1] < args.num_pcs:
+                raise ValueError("Too many principal components requested")
+
         # Sanitise number of axes
-        if len(axes) != num_objectives:
+        if len(axes) != num_objectives + args.num_pcs:
             raise ValueError("Number of axes does not match number of objectives")
 
         # Plot for each objective
@@ -418,74 +496,29 @@ class CompositeGPPlot(PlottingModuleConfigFile):
             ax = axes[i]
 
             # Set up the plot depending on whether this is stochastic or not
-            if obs_y_lb is None:
-                ax.plot(x.squeeze(), f_mean[..., i].squeeze(), label='f mean')
-                ax.fill_between(
-                    x.squeeze(),
-                    f_lb[..., i].squeeze(),
-                    f_ub[..., i].squeeze(),
-                    alpha=0.2,
-                    label='f 95% CI',
-                )
-                ax.scatter(
-                    obs_x_vals.squeeze(),
-                    obs_y_vals[..., i].squeeze(),
-                    color='k',
-                    label='Observations',
-                )
-            else:
-                # Distribution from the mean estimator
-                ax.plot(
-                    x.squeeze(),
-                    f_mean[..., i].squeeze(),
-                    label=r'$\mathbb{E}[f(\theta, \mu_p(\theta))]$',
-                )
-                ax.fill_between(
-                    x.squeeze(),
-                    f_lb[..., i].squeeze(),
-                    f_ub[..., i].squeeze(),
-                    alpha=0.2,
-                )
-                # Distribution from the latent posterior (with noise)
-                p_y, = ax.plot(
-                    x.squeeze(),
-                    y_mean[..., i].squeeze(),
-                    label=r'$\mathbb{E}[f(\theta, p(\theta))]$',
-                )
-                ax.fill_between(
-                    x.squeeze(),
-                    y_lb[..., i].squeeze(),
-                    y_ub[..., i].squeeze(),
-                    alpha=0.2,
+            gp_plot(
+                ax,
+                x,
+                samples[..., i],
+                r'$\mathbb{E}[f(\theta, \mu_p(\theta))]$',
+                obs_x=obs_x_vals,
+                obs_y=obs_y_mean_vals[..., i],
+            )
+            if dataset.covariances is not None:
+                gp_plot(
+                    ax,
+                    x,
+                    noisy_samples[..., i],
+                    r'$\mathbb{E}[f(\theta, p(\theta))]$',
+                    obs_x=obs_x_vals,
+                    obs_y=obs_y_vals,
+                    obs_ysamples=obs_y_samples[..., i],
                 )
                 # Objective of the mean
-                p_m, = ax.plot(
+                ax.plot(
                     x.squeeze(),
                     objective_of_mean[..., i].squeeze(),
                     label=r'$f(\theta, \mathbb{E}[p(\theta)])$',
-                )
-
-                # Observations
-                yerr = torch.stack(
-                    [
-                        obs_y_vals[..., i].squeeze() - obs_y_lb[..., i].squeeze(),
-                        obs_y_ub[..., i].squeeze() - obs_y_vals[..., i].squeeze()
-                    ],
-                    dim=0,
-                )
-                ax.errorbar(
-                    obs_x_vals.squeeze(),
-                    obs_y_vals[..., i].squeeze(),
-                    yerr=yerr,
-                    fmt='o',
-                    color=p_y.get_color(),
-                    label=r'Observations - $p(f(\theta, p(\theta)))$',
-                )
-                ax.scatter(
-                    obs_x_vals.squeeze(),
-                    obs_y_mean_vals[..., i].squeeze(),
-                    color=p_m.get_color(),
-                    label=r'Observations - $p(f(\theta, \mu_p(\theta)))$',
                 )
 
             # If function samples are requested, plot them
@@ -508,3 +541,23 @@ class CompositeGPPlot(PlottingModuleConfigFile):
             ax.set_xlim(x_min, x_max)
             ax.set_title(f"Objective {i+1}" if num_objectives > 1 else "Objective")
             ax.legend()
+
+        if args.num_pcs > 0:
+            for i in range(args.num_pcs):
+                ax = axes[num_objectives + i]
+                gp_plot(ax, x, pc_samples[..., i], r"$\mu_p(\theta)$")
+                if dataset.covariances is not None:
+                    gp_plot(
+                        ax,
+                        x,
+                        noisy_pc_samples[..., i],
+                        r"$p(\theta)$",
+                        obs_x=model.inputs,
+                        obs_y=model.outputs[..., i],
+                        obs_yvar=model.output_variances[..., i],
+                    )
+
+                ax.set_xlabel(problem.settings.parameters[0].name)
+                ax.set_xlim(x_min, x_max)
+                ax.set_title(f"Principal Component {i+1}")
+                ax.legend()
