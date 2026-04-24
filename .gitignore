@@ -143,3 +143,6 @@ reference/
 examples/*/config/
 test/example_init_shot/*/
 test/example_init_shot/data.out
+
+# uv lock (we don't want to enforce uv yet)
+uv.lock
