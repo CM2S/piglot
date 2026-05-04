@@ -88,6 +88,7 @@ class MultiCaseSolver(Solver, ABC):
         tmp_dir: str,
         verbosity: str,
         parallel: int = 1,
+        max_retries: int = 1,
     ) -> None:
         """Constructor for the solver class.
 
@@ -103,10 +104,13 @@ class MultiCaseSolver(Solver, ABC):
             Path to the temporary directory.
         parallel : int, optional
             Number of parallel processes to run, by default 1.
+        max_retries : int, optional
+            Maximum number of retries for a failed case, by default 1.
         """
         super().__init__(parameters, output_dir, tmp_dir, verbosity)
         self.cases = cases
         self.parallel = parallel
+        self.max_retries = max_retries
         self.cases_dir = os.path.join(output_dir, "cases")
         self.cases_hist = os.path.join(output_dir, "cases_hist")
         # Sanitise output fields
@@ -243,10 +247,16 @@ class MultiCaseSolver(Solver, ABC):
             shutil.rmtree(tmp_dir)
         os.mkdir(tmp_dir)
 
-        # Evaluate all cases (in parallel if specified)
+        # Set up function to run a single case (retry up to max_retries times)
         def run_case(case: Case) -> CaseResult:
-            with self.verbosity_manager as stream:
-                return case.run(values, tmp_dir, stream)
+            for _ in range(self.max_retries):
+                with self.verbosity_manager as stream:
+                    result = case.run(values, tmp_dir, stream)
+                if result.success:
+                    break
+            return result
+
+        # Evaluate all cases (in parallel if specified)
         if self.parallel > 1:
             with Pool(self.parallel) as pool:
                 results = pool.map(run_case, self.cases)
@@ -306,8 +316,17 @@ class MultiCaseSolver(Solver, ABC):
         # Extract other information from the configuration
         tmp_dir = os.path.join(output_dir, config.pop('tmp_dir', 'tmp'))
         parallel = int(config.pop('parallel', 1))
+        max_retries = int(config.pop('max_retries', 1))
         verbosity = config.pop('verbosity', None)
         # Initialise each case (and append any extra configuration)
         case_class = cls.get_case_class()
         cases = [case_class.read(name, case | config) for name, case in config_cases.items()]
-        return cls(cases, parameters, output_dir, tmp_dir, verbosity, parallel=parallel)
+        return cls(
+            cases,
+            parameters,
+            output_dir,
+            tmp_dir,
+            verbosity,
+            parallel=parallel,
+            max_retries=max_retries,
+        )
