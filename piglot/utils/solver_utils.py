@@ -1,11 +1,10 @@
 """Utilities for the solver module."""
+from dataclasses import dataclass
+from io import TextIOWrapper
 import os
-import re
 import sys
 import shutil
-import importlib.util
-from typing import Union
-from piglot.parameter import ParameterSet
+from typing import Optional, Union
 
 
 def get_case_name(input_file: str) -> str:
@@ -95,6 +94,51 @@ def find_keyword(file: str, keyword: str) -> str:
     raise RuntimeError(f"Keyword {keyword} not found!")
 
 
+@dataclass
+class OutputStream:
+    """Class to manage output streams."""
+    stdout: TextIOWrapper
+    stderr: TextIOWrapper
+
+    def print(
+        self, *values, sep: Optional[str] = " ", end: Optional[str] = "\n", flush: bool = False
+    ) -> None:
+        """Wrapper for the print function in the output stream context.
+        
+        Parameters
+        ----------
+        *values : Any
+            Values to print.
+        sep : Optional[str], default=" "
+            Separator between values.
+        end : Optional[str], default="\n"
+            End character.
+        flush : bool, default=False
+            Whether to flush the output.
+
+        """
+        print(*values, sep=sep, end=end, file=self.stdout, flush=flush)
+
+    def print_error(
+        self, *values, sep: Optional[str] = " ", end: Optional[str] = "\n", flush: bool = False
+    ) -> None:
+        """Wrapper for the print function in the error stream context.
+
+        Parameters
+        ----------
+        *values : Any
+            Values to print.
+        sep : Optional[str], default=" "
+            Separator between values.
+        end : Optional[str], default="\n"
+            End character.
+        flush : bool, default=False
+            Whether to flush the output.
+
+        """
+        print(*values, sep=sep, end=end, file=self.stderr, flush=flush)
+
+
 class VerbosityManager:
     """Class to manage output streams based on verbosity levels."""
 
@@ -145,12 +189,8 @@ class VerbosityManager:
             if self.stderr is not None:
                 self.stderr.flush()
 
-    def __enter__(self) -> "VerbosityManager":
-        sys.stdout = self.stdout
-        sys.stderr = self.stderr
-        return self
+    def __enter__(self) -> OutputStream:
+        return OutputStream(self.stdout, self.stderr)
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         self.flush()
-        sys.stdout = sys.__stdout__
-        sys.stderr = sys.__stderr__

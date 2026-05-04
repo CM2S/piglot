@@ -5,6 +5,7 @@ import os
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import OutputResult, SingleCaseSolver
 from piglot.utils.assorted import read_custom_module
+from piglot.utils.solver_utils import OutputStream
 
 
 class ScriptSolverCallable(ABC):
@@ -65,7 +66,9 @@ class ScriptSolver(SingleCaseSolver):
         super().__init__(script.get_output_fields(), parameters, output_dir, tmp_dir, verbosity)
         self.script = script
 
-    def _solve(self, values: dict[str, float], concurrent: bool) -> dict[str, OutputResult]:
+    def _solve(
+        self, values: dict[str, float], concurrent: bool, stream: OutputStream
+    ) -> dict[str, OutputResult]:
         """Internal solver for the prescribed problems.
 
         Parameters
@@ -74,6 +77,8 @@ class ScriptSolver(SingleCaseSolver):
             Named set of parameter values for this evaluation.
         concurrent : bool
             Whether this run may be concurrent to another one (so use unique file names).
+        stream : OutputStream
+            Output stream for this call.
 
         Returns
         -------

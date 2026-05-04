@@ -9,7 +9,7 @@ import numpy as np
 from yaml import safe_dump_all, safe_load_all
 from piglot.parameter import ParameterSet, ParameterValues
 from piglot.utils.assorted import pretty_time
-from piglot.utils.solver_utils import VerbosityManager
+from piglot.utils.solver_utils import OutputStream, VerbosityManager
 
 
 T = TypeVar('T', bound='Solver')
@@ -334,7 +334,9 @@ class SingleCaseSolver(Solver, ABC):
         return self.get_case_result(param_hash).responses
 
     @abstractmethod
-    def _solve(self, values: dict[str, float], concurrent: bool) -> dict[str, OutputResult]:
+    def _solve(
+        self, values: dict[str, float], concurrent: bool, stream: OutputStream
+    ) -> dict[str, OutputResult]:
         """Internal solver for the prescribed problems.
 
         Parameters
@@ -343,6 +345,8 @@ class SingleCaseSolver(Solver, ABC):
             Named set of parameter values for this evaluation.
         concurrent : bool
             Whether this run may be concurrent to another one (so use unique file names).
+        stream : OutputStream
+            Output stream for this call.
 
         Returns
         -------
@@ -367,8 +371,8 @@ class SingleCaseSolver(Solver, ABC):
         """
         # Run the solver
         begin_time = time.time()
-        with self.verbosity_manager:
-            results = self._solve(values.scalar_values, concurrent)
+        with self.verbosity_manager as stream:
+            results = self._solve(values.scalar_values, concurrent, stream)
         run_time = time.time() - begin_time
         # Post-process results: write history entries
         case_result = CaseResult(

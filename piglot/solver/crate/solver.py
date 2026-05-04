@@ -1,7 +1,6 @@
 """Module for CRATE solver."""
 from typing import Dict, Type
 import os
-import sys
 import subprocess
 from piglot.solver.input_file_solver import (
     InputDataGenerator,
@@ -11,7 +10,7 @@ from piglot.solver.input_file_solver import (
     OutputField,
 )
 from piglot.solver.crate.fields import HresFile
-from piglot.utils.solver_utils import has_keyword
+from piglot.utils.solver_utils import OutputStream, has_keyword
 
 
 class CrateCase(InputFileCase):
@@ -31,7 +30,7 @@ class CrateCase(InputFileCase):
         self.python_interp = python_interp
         self.microstructure_dir = microstructure_dir
 
-    def _run_case(self, input_data: InputData, tmp_dir: str) -> bool:
+    def _run_case(self, input_data: InputData, tmp_dir: str, stream: OutputStream) -> bool:
         """Run the case for the given set of parameters.
 
         Parameters
@@ -40,6 +39,8 @@ class CrateCase(InputFileCase):
             Input data for this problem.
         tmp_dir : str
             Temporary directory to run the problem.
+        stream : OutputStream
+            Output stream for this call.
 
         Returns
         -------
@@ -57,8 +58,8 @@ class CrateCase(InputFileCase):
         # Run the analysis
         process_result = subprocess.run(
             command,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
+            stdout=stream.stdout,
+            stderr=stream.stderr,
             check=False,
             cwd=tmp_dir,
         )

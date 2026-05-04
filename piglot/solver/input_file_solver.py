@@ -9,6 +9,7 @@ from piglot.parameter import ParameterValues
 from piglot.solver.solver import OutputResult, CaseResult
 from piglot.solver.multi_case_solver import Case, MultiCaseSolver
 from piglot.utils.assorted import read_custom_module
+from piglot.utils.solver_utils import OutputStream
 
 
 T = TypeVar('T', bound='OutputField')
@@ -226,7 +227,7 @@ class InputFileCase(Case, ABC):
         return list(self.fields.keys())
 
     @abstractmethod
-    def _run_case(self, input_data: InputData, tmp_dir: str) -> bool:
+    def _run_case(self, input_data: InputData, tmp_dir: str, stream: OutputStream) -> bool:
         """Run the case for the given set of parameters.
 
         Parameters
@@ -235,6 +236,8 @@ class InputFileCase(Case, ABC):
             Input data for this problem.
         tmp_dir : str
             Temporary directory to run the problem.
+        stream : OutputStream
+            Output stream for this call.
 
         Returns
         -------
@@ -242,7 +245,7 @@ class InputFileCase(Case, ABC):
             Whether the case ran successfully or not.
         """
 
-    def run(self, values: ParameterValues, tmp_dir: str) -> CaseResult:
+    def run(self, values: ParameterValues, tmp_dir: str, stream: OutputStream) -> CaseResult:
         """Run the case for the given set of parameters.
 
         Parameters
@@ -251,6 +254,8 @@ class InputFileCase(Case, ABC):
             Named set of parameter values for this evaluation.
         tmp_dir : str
             Temporary directory to run the problem.
+        stream : OutputStream
+            Output stream for this call.
 
         Returns
         -------
@@ -279,7 +284,7 @@ class InputFileCase(Case, ABC):
             field.check(input_data)
         # Run and time the case (no high precision timing to track start time)
         begin_time = time.time()
-        success = self._run_case(input_data, tmp_dir)
+        success = self._run_case(input_data, tmp_dir, stream)
         elapsed_time = time.time() - begin_time
         # Read and return the fields
         responses = {name: field.get(input_data) for name, field in self.fields.items()}

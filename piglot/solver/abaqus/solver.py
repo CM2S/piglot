@@ -2,7 +2,6 @@
 from typing import Dict, Type, List, Any
 import os
 import re
-import sys
 import subprocess
 from piglot.solver.input_file_solver import (
     InputDataGenerator,
@@ -12,6 +11,7 @@ from piglot.solver.input_file_solver import (
     OutputField,
 )
 from piglot.solver.abaqus.fields import FieldsOutput
+from piglot.utils.solver_utils import OutputStream
 
 
 class AbaqusCase(InputFileCase):
@@ -91,7 +91,6 @@ class AbaqusCase(InputFileCase):
             job_list = re.findall(r'\*\* Job name: ([^M]+)', data)
             job_list = [job.strip() for job in job_list]
             self.job_name = self.__sanitize_field(self.job_name, job_list, "job")
-            print(self.job_name)
 
             instance_list = re.findall(r'\*Instance, name=([^,]+)', data)
             self.instance_name = self.__sanitize_field(self.instance_name,
@@ -132,7 +131,7 @@ class AbaqusCase(InputFileCase):
 
         return variables
 
-    def _run_case(self, input_data: InputData, tmp_dir: str) -> bool:
+    def _run_case(self, input_data: InputData, tmp_dir: str, stream: OutputStream) -> bool:
         """Run the case for the given set of parameters.
 
         Parameters
@@ -141,6 +140,8 @@ class AbaqusCase(InputFileCase):
             Input data for this problem.
         tmp_dir : str
             Temporary directory to run the problem.
+        stream : OutputStream
+            Output stream for this call.
 
         Returns
         -------
@@ -162,8 +163,8 @@ class AbaqusCase(InputFileCase):
             ] + extra_args,
             cwd=tmp_dir,
             shell=False,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
+            stdout=stream.stdout,
+            stderr=stream.stderr,
             check=False
         )
         variables = self._post_proc_variables(input_data)
@@ -191,8 +192,8 @@ class AbaqusCase(InputFileCase):
             ],
             cwd=tmp_dir,
             shell=False,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
+            stdout=stream.stdout,
+            stderr=stream.stderr,
             check=False,
         )
         if run_inp.returncode != 0 or run_odb.returncode != 0:

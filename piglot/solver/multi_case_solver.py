@@ -6,6 +6,7 @@ import shutil
 from multiprocessing.pool import ThreadPool as Pool
 from piglot.parameter import ParameterSet, ParameterValues
 from piglot.solver.solver import Solver, OutputResult, CaseResult
+from piglot.utils.solver_utils import OutputStream
 
 
 T = TypeVar('T')
@@ -35,7 +36,7 @@ class Case(ABC):
         """
 
     @abstractmethod
-    def run(self, values: ParameterValues, tmp_dir: str) -> CaseResult:
+    def run(self, values: ParameterValues, tmp_dir: str, stream: OutputStream) -> CaseResult:
         """Run the case for the given set of parameters.
 
         Parameters
@@ -44,6 +45,8 @@ class Case(ABC):
             Named set of parameter values for this evaluation.
         tmp_dir : str
             Temporary directory to run the problem.
+        stream : OutputStream
+            Output stream for this call.
 
         Returns
         -------
@@ -242,8 +245,8 @@ class MultiCaseSolver(Solver, ABC):
 
         # Evaluate all cases (in parallel if specified)
         def run_case(case: Case) -> CaseResult:
-            with self.verbosity_manager:
-                return case.run(values, tmp_dir)
+            with self.verbosity_manager as stream:
+                return case.run(values, tmp_dir, stream)
         if self.parallel > 1:
             with Pool(self.parallel) as pool:
                 results = pool.map(run_case, self.cases)

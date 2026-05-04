@@ -7,6 +7,7 @@ import sympy
 from piglot.parameter import ParameterSet, ParameterValues
 from piglot.solver.solver import CaseResult, OutputResult
 from piglot.solver.multi_case_solver import MultiCaseSolver, Case
+from piglot.utils.solver_utils import OutputStream
 
 
 class CurveCase(Case):
@@ -71,7 +72,7 @@ class CurveCase(Case):
             expression = re.sub(r'\<' + parameter + r'\>', str(value), expression)
         return expression
 
-    def run(self, values: ParameterValues, tmp_dir: str) -> CaseResult:
+    def run(self, values: ParameterValues, tmp_dir: str, stream: OutputStream) -> CaseResult:
         """Run the case for the given set of parameters.
 
         Parameters
@@ -80,6 +81,8 @@ class CurveCase(Case):
             Named set of parameter values for this evaluation.
         tmp_dir : str
             Temporary directory to run the problem.
+        stream : OutputStream
+            Output stream for this call.
 
         Returns
         -------
