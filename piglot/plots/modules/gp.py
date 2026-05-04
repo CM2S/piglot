@@ -461,7 +461,7 @@ class CompositeGPPlot(PlottingModuleConfigFile):
             obs_y_vals = objective.composition(dataset.outputs, obs_x_vals).reshape(
                 -1, num_objectives
             )
-            obs_y_mean_vals = None
+            obs_y_mean_vals = obs_y_vals
         else:
             obs_latent_samples = torch.stack(
                 [
