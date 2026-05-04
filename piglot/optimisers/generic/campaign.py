@@ -165,7 +165,7 @@ class OptimisationCampaign:
                 float(torch.quantile(samples, 0.025).item()),
                 float(torch.quantile(samples, 0.975).item()),
             )
-    
+
     def load(self) -> None:
         """Load the campaign data from a previous run."""
         self.dataset.load()
