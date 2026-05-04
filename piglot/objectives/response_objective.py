@@ -37,6 +37,7 @@ class ResponseSingleObjective(IndividualObjective, ABC):
         maximise: bool = False,
         variance: bool = False,
         composite: bool = False,
+        noisy: Optional[bool] = None,
         bounds: Optional[tuple[float, float]] = None,
         latent_transformer: Optional[LatentTransformer] = None,
         prediction_transform: Optional[ResponseTransformer] = None,
@@ -47,7 +48,7 @@ class ResponseSingleObjective(IndividualObjective, ABC):
             maximise=maximise,
             variance=variance,
             composite=composite,
-            noisy=len(prediction) > 1,
+            noisy=len(prediction) > 1 if noisy is None else noisy,
             bounds=bounds,
         )
         self.name = name

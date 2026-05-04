@@ -165,6 +165,7 @@ class FittingSingleObjective(ResponseSingleObjective):
         weight: float = 1.0,
         variance: bool = False,
         composite: bool = False,
+        noisy: Optional[bool] = None,
         bounds: Optional[tuple[float, float]] = None,
     ) -> None:
         super().__init__(
@@ -176,6 +177,7 @@ class FittingSingleObjective(ResponseSingleObjective):
             variance=variance,
             composite=composite,
             bounds=bounds,
+            noisy=noisy,
             mean_dist=mean_dist,
             latent_transformer=FixedTimeLatentTransformer(reference.get_time()),
             prediction_transform=PointwiseErrors(reference.get_time(), reference.get_data()),
@@ -252,6 +254,7 @@ class FittingSingleObjective(ResponseSingleObjective):
         variance = bool(config.pop('variance', False))
         mean_dist = bool(config.pop('mean_dist', False))
         composite = bool(config.get('composite', False))
+        noisy = bool(config.pop('noisy', None))
         # Read the reference and return the objective
         reference = Reference.read(name, config, settings.output_dir)
         return cls(
@@ -264,6 +267,7 @@ class FittingSingleObjective(ResponseSingleObjective):
             weight=weight,
             composite=composite,
             bounds=bounds,
+            noisy=noisy,
         )
 
 
