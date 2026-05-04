@@ -95,7 +95,7 @@ class DesignSingleObjective(ResponseSingleObjective):
             maximise=bool(config.get('maximise', False)),
             variance=bool(config.get('variance', False)),
             composite=bool(config.get('composite', False)),
-            noisy=bool(config.get('noisy', None)),
+            noisy=config.get('noisy', None),
             bounds=config.get('bounds', None),
             latent_transformer=latent_transformer,
             prediction_transform=(
