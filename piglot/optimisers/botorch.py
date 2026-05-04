@@ -97,6 +97,7 @@ class BoTorchOptimiser(GenericOptimiser):
         # Optional fields
         mode = config.pop('mode', None)
         seed = config.pop('seed', settings.seed)
+        n_initial = config.pop('n_initial', None)
         acquisition = config.pop('acquisition', None)
         optim_settings = OptimisationSettings.read(config)
 
@@ -120,4 +121,5 @@ class BoTorchOptimiser(GenericOptimiser):
             acq_settings,
             seed=seed,
             mode=mode,
+            n_initial=n_initial,
         )
