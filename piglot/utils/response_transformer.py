@@ -7,6 +7,10 @@ from piglot.solver.solver import OutputResult
 from piglot.utils.responses import interpolate_response
 
 
+class UnsupportedUntransform(Exception):
+    """Exception raised when untransform is not supported."""
+
+
 class ResponseTransformer(ABC):
     """Abstract class for defining transformation functions."""
 
@@ -24,6 +28,21 @@ class ResponseTransformer(ABC):
         OutputResult
             Transformed time and data points of the response.
         """
+
+    def untransform(self, response: OutputResult) -> OutputResult:
+        """Untransform the input data.
+
+        Parameters
+        ----------
+        response : OutputResult
+            Time and data points of the response.
+
+        Returns
+        -------
+        OutputResult
+            Untransformed time and data points of the response.
+        """
+        raise UnsupportedUntransform(f"Untransform unsupported for '{self.__class__.__name__}'.")
 
     def __call__(self, x_old: np.ndarray, y_old: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Transform a response function.
@@ -66,6 +85,23 @@ class ChainResponse(ResponseTransformer):
         """
         for transformer in self.transformers:
             response = transformer.transform(response)
+        return response
+
+    def untransform(self, response: OutputResult) -> OutputResult:
+        """Untransform the input data.
+
+        Parameters
+        ----------
+        response : OutputResult
+            Time and data points of the response.
+
+        Returns
+        -------
+        OutputResult
+            Untransformed time and data points of the response.
+        """
+        for transformer in reversed(self.transformers):
+            response = transformer.untransform(response)
         return response
 
 
@@ -125,6 +161,21 @@ class NegateResponse(ResponseTransformer):
         """
         return OutputResult(response.time, -response.data)
 
+    def untransform(self, response: OutputResult) -> OutputResult:
+        """Untransform the input data.
+
+        Parameters
+        ----------
+        response : OutputResult
+            Time and data points of the response.
+
+        Returns
+        -------
+        OutputResult
+            Untransformed time and data points of the response.
+        """
+        return OutputResult(response.time, -response.data)
+
 
 class SquareResponse(ResponseTransformer):
     """Square a response transformer."""
@@ -176,6 +227,24 @@ class AffineTransformResponse(ResponseTransformer):
         return OutputResult(
             self.x_scale * response.time + self.x_offset,
             self.y_scale * response.data + self.y_offset,
+        )
+
+    def untransform(self, response: OutputResult) -> OutputResult:
+        """Untransform the input data.
+
+        Parameters
+        ----------
+        response : OutputResult
+            Time and data points of the response.
+
+        Returns
+        -------
+        OutputResult
+            Untransformed time and data points of the response.
+        """
+        return OutputResult(
+            (response.time - self.x_offset) / self.x_scale,
+            (response.data - self.y_offset) / self.y_scale,
         )
 
 
@@ -242,6 +311,22 @@ class PointwiseErrors(ResponseTransformer):
         # Compute normalised error
         factor = np.mean(np.abs(self.reference_data))
         return OutputResult(self.reference_time, (resp_interp - self.reference_data) / factor)
+
+    def untransform(self, response: OutputResult) -> OutputResult:
+        """Untransform the input data.
+
+        Parameters
+        ----------
+        response : OutputResult
+            Time and data points of the response.
+
+        Returns
+        -------
+        OutputResult
+            Untransformed time and data points of the response.
+        """
+        factor = np.mean(np.abs(self.reference_data))
+        return OutputResult(self.reference_time, response.data * factor + self.reference_data)
 
 
 AVAILABLE_RESPONSE_TRANSFORMERS: Dict[str, Type[ResponseTransformer]] = {

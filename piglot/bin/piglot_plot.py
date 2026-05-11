@@ -10,6 +10,7 @@ from piglot.plots.modules.history import (
     RegretHistoryPlot,
     AnimationPlot,
 )
+from piglot.plots.modules.response_samples import ResponseSamplePlot
 
 
 AVAILABLE_PLOTTING_MODULES: list[type[PlottingModuleConfigFile]] = [
@@ -24,6 +25,7 @@ AVAILABLE_PLOTTING_MODULES: list[type[PlottingModuleConfigFile]] = [
     AnimationPlot,
     InferencePlot,
     CornerPlot,
+    ResponseSamplePlot,
 ]
 
 

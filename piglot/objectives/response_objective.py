@@ -98,6 +98,25 @@ class ResponseSingleObjective(IndividualObjective, ABC):
         # Expand the parameters along the first dimensions
         return params.expand(*(list(time.shape[:-1]) + [params.shape[-1]]))
 
+    def responses_from_latent(self, latent: torch.Tensor) -> list[OutputResult]:
+        """Compute the responses from the latent space representation.
+
+        Parameters
+        ----------
+        latent : torch.Tensor
+            Latent space values.
+
+        Returns
+        -------
+        list[OutputResult]
+            Computed responses.
+        """
+        # Build flat-batch response data
+        time, data = self.latent_transformer.inverse_transform(latent)
+        time = time.flatten(end_dim=-2)
+        data = data.flatten(end_dim=-2)
+        return [OutputResult(time.numpy(), data.numpy()) for time, data in zip(time, data)]
+
     def evaluate(
         self, params: ParameterValues, raw_results: dict[str, OutputResult]
     ) -> IndividualObjectiveResult:
@@ -192,6 +211,19 @@ class ResponseSingleObjective(IndividualObjective, ABC):
         """
         # Under non-composite objectives, assume a size of 1 for the scalar value of the objective
         return self.latent_transformer.length() if self.is_composite() else 1
+
+    def plot_raw_responses(self, axis: plt.Axes, responses: list[OutputResult]) -> None:
+        """Plot the raw responses for this objective.
+
+        Parameters
+        ----------
+        axis : plt.Axes
+            Axis to plot the raw responses on.
+        responses : list[OutputResult]
+            Raw responses from the solver.
+        """
+        for response in responses:
+            axis.plot(response.get_time(), response.get_data(), alpha=1.0 / len(responses), c='k')
 
     @abstractmethod
     def plot_response(
@@ -347,7 +379,7 @@ class ResponseObjective(Objective):
         # Plot each target
         figures = []
         for objective in self.objectives:
-            fig, axis = plt.subplots()
+            fig, axis = plt.subplots(layout='constrained')
             objective.plot_response(axis, responses)
             axis.set_title(objective.name + append_title)
             axis.grid()

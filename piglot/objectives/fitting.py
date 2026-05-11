@@ -184,6 +184,27 @@ class FittingSingleObjective(ResponseSingleObjective):
         )
         self.reference = reference
 
+    def plot_raw_responses(self, axis: plt.Axes, responses: list[OutputResult]) -> None:
+        """Plot the raw responses for this objective.
+
+        Parameters
+        ----------
+        axis : plt.Axes
+            Axis to plot the raw responses on.
+        responses : list[OutputResult]
+            Raw responses from the solver.
+        """
+        # Plot the reference
+        axis.plot(
+            self.reference.get_time(),
+            self.reference.get_data(),
+            label='Reference',
+            ls='dashed',
+            marker='x',
+            c='k',
+        )
+        super().plot_raw_responses(axis, responses)
+
     def plot_response(
         self, axis: plt.Axes, raw_results: dict[str, OutputResult]
     ) -> dict[Line2D, str]:
