@@ -43,7 +43,7 @@ class ResponseSamplePlot(PlottingModuleConfigFile):
         parser.add_argument(
             "--num_samples",
             type=int,
-            default=512,
+            default=8,
             help="Number of samples to draw.",
         )
         parser.add_argument(
@@ -149,9 +149,6 @@ class ResponseSamplePlot(PlottingModuleConfigFile):
             ax.set_xlim(
                 np.min([r.get_time() for r in results]), np.max([r.get_time() for r in results])
             )
-            ax.set_ylim(0, 120)
-            ax.set_xlabel("$F_{xx}$")
-            ax.set_ylabel("Stress /MPa")
             ax.grid()
             figures.append(fig)
 
