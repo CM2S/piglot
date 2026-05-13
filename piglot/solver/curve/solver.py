@@ -176,6 +176,7 @@ class CurveSolver(MultiCaseSolver):
         tmp_dir: str,
         verbosity: str,
         parallel: int = 1,
+        max_retries: int = 1,
     ) -> None:
         """Constructor for the Curve solver class.
 
@@ -193,8 +194,18 @@ class CurveSolver(MultiCaseSolver):
             Number of parallel processes to use.
         tmp_dir : str
             Path to the temporary directory.
+        max_retries : int
+            Maximum number of retries for the solver.
         """
-        super().__init__(cases, parameters, output_dir, tmp_dir, verbosity, parallel=parallel)
+        super().__init__(
+            cases,
+            parameters,
+            output_dir,
+            tmp_dir,
+            verbosity,
+            parallel=parallel,
+            max_retries=max_retries,
+        )
 
     @classmethod
     def get_case_class(cls) -> Type[Case]:
