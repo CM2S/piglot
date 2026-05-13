@@ -128,7 +128,8 @@ class PathwiseSamplingModel:
         self.path = draw_matheron_paths(model.gp, torch.Size([num_samples]))
 
     def __call__(self, points: torch.Tensor) -> torch.Tensor:
-        samples = self.path(points).reshape(self.num_samples, *points.shape[:-1], -1)
+        samples = self.path(points).transpose(-1, -2)
+        samples = samples.reshape(self.num_samples, *points.shape[:-1], -1)
         # Inject observation noise
         if self.observation_noise:
             noise_std = self.model.gp.noise_prediction(points).sqrt()
