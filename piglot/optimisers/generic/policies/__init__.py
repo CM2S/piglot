@@ -2,6 +2,7 @@
 from piglot.optimisers.generic.campaign import CandidatePolicy
 from piglot.optimisers.generic.policies.acquisition import AcquisitionCandidatePolicy
 from piglot.optimisers.generic.policies.initial import InitialCandidatePolicy
+from piglot.optimisers.generic.policies.optima import OptimaCandidatePolicy
 from piglot.optimisers.generic.policies.query import QueryCandidatePolicy
 from piglot.optimisers.generic.policies.random import RandomCandidatePolicy
 from piglot.optimisers.generic.policies.thompson import ThompsonSamplingCandidatePolicy
@@ -10,6 +11,7 @@ from piglot.optimisers.generic.policies.thompson import ThompsonSamplingCandidat
 AVAILABLE_POLICIES: dict[str, type[CandidatePolicy]] = {
     'acquisition': AcquisitionCandidatePolicy,
     'initial': InitialCandidatePolicy,
+    'optima': OptimaCandidatePolicy,
     'query': QueryCandidatePolicy,
     'random': RandomCandidatePolicy,
     'thompson': ThompsonSamplingCandidatePolicy,
