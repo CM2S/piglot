@@ -59,7 +59,11 @@ class AcquisitionCandidatePolicy(CandidatePolicy):
             List of parameters for the next candidates to evaluate.
         """
         acq = get_acquisition(
-            model, self.settings, state, pending=torch.tensor(pending) if pending else None
+            model,
+            dataset.settings.parameters,
+            self.settings,
+            state,
+            pending=torch.tensor(pending) if pending else None,
         )
         candidates, _ = optimise_acquisition(
             acq, dataset.settings.parameters, model, self.settings, q=num_candidates

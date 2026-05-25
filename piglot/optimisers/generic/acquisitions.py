@@ -1,4 +1,5 @@
 """Module for acquisition functions with BoTorch."""
+from functools import partial
 from typing import Optional
 import torch
 from botorch.acquisition import (
@@ -10,6 +11,7 @@ from botorch.acquisition import (
     qNoisyExpectedImprovement,
     qLogNoisyExpectedImprovement,
     qKnowledgeGradient,
+    qMultiFidelityKnowledgeGradient,
     qSimpleRegret,
 )
 from botorch.acquisition.objective import (
@@ -31,6 +33,12 @@ from botorch.sampling import SobolQMCNormalSampler
 from piglot.data.surrogate import ObjectiveModel
 from piglot.parameter import ParameterSet
 from piglot.optimisers.generic.containers import OptimisationState
+from piglot.optimisers.generic.multi_fidelity import (
+    build_cost_model,
+    project_to_target_fidelity,
+    qMultiFidelityExpectedImprovement,
+    qMultiFidelityLogExpectedImprovement,
+)
 from piglot.utils.readable import ReadableModel
 
 
@@ -46,6 +54,7 @@ class AcquisitionSettings(ReadableModel):
     sequential: bool = False
     seed: Optional[int] = None
     raw_samples: Optional[int] = None
+    parameter_fixtures: Optional[dict[int, float]] = None
 
 
 AVAILABLE_ACQUISITIONS: dict[str, type[AcquisitionFunction]] = {
@@ -65,11 +74,17 @@ AVAILABLE_ACQUISITIONS: dict[str, type[AcquisitionFunction]] = {
     'qlogehvi': qLogExpectedHypervolumeImprovement,
     'qlognehvi': qLogNoisyExpectedHypervolumeImprovement,
     'qhvkg': qHypervolumeKnowledgeGradient,
+    # Multi-fidelity acquisitions
+    'qmfei': qMultiFidelityExpectedImprovement,
+    'qmflogei': qMultiFidelityLogExpectedImprovement,
+    'qmfkg': qMultiFidelityKnowledgeGradient,
 }
 EXACT_IMPROVEMENT_BASED: list[str] = [
     'qei',
     'qlogei',
     'qpi',
+    'qmfei',
+    'qmflogei',
 ]
 NOISY_IMPROVEMENT_BASED: list[str] = [
     'qnei',
@@ -91,6 +106,12 @@ MULTI_OBJECTIVE_WITH_PARTITIONING: list[str] = [
 KNOWLEDGE_GRADIENT: list[str] = [
     'qkg',
     'qhvkg',
+    'qmfkg',
+]
+MULTI_FIDELITY_ACQUISITIONS: list[str] = [
+    'qmfei',
+    'qmflogei',
+    'qmfkg',
 ]
 
 
@@ -129,6 +150,7 @@ def default_acquisition(
 
 def get_acquisition(
     model: ObjectiveModel,
+    parameters: ParameterSet,
     settings: AcquisitionSettings,
     state: OptimisationState,
     pending: Optional[torch.Tensor] = None,
@@ -174,18 +196,45 @@ def get_acquisition(
     else:
         acq_options['objective'] = GenericMCObjective(model.composition_from_raw)
 
-    # Exact or noisy improvement-based acquisitions
-    if settings.name in EXACT_IMPROVEMENT_BASED:
-        acq_options['best_f'] = state.best_value
-    elif settings.name in NOISY_IMPROVEMENT_BASED:
-        acq_options['X_baseline'] = model.inputs
-        acq_options['prune_baseline'] = True
+    # Improvement-based acquisitions: check if this is a single- or multi-fidelity run
+    if settings.name in MULTI_FIDELITY_ACQUISITIONS:
+        if settings.name in EXACT_IMPROVEMENT_BASED:
+            best_f = {}
+            for fidelity in parameters.get_fidelities():
+                dataset = model.dataset.subset(
+                    lambda obs: obs.params[parameters.get_scalar_fidelity_index()] == fidelity
+                )
+                _, values = dataset.best_deterministic_observation()
+                best_f[fidelity] = -values
+            acq_options['best_f'] = best_f
+    else:
+        # Exact or noisy improvement-based acquisitions
+        if settings.name in EXACT_IMPROVEMENT_BASED:
+            acq_options['best_f'] = state.best_value
+        elif settings.name in NOISY_IMPROVEMENT_BASED:
+            acq_options['X_baseline'] = model.inputs
+            acq_options['prune_baseline'] = True
 
     # Other acquisition-specific options
     if settings.name == 'qkg':
         acq_options['current_value'] = state.best_value
     elif settings.name == 'qucb':
         acq_options['beta'] = settings.beta
+
+    # Multi-fidelity acquisitions
+    if settings.name in MULTI_FIDELITY_ACQUISITIONS:
+        cost_model = build_cost_model(parameters, model.dataset)
+        fidelity_dim = parameters.get_scalar_fidelity_index()
+        if settings.name == 'qmfkg':
+            acq_options['current_value'] = get_best_posterior_mean(
+                model, parameters, state, fixtures={fidelity_dim: 1.0}
+            )[1]
+            acq_options['project'] = partial(
+                project_to_target_fidelity, fidelity_index=fidelity_dim, target=1.0
+            )
+        else:
+            acq_options['cost_model'] = cost_model
+            acq_options['fidelity_dim'] = fidelity_dim
 
     # Inject pending candidates
     if pending is not None:
@@ -260,7 +309,9 @@ def optimise_acquisition(
         )
 
     # We have at least one discrete parameter: find all combinations
-    features_list = parameters.get_discrete_combinations()
+    features_list = parameters.get_discrete_combinations(
+        settings.parameter_fixtures if settings.parameter_fixtures is not None else {}
+    )
 
     # Mixed case
     if num_continuous > 0:
@@ -309,7 +360,7 @@ def build_and_optimise_acquisition(
     tuple[torch.Tensor, torch.Tensor]
         Tuple with the optimised candidates and their acquisition values.
     """
-    acquisition = get_acquisition(model, settings, state)
+    acquisition = get_acquisition(model, parameters, settings, state)
     return optimise_acquisition(acquisition, parameters, model, settings)
 
 
@@ -317,6 +368,7 @@ def get_best_posterior_mean(
     model: ObjectiveModel,
     parameters: ParameterSet,
     state: OptimisationState,
+    fixtures: Optional[dict[int, float]] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Utility function to get the best point according to the surrogate model's posterior mean.
 
@@ -330,14 +382,20 @@ def get_best_posterior_mean(
         Settings for the acquisition function.
     state : OptimisationState
         Current state of the optimisation campaign.
+    fixtures : Optional[dict[int, float]]
+        Optional parameter fixtures.
 
     Returns
     -------
     tuple[torch.Tensor, torch.Tensor]
         Tuple with the best candidates and their posterior mean values.
     """
-    settings = AcquisitionSettings(name='qsr', q=1)
-    acq = get_acquisition(model, settings, state)
+    # Multi-fidelity runs: always optimise at target fidelity
+    if parameters.is_multi_fidelity() and fixtures is None:
+        fixtures = {parameters.get_scalar_fidelity_index(): 1.0}
+
+    settings = AcquisitionSettings(name='qsr', q=1, parameter_fixtures=fixtures)
+    acq = get_acquisition(model, parameters, settings, state)
     return optimise_acquisition(
         acq, parameters, model, settings, q=1
     )

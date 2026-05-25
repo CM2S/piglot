@@ -1,6 +1,6 @@
 """Optimisation parameter module."""
 from dataclasses import dataclass
-from typing import Iterator, Any, Union, TypeVar, Optional
+from typing import Iterator, Any, Literal, Union, TypeVar, Optional
 from abc import ABC, abstractmethod
 from hashlib import sha256
 from itertools import product
@@ -269,6 +269,66 @@ class DiscreteParameter(OptimisableParameter):
         return cls(name, float(config['initial']), values, int(config.get('num_components', 1)))
 
 
+class FidelityParameter(DiscreteParameter):
+    """Class for fidelity parameters."""
+
+    def __init__(
+        self,
+        name: str,
+        initial: float,
+        values: list[float],
+        cost: Optional[dict[float, float]],
+        cost_model: Literal["fixed", "infer", "infer_full"],
+    ) -> None:
+        super().__init__(name, initial, values, num_components=1)
+        self.cost = cost
+        self.cost_model = cost_model
+
+    @classmethod
+    def read(cls: type[OptimisableT], name: str, config: dict[str, Any]) -> OptimisableT:
+        """Read a parameter from a configuration dictionary.
+
+        Parameters
+        ----------
+        name : str
+            Name of the parameter.
+        config : dict[str, Any]
+            Configuration dictionary.
+
+        Returns
+        -------
+        OptimisableT
+            An instance of the parameter.
+        """
+        # Read fidelity values
+        if 'values' not in config:
+            raise RuntimeError(f"Missing 'values' value for fidelity parameter {name}.")
+        values = [float(val) for val in config['values']]
+        if any(val < 0 for val in values) or any(val > 1 for val in values):
+            raise RuntimeError(f"Fidelity parameter {name} must be between 0 and 1.")
+        if 1.0 not in values:
+            raise RuntimeError(f"Fidelity parameter {name} must have a target fidelity of 1.")
+
+        # Read cost
+        cost = None
+        cost_model = "infer"
+        if 'cost' in config:
+            cost = {val: float(c) for val, c in zip(values, config['cost'])}
+            if config.get("cost_model", "fixed") != "fixed":
+                raise RuntimeError("Cost model must be 'fixed' when cost is provided.")
+            cost_model = "fixed"
+
+        # Read cost model
+        if 'cost_model' in config:
+            cost_model = config['cost_model']
+            if cost_model not in ["fixed", "infer", "infer_full"]:
+                raise RuntimeError(
+                    f"Invalid cost model '{cost_model}' for fidelity parameter {name}."
+                )
+
+        return cls(name, float(config.get('initial', 1.0)), values, cost, cost_model)
+
+
 class ComputedParameter(Parameter):
     """Class for computed parameters.
 
@@ -387,6 +447,13 @@ class ParameterSet:
         self.computed_parameters = computed_params
         self.indices = np.cumsum([0] + [p.num_components for p in self.optim_parameters])
 
+        # Sanitise fidelity parameter
+        self.fidelity_params = [
+            p for p in self.optim_parameters if isinstance(p, FidelityParameter)
+        ]
+        if len(self.fidelity_params) > 1:
+            raise RuntimeError("Only one fidelity parameter is allowed.")
+
     def __iter__(self) -> Iterator[OptimisableParameter]:
         """Iterator for a parameter set.
 
@@ -419,6 +486,52 @@ class ParameterSet:
             The optimisable parameter at the given index.
         """
         return self.optim_parameters[index]
+
+    def is_multi_fidelity(self) -> bool:
+        """Check if the parameter set contains a fidelity parameter.
+
+        Returns
+        -------
+        bool
+            True if the parameter set contains a fidelity parameter, False otherwise.
+        """
+        return len(self.fidelity_params) > 0
+
+    def get_scalar_fidelity_index(self) -> int:
+        """Get the index of the scalar fidelity parameter.
+
+        Returns
+        -------
+        int
+            Index of the scalar fidelity parameter.
+        """
+        if not self.is_multi_fidelity():
+            raise RuntimeError("No fidelity parameter found.")
+        return self.get_scalar_names().index(self.fidelity_params[0].name)
+
+    def get_fidelities(self) -> list[float]:
+        """Get the fidelities of the parameter set.
+
+        Returns
+        -------
+        list[float]
+            Fidelities of the parameter set.
+        """
+        if not self.is_multi_fidelity():
+            raise RuntimeError("No fidelity parameter found.")
+        return [p.values for p in self.fidelity_params][0]
+
+    def get_fidelity_parameter(self) -> FidelityParameter:
+        """Get the fidelity parameter.
+
+        Returns
+        -------
+        FidelityParameter
+            The fidelity parameter.
+        """
+        if not self.is_multi_fidelity():
+            raise RuntimeError("No fidelity parameter found.")
+        return self.fidelity_params[0]
 
     def num_optim_parameters(self) -> int:
         """Get the number of optimisable parameters.
@@ -507,23 +620,29 @@ class ParameterSet:
         """
         return np.concatenate([p.get_bounds() for p in self.optim_parameters])
 
-    def get_discrete_combinations(self) -> list[dict[int, float]]:
+    def get_discrete_combinations(self, fixtures: dict[int, float]) -> list[dict[int, float]]:
         """Get all possible combinations of discrete optimisable parameters.
 
         We return a list of dictionaries, where each dictionary represents a unique combination
         of discrete parameter values. The keys in the dictionary are the indices of the discrete
         parameters, and the values are the corresponding discrete values.
 
+        Parameters
+        ----------
+        fixtures : dict[int, float]
+            Fixed values for certain discrete parameters.
+
         Returns
         -------
         list[dict[int, float]]
             List of dictionaries representing all possible combinations of discrete parameters.
         """
-        values = {
-            int(self.indices[i] + j): p.values
-            for i, p in enumerate(self.optim_parameters) if isinstance(p, DiscreteParameter)
-            for j in range(p.num_components)
-        }
+        values: dict[int, list[float]] = {}
+        for i, param in enumerate(self.optim_parameters):
+            if isinstance(param, DiscreteParameter):
+                for j in range(param.num_components):
+                    idx = int(self.indices[i] + j)
+                    values[idx] = param.values if idx not in fixtures else [fixtures[idx]]
         return [dict(zip(values.keys(), combination)) for combination in product(*values.values())]
 
     def to_values(self, values: np.ndarray) -> ParameterValues:
@@ -637,6 +756,7 @@ def legacy_converter(name: str, param_spec: Any) -> dict[str, Any]:
 AVALIABLE_OPTIMISABLE_PARAMS: dict[str, type[OptimisableParameter]] = {
     'real': RealParameter,
     'discrete': DiscreteParameter,
+    'fidelity': FidelityParameter,
 }
 
 

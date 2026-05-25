@@ -65,6 +65,41 @@ def fit_mll_pytorch_loop(mll: ExactMarginalLogLikelihood, n_iters: int = 100) ->
     mll.model.likelihood.eval()
 
 
+def fit_single_task_gp(
+    train_X: Tensor, train_Y: Tensor, train_Yvar: Optional[Tensor] = None
+) -> SingleTaskGP:
+    """Fit a simple single-task GP model.
+    
+    Parameters
+    ----------
+    train_X : Tensor
+        Training inputs of shape `(n, d)`.
+    train_Y : Tensor
+        Training targets of shape `(n, 1)`.
+    train_Yvar : Optional[Tensor], optional
+        Training target variances of shape `(n, 1)`, by default None.
+
+    Returns
+    -------
+    SingleTaskGP
+        Fitted single-task GP model.
+    """
+    model = SingleTaskGP(
+        train_X,
+        train_Y,
+        train_Yvar=train_Yvar,
+        input_transform=Normalize(d=train_X.shape[-1]),
+        outcome_transform=Standardize(m=train_Y.shape[-1]),
+    )
+    mll = ExactMarginalLogLikelihood(model.likelihood, model)
+    try:
+        fit_gpytorch_mll(mll)
+    except ModelFittingError:
+        warnings.warn('Optimisation of the MLL failed, falling back to PyTorch optimiser')
+        fit_mll_pytorch_loop(mll)
+    return model
+
+
 class SingleTaskGPWithNoise(SingleTaskGP):
     """Wrapper for a SingleTaskGP model with a noise model."""
 

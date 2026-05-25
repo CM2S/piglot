@@ -1,6 +1,6 @@
 """Module for data generation and handling in piglot."""
 import os
-from typing import Optional
+from typing import Callable, Optional
 from dataclasses import dataclass
 from threading import Lock
 import time
@@ -143,3 +143,40 @@ class ObjectiveDataset:
         with self.lock, open(os.path.join(self.settings.output_dir, "dataset.bin"), "rb") as f:
             self.data = pickle.load(f)
             self.num_evaluations = len(self.data)
+
+    def subset(self, filter_func: Callable[[Observation], bool]) -> "ObjectiveDataset":
+        """Create a subset of the dataset based on a filter function.
+
+        Parameters
+        ----------
+        filter_func : Callable[[Observation], bool]
+            A function that returns True if an observation should be included in the subset.
+
+        Returns
+        -------
+        ObjectiveDataset
+            A new ObjectiveDataset containing only the observations that satisfy the filter.
+        """
+        with self.lock:
+            subset_data = [obs for obs in self.data if filter_func(obs)]
+            subset_dataset = ObjectiveDataset(self.settings, self.objective)
+            subset_dataset.data = subset_data
+            subset_dataset.num_evaluations = len(subset_data)
+        return subset_dataset
+
+    def best_deterministic_observation(self) -> Optional[tuple[Observation, float]]:
+        """Return the best deterministic observation in the dataset.
+
+        Returns
+        -------
+        Optional[tuple[Observation, float]]
+            The best deterministic observation and its objective value, if available.
+        """
+        with self.lock:
+            if not self.data or self.objective.is_multi_objective() or self.objective.is_noisy():
+                return None
+            y_points = torch.tensor(
+                [self.objective.get_objective_value(obs.result) for obs in self.data]
+            )
+            idx = int(torch.argmin(y_points).item())
+            return self.data[idx], float(y_points[idx].item())
