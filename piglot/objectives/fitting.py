@@ -51,6 +51,9 @@ class Reference:
             data = data.reshape(1, -1)
         self.x_data = data[:, x_col - 1]
         self.y_data = data[:, y_col - 1]
+        # Check if all data is valid
+        if np.any(np.isnan(self.x_data)) or np.any(np.isnan(self.y_data)):
+            raise ValueError(f"Reference data in {filename} contains NaN values.")
         # Apply the transformer
         if self.transformer is not None:
             self.x_data, self.y_data = self.transformer(self.x_data, self.y_data)
