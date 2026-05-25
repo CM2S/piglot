@@ -5,6 +5,7 @@ import os
 import numpy as np
 from piglot.parameter import ParameterSet
 from piglot.solver.solver import OutputResult, SingleCaseSolver
+from piglot.utils.solver_utils import OutputStream
 
 
 class SampleSingleCaseSolver(SingleCaseSolver):
@@ -33,19 +34,23 @@ class SampleSingleCaseSolver(SingleCaseSolver):
         """
         super().__init__([field_name], parameters, output_dir, tmp_dir, verbosity)
 
-    def _solve(self, values: dict[str, float], concurrent: bool) -> Dict[str, OutputResult]:
+    def _solve(
+        self, values: dict[str, float], concurrent: bool, stream: OutputStream
+    ) -> dict[str, OutputResult]:
         """Internal solver for the prescribed problems.
 
         Parameters
         ----------
         values : dict[str, float]
-            Current parameters to evaluate.
+            Named set of parameter values for this evaluation.
         concurrent : bool
             Whether this run may be concurrent to another one (so use unique file names).
+        stream : OutputStream
+            Output stream for this call.
 
         Returns
         -------
-        Dict[str, OutputResult]
+        dict[str, OutputResult]
             Evaluated results for each output field.
         """
         # Build the output response: [0, 1] time grid with the parameter values

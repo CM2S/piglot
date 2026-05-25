@@ -11,6 +11,7 @@ from piglot.solver.input_file_solver import (
     InputFileSolver,
     OutputField,
 )
+from piglot.utils.solver_utils import OutputStream
 
 
 class SampleOutputField(OutputField):
@@ -63,7 +64,7 @@ class SampleOutputField(OutputField):
 class SampleInputFileCase(InputFileCase):
     """Sample input file-based case class."""
 
-    def _run_case(self, input_data: InputData, tmp_dir: str) -> bool:
+    def _run_case(self, input_data: InputData, tmp_dir: str, stream: OutputStream) -> bool:
         """Run the case for the given set of parameters.
 
         Parameters
@@ -72,6 +73,8 @@ class SampleInputFileCase(InputFileCase):
             Input data for this problem.
         tmp_dir : str
             Temporary directory to run the problem.
+        stream : OutputStream
+            Output stream for this call.
 
         Returns
         -------
