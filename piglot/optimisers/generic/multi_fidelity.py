@@ -288,6 +288,8 @@ class qMultiFidelityExpectedImprovement(MultiFidelityAcquisition):
 class qMultiFidelityLogExpectedImprovement(qMultiFidelityExpectedImprovement):
     """Multi-fidelity log expected improvement acquisition."""
 
+    _log = True
+
     @concatenate_pending_points
     @t_batch_mode_transform()
     def forward(self, X: Tensor) -> Tensor:
