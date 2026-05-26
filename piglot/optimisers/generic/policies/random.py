@@ -1,6 +1,7 @@
 """Module with the random policy for generic data-driven optimisation."""
 from typing import Optional, TypeVar, Literal
 import numpy as np
+import torch
 from piglot.data.dataset import ObjectiveDataset
 from piglot.data.surrogate import ObjectiveModel
 from piglot.optimisers.generic.containers import OptimisationState
@@ -24,7 +25,8 @@ class RandomCandidatePolicy(CandidatePolicy):
         seed: Optional[int] = None,
     ) -> None:
         super().__init__(rounds, False, num_workers, num_candidates_per_round, mode)
-        self.rng = np.random.default_rng(seed)
+        if seed is not None:
+            torch.manual_seed(seed)
 
     def get_next_candidates(
         self,
@@ -54,7 +56,4 @@ class RandomCandidatePolicy(CandidatePolicy):
         list[np.ndarray]
             List of parameters for the next candidates to evaluate.
         """
-        return [
-            dataset.settings.parameters.get_random_vector(self.rng)
-            for _ in range(num_candidates)
-        ]
+        return [dataset.settings.parameters.get_random_vector() for _ in range(num_candidates)]

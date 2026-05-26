@@ -13,6 +13,7 @@ from botorch.acquisition import (
     qKnowledgeGradient,
     qMultiFidelityKnowledgeGradient,
     qSimpleRegret,
+    PriorGuidedAcquisitionFunction,
 )
 from botorch.acquisition.objective import (
     GenericMCObjective,
@@ -55,6 +56,7 @@ class AcquisitionSettings(ReadableModel):
     seed: Optional[int] = None
     raw_samples: Optional[int] = None
     parameter_fixtures: Optional[dict[int, float]] = None
+    prior_guided: bool = False
 
 
 AVAILABLE_ACQUISITIONS: dict[str, type[AcquisitionFunction]] = {
@@ -148,6 +150,31 @@ def default_acquisition(
     return 'qlogei'
 
 
+class PriorGuidedModule(torch.nn.Module):
+    """Wrapper to compute the prior in prior-guided acquisitions."""
+
+    def __init__(self, parameters: ParameterSet, log: bool) -> None:
+        self.parameter_set = parameters
+        self.log = log
+        super().__init__()
+
+    def forward(self, X: torch.Tensor) -> torch.Tensor:
+        """Compute the prior for the given input tensor.
+
+        Parameters
+        ----------
+        X : torch.Tensor
+            Input tensor of shape `(batch_shape) x d`.
+
+        Returns
+        -------
+        torch.Tensor
+            Tensor of shape `(batch_shape)` representing the prior for each input.
+        """
+        log_prob = self.parameter_set.log_prob(X)
+        return log_prob if self.log else log_prob.exp()
+
+
 def get_acquisition(
     model: ObjectiveModel,
     parameters: ParameterSet,
@@ -237,7 +264,7 @@ def get_acquisition(
             acq_options['fidelity_dim'] = fidelity_dim
 
     # Inject pending candidates
-    if pending is not None:
+    if pending is not None and not settings.prior_guided:
         acq_options['X_pending'] = pending
 
     # Check if we need to convert the model
@@ -245,9 +272,17 @@ def get_acquisition(
     if settings.name in MULTI_OBJECTIVE_ACQUISITIONS:
         gp = batched_to_model_list(gp)
 
-    # Build and return the acquisition function
+    # Build the acquisition function
     cls = AVAILABLE_ACQUISITIONS[settings.name]
-    return cls(model=gp, **acq_options)
+    acq = cls(model=gp, **acq_options)
+
+    # Wrap the acquisition function if prior-guided
+    if settings.prior_guided:
+        acq = PriorGuidedAcquisitionFunction(
+            acq, PriorGuidedModule(parameters, acq._log), acq._log, X_pending=pending
+        )
+    
+    return acq
 
 def optimise_acquisition(
     acq: AcquisitionFunction,

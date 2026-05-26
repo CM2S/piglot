@@ -100,9 +100,9 @@ def draw_function_samples(
         The grid and the drawn function samples.
     """
     # Generate random grid of points
-    rng = np.random.default_rng(seed)
+    torch.manual_seed(seed)
     params = model.dataset.settings.parameters
-    grid = torch.tensor([params.get_random_vector(rng).tolist() for _ in range(num_grid_points)])
+    grid = torch.tensor([params.get_random_vector().tolist() for _ in range(num_grid_points)])
 
     # Set up sampler
     if strategy == 'sobol':

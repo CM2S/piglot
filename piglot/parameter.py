@@ -6,6 +6,10 @@ from hashlib import sha256
 from itertools import product
 import numpy as np
 import torch
+from torch.distributions import Distribution
+from piglot.utils.distributions import (
+    read_real_distribution, get_discrete_distribution, ClosedUniform
+)
 
 
 OptimisableT = TypeVar("OptimisableT", bound="OptimisableParameter")
@@ -70,9 +74,12 @@ class Parameter:
 class OptimisableParameter(Parameter, ABC):
     """Base class for optimisable parameters."""
 
-    def __init__(self, name: str, initial_value: float, num_components: int) -> None:
+    def __init__(
+        self, name: str, initial_value: float, prior: Distribution, num_components: int
+    ) -> None:
         super().__init__(name, optimisable=True, num_components=num_components)
         self.initial_value = initial_value
+        self.prior = prior
 
     def get_initial_value(self) -> Union[float, np.ndarray]:
         """Get the initial value of the parameter.
@@ -107,18 +114,28 @@ class OptimisableParameter(Parameter, ABC):
         """
 
     @abstractmethod
-    def get_random(self, rng: np.random.Generator) -> Union[float, np.ndarray]:
+    def get_random(self) -> Union[float, np.ndarray]:
         """Get a random value for the parameter.
-
-        Parameters
-        ----------
-        rng : np.random.Generator
-            Random number generator.
 
         Returns
         -------
         Union[float, np.ndarray]
             Random value for the parameter.
+        """
+
+    @abstractmethod
+    def log_prob(self, values: torch.Tensor) -> torch.Tensor:
+        """Get the log probability of the parameter values.
+
+        Parameters
+        ----------
+        values : torch.Tensor
+            Values of the parameter.
+
+        Returns
+        -------
+        torch.Tensor
+            Log probability of the parameter values.
         """
 
     @classmethod
@@ -144,9 +161,15 @@ class RealParameter(OptimisableParameter):
     """Class for real-valued optimisation parameters."""
 
     def __init__(
-        self, name: str, initial: float, lbound: float, ubound: float, num_components: int = 1
+        self,
+        name: str,
+        initial: float,
+        lbound: float,
+        ubound: float,
+        prior: Distribution,
+        num_components: int = 1,
     ) -> None:
-        super().__init__(name, initial, num_components=num_components)
+        super().__init__(name, initial, prior, num_components=num_components)
         self.lbound = lbound
         self.ubound = ubound
         if initial > ubound or initial < lbound:
@@ -165,20 +188,31 @@ class RealParameter(OptimisableParameter):
         """
         return np.array([[self.lbound, self.ubound]] * self.num_components)
 
-    def get_random(self, rng: np.random.Generator) -> Union[float, np.ndarray]:
+    def get_random(self) -> Union[float, np.ndarray]:
         """Get a random value for the parameter.
-
-        Parameters
-        ----------
-        rng : np.random.Generator
-            Random number generator.
 
         Returns
         -------
         Union[float, np.ndarray]
             Random value for the parameter.
         """
-        return rng.uniform(self.lbound, self.ubound, size=self.num_components)
+        samples = self.prior.sample((self.num_components,)).numpy()
+        return np.clip(samples, self.lbound, self.ubound)
+
+    def log_prob(self, values: torch.Tensor) -> torch.Tensor:
+        """Get the log probability of the parameter values.
+
+        Parameters
+        ----------
+        values : torch.Tensor
+            Values of the parameter.
+
+        Returns
+        -------
+        torch.Tensor
+            Log probability of the parameter values.
+        """
+        return self.prior.log_prob(values)
 
     @classmethod
     def read(cls: type[OptimisableT], name: str, config: dict[str, Any]) -> OptimisableT:
@@ -199,11 +233,17 @@ class RealParameter(OptimisableParameter):
         for key in ['initial', 'lbound', 'ubound']:
             if key not in config:
                 raise RuntimeError(f"Missing '{key}' value for parameter {name}.")
+        # Read prior distribution
+        if 'prior' in config:
+            prior = read_real_distribution(config['prior'])
+        else:
+            prior = ClosedUniform(float(config['lbound']), float(config['ubound']))
         return cls(
             name,
             float(config['initial']),
             float(config['lbound']),
             float(config['ubound']),
+            prior,
             int(config.get('num_components', 1))
         )
 
@@ -212,9 +252,14 @@ class DiscreteParameter(OptimisableParameter):
     """Class for discrete-valued optimisation parameters."""
 
     def __init__(
-        self, name: str, initial: float, values: list[float], num_components: int = 1
+        self,
+        name: str,
+        initial: float,
+        values: list[float],
+        prior: Distribution,
+        num_components: int = 1,
     ) -> None:
-        super().__init__(name, initial, num_components=num_components)
+        super().__init__(name, initial, prior, num_components=num_components)
         self.values = values
         if initial not in values:
             raise RuntimeError(
@@ -231,20 +276,34 @@ class DiscreteParameter(OptimisableParameter):
         """
         return np.array([[min(self.values), max(self.values)]] * self.num_components)
 
-    def get_random(self, rng: np.random.Generator) -> Union[float, np.ndarray]:
+    def get_random(self) -> Union[float, np.ndarray]:
         """Get a random value for the parameter.
-
-        Parameters
-        ----------
-        rng : np.random.Generator
-            Random number generator.
 
         Returns
         -------
         Union[float, np.ndarray]
             Random value for the parameter.
         """
-        return rng.choice(self.values, size=self.num_components)
+        indices = self.prior.sample((self.num_components,)).tolist()
+        return np.array([self.values[int(idx)] for idx in indices])
+
+    def log_prob(self, values: torch.Tensor) -> torch.Tensor:
+        """Get the log probability of the parameter values.
+
+        Parameters
+        ----------
+        values : torch.Tensor
+            Values of the parameter.
+
+        Returns
+        -------
+        torch.Tensor
+            Log probability of the parameter values.
+        """
+        indices = torch.tensor(
+            [self.values.index(val.item()) for val in values.flatten()], dtype=torch.long
+        ).reshape(values.shape)
+        return self.prior.log_prob(indices)
 
     @classmethod
     def read(cls: type[OptimisableT], name: str, config: dict[str, Any]) -> OptimisableT:
@@ -266,7 +325,15 @@ class DiscreteParameter(OptimisableParameter):
             if key not in config:
                 raise RuntimeError(f"Missing '{key}' value for parameter {name}.")
         values = [float(val) for val in config['values']]
-        return cls(name, float(config['initial']), values, int(config.get('num_components', 1)))
+        # Read prior probabilities
+        if 'prior_probs' in config:
+            prior_probs = [float(prob) for prob in config['prior_probs']]
+        else:
+            prior_probs = [1.0] * len(values)
+        prior = get_discrete_distribution(prior_probs)
+        return cls(
+            name, float(config['initial']), values, prior, int(config.get('num_components', 1))
+        )
 
 
 class FidelityParameter(DiscreteParameter):
@@ -277,10 +344,11 @@ class FidelityParameter(DiscreteParameter):
         name: str,
         initial: float,
         values: list[float],
+        prior: Distribution,
         cost: Optional[dict[float, float]],
         cost_model: Literal["fixed", "infer", "infer_full"],
     ) -> None:
-        super().__init__(name, initial, values, num_components=1)
+        super().__init__(name, initial, values, prior, num_components=1)
         self.cost = cost
         self.cost_model = cost_model
 
@@ -326,7 +394,14 @@ class FidelityParameter(DiscreteParameter):
                     f"Invalid cost model '{cost_model}' for fidelity parameter {name}."
                 )
 
-        return cls(name, float(config.get('initial', 1.0)), values, cost, cost_model)
+        # Read prior
+        if 'prior_probs' in config:
+            prior_probs = [float(prob) for prob in config['prior_probs']]
+        else:
+            prior_probs = [1.0] * len(values)
+        prior = get_discrete_distribution(prior_probs)
+
+        return cls(name, float(config.get('initial', 1.0)), values, prior, cost, cost_model)
 
 
 class ComputedParameter(Parameter):
@@ -593,22 +668,15 @@ class ParameterSet:
         """
         return np.concatenate([p.get_initial_vector() for p in self.optim_parameters])
 
-    def get_random_vector(self, rng: Optional[np.random.Generator] = None) -> np.ndarray:
+    def get_random_vector(self) -> np.ndarray:
         """Get a random vector of optimisable parameters.
-
-        Parameters
-        ----------
-        rng : Optional[np.random.Generator]
-            Random number generator. If None, a new generator is created.
 
         Returns
         -------
         np.ndarray
             Random values of the optimisable parameters.
         """
-        if rng is None:
-            rng = np.random.default_rng()
-        return np.concatenate([p.get_random(rng) for p in self.optim_parameters])
+        return np.concatenate([p.get_random() for p in self.optim_parameters])
 
     def get_bounds(self) -> np.ndarray:
         """Get the bounds of the optimisable parameters.
@@ -697,6 +765,25 @@ class ParameterSet:
             p.name: values[..., self.indices[i]:self.indices[i + 1]]
             for i, p in enumerate(self.optim_parameters)
         }
+
+    def log_prob(self, values: torch.Tensor) -> torch.Tensor:
+        """Get the log probability of the parameter values.
+
+        Parameters
+        ----------
+        values : torch.Tensor
+            Values to pack, with shape `(batch_shape) x n_optim_param`.
+
+        Returns
+        -------
+        torch.Tensor
+            Log probability of the parameter values.
+        """
+        log_probs = [
+            p.log_prob(values[..., self.indices[i]:self.indices[i + 1]])
+            for i, p in enumerate(self.optim_parameters)
+        ]
+        return torch.sum(torch.concatenate(log_probs, dim=-1), dim=-1)
 
     @staticmethod
     def __hash(values: np.ndarray) -> str:
