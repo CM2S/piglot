@@ -196,7 +196,7 @@ class RealParameter(OptimisableParameter):
         Union[float, np.ndarray]
             Random value for the parameter.
         """
-        samples = self.prior.sample((self.num_components,)).to(torch.float64).numpy()
+        samples = self.prior.sample().to(torch.float64).numpy()
         return np.clip(samples, self.lbound, self.ubound)
 
     def log_prob(self, values: torch.Tensor) -> torch.Tensor:
@@ -233,6 +233,7 @@ class RealParameter(OptimisableParameter):
         for key in ['initial', 'lbound', 'ubound']:
             if key not in config:
                 raise RuntimeError(f"Missing '{key}' value for parameter {name}.")
+        num_components = int(config.get('num_components', 1))
         # Read prior distribution
         if 'prior' in config:
             prior = read_real_distribution(config['prior'])
@@ -243,8 +244,8 @@ class RealParameter(OptimisableParameter):
             float(config['initial']),
             float(config['lbound']),
             float(config['ubound']),
-            prior,
-            int(config.get('num_components', 1))
+            prior.expand((num_components,)),
+            num_components,
         )
 
 
@@ -284,7 +285,7 @@ class DiscreteParameter(OptimisableParameter):
         Union[float, np.ndarray]
             Random value for the parameter.
         """
-        indices = self.prior.sample((self.num_components,)).tolist()
+        indices = self.prior.sample().tolist()
         return np.array([self.values[int(idx)] for idx in indices])
 
     def log_prob(self, values: torch.Tensor) -> torch.Tensor:
@@ -325,15 +326,14 @@ class DiscreteParameter(OptimisableParameter):
             if key not in config:
                 raise RuntimeError(f"Missing '{key}' value for parameter {name}.")
         values = [float(val) for val in config['values']]
+        num_components = int(config.get('num_components', 1))
         # Read prior probabilities
         if 'prior_probs' in config:
             prior_probs = [float(prob) for prob in config['prior_probs']]
         else:
             prior_probs = [1.0] * len(values)
-        prior = get_discrete_distribution(prior_probs)
-        return cls(
-            name, float(config['initial']), values, prior, int(config.get('num_components', 1))
-        )
+        prior = get_discrete_distribution(prior_probs).expand((num_components,))
+        return cls(name, float(config['initial']), values, prior, num_components)
 
 
 class FidelityParameter(DiscreteParameter):
@@ -399,7 +399,7 @@ class FidelityParameter(DiscreteParameter):
             prior_probs = [float(prob) for prob in config['prior_probs']]
         else:
             prior_probs = [1.0] * len(values)
-        prior = get_discrete_distribution(prior_probs)
+        prior = get_discrete_distribution(prior_probs).expand((1,))
 
         return cls(name, float(config.get('initial', 1.0)), values, prior, cost, cost_model)
 
