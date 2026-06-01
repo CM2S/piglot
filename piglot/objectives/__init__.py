@@ -6,6 +6,7 @@ from piglot.objectives.analytical import AnalyticalObjective
 from piglot.objectives.synthetic import SyntheticObjective
 from piglot.objectives.fitting import ResponseFittingObjective
 from piglot.objectives.design import ResponseDesignObjective
+from piglot.objectives.script import ScriptObjective
 
 
 AVAILABLE_OBJECTIVES: Dict[str, Type[Objective]] = {
@@ -13,6 +14,7 @@ AVAILABLE_OBJECTIVES: Dict[str, Type[Objective]] = {
     'test_function': SyntheticObjective,
     'fitting': ResponseFittingObjective,
     'design': ResponseDesignObjective,
+    'script': ScriptObjective,
 }
 
 

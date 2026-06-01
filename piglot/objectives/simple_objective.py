@@ -21,9 +21,7 @@ class SimpleIndividualObjective(IndividualObjective, ABC):
     """Self-contained individual objective function."""
 
     @abstractmethod
-    def evaluate(
-        self, params: ParameterValues, concurrent: bool
-    ) -> IndividualObjectiveResult:
+    def evaluate(self, params: ParameterValues, concurrent: bool) -> IndividualObjectiveResult:
         """Evaluate the objective for a set of parameters.
 
         Parameters
@@ -42,10 +40,7 @@ class SimpleIndividualObjective(IndividualObjective, ABC):
     @classmethod
     @abstractmethod
     def read(
-        cls: type[IndividualT],
-        name: str,
-        config: dict[str, Any],
-        settings: Settings,
+        cls: type[IndividualT], name: str, config: dict[str, Any], settings: Settings
     ) -> IndividualT:
         """Read the individual objective from the configuration dictionary.
 
@@ -80,8 +75,8 @@ class SimpleObjective(Objective, Generic[IndividualT], ABC):
 
     def _objective(
         self, params: ParameterValues, concurrent: bool = False
-    ) -> ObjectiveResult:
-        """Objective computation for simple individual objectives.
+    ) -> list[IndividualObjectiveResult]:
+        """Abstract method for objective computation.
 
         Parameters
         ----------
@@ -92,16 +87,14 @@ class SimpleObjective(Objective, Generic[IndividualT], ABC):
 
         Returns
         -------
-        ObjectiveResult
-            Objective value.
+        list[IndividualObjectiveResult]
+            List of individual objective results.
         """
         return [obj.evaluate(params, concurrent) for obj in self.objectives]
 
     @classmethod
     def read(
-        cls: type[SimpleObjT],
-        config: dict[str, Any],
-        settings: Settings,
+        cls: type[SimpleObjT], config: dict[str, Any], settings: Settings
     ) -> SimpleObjT:
         """Read the objective from the configuration dictionary.
 

@@ -67,7 +67,7 @@ class FunctionCallsData:
     scalar_variances: Optional[np.ndarray]
 
 
-class IndividualObjective(ABC):
+class IndividualObjective:
     """Base class for individual objectives for generic optimisation problems."""
 
     def __init__(
