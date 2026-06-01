@@ -7,7 +7,7 @@ optimiser:
       name: initial
     random:
       name: random
-      rounds: 2
+      rounds: 8
       seed: 1
     acquisition:
       name: acquisition
