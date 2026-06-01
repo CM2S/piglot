@@ -185,6 +185,9 @@ class PCA(Transform):
         else:
             # Refer to Eq.(4) of https://doi.org/10.1109/TVCG.2019.2934812 for this
             cov = torch.cov(data_std.T) + torch.mean(covariances_std, dim=0)
+        # Ensure covariance is a matrix
+        if cov.ndim == 0:
+            cov = cov.reshape(1, 1)
         # Compute eigenvalues and vectors of the covariance matrix and sort by decreasing variance
         vals, vecs = torch.linalg.eigh(cov)  # pylint: disable=not-callable
         idx = torch.argsort(vals, descending=True)
