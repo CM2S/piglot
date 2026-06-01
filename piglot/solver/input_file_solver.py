@@ -40,7 +40,8 @@ def write_parameters(
         with open(dest, 'w', encoding='utf8') as fout:
             for line in fin:
                 for parameter, value in param_value.items():
-                    line = re.sub(regex(parameter), str(value), line)
+                    if parameter in line:
+                        line = re.sub(regex(parameter), str(value), line)
                 fout.write(line)
 
 
