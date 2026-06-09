@@ -2,18 +2,63 @@
 from dataclasses import dataclass
 from typing import Iterator, Any, Literal, Union, TypeVar, Optional
 from abc import ABC, abstractmethod
+from functools import cached_property
 from hashlib import sha256
 from itertools import product
 import numpy as np
 import torch
-from torch.distributions import Distribution
+from torch.distributions import Distribution, Normal
+from piglot.utils.assorted import read_grid
 from piglot.utils.distributions import (
     read_real_distribution, get_discrete_distribution, ClosedUniform
+)
+from piglot.utils.kernels import (
+    read_kernel, Kernel, KarhunenLoeveExpansion, GridRandomFourierFeatures
 )
 
 
 OptimisableT = TypeVar("OptimisableT", bound="OptimisableParameter")
 ComputedT = TypeVar("ComputedT", bound="ComputedParameter")
+
+
+@dataclass(frozen=True)
+class ParameterValues:
+    """Container for a set of parameter values for objective evaluation."""
+    scalar_values: dict[str, float]
+    vector_values: dict[str, np.ndarray]
+
+    @cached_property
+    def param_hash(self) -> str:
+        values = np.array(list(self.scalar_values.values()))
+        return sha256(values.tobytes()).hexdigest()
+
+    @staticmethod
+    def join(*args: "ParameterValues") -> "ParameterValues":
+        """Join multiple ParameterValues into a single ParameterValues.
+
+        Parameters
+        ----------
+        *args : ParameterValues
+            ParameterValues to join.
+
+        Returns
+        -------
+        ParameterValues
+            Joined ParameterValues.
+        """
+        scalar_values: dict[str, float] = {}
+        vector_values: dict[str, np.ndarray] = {}
+        for pv in args:
+            # Check for name collisions
+            for name in pv.scalar_values:
+                if name in scalar_values:
+                    raise ValueError(f"Duplicate scalar parameter name: {name}")
+            for name in pv.vector_values:
+                if name in vector_values:
+                    raise ValueError(f"Duplicate vector parameter name: {name}")
+            scalar_values.update(pv.scalar_values)
+            vector_values.update(pv.vector_values)
+        return ParameterValues(scalar_values, vector_values)
 
 
 class Parameter:
@@ -36,24 +81,7 @@ class Parameter:
             return [self.name]
         return [f"{self.name}_{i}" for i in range(self.num_components)]
 
-    def get_name_value_pair(self, values: np.ndarray) -> dict[str, float]:
-        """Get a dictionary of parameter names and their corresponding values.
-
-        Parameters
-        ----------
-        values : np.ndarray
-            Array of parameter values.
-
-        Returns
-        -------
-        dict[str, float]
-            Dictionary of parameter names and their corresponding values.
-        """
-        if self.num_components == 1:
-            return {self.name: float(values)}
-        return {f"{self.name}_{i}": float(values[i]) for i in range(self.num_components)}
-
-    def get_value(self, values: np.ndarray) -> Union[float, np.ndarray]:
+    def get_values(self, values: np.ndarray) -> ParameterValues:
         """Get the value of the parameter.
 
         Parameters
@@ -63,12 +91,13 @@ class Parameter:
 
         Returns
         -------
-        Union[float, np.ndarray]
-            Value of the parameter.
+        ParameterValues
+            Values of the parameter.
         """
-        if self.num_components == 1:
-            return float(values)
-        return np.array(values)
+        return ParameterValues(
+            {name: float(values[i]) for i, name in enumerate(Parameter.get_scalar_names(self))},
+            {self.name: values}
+        )
 
 
 class OptimisableParameter(Parameter, ABC):
@@ -102,6 +131,21 @@ class OptimisableParameter(Parameter, ABC):
             Initial values of the optimisable parameters.
         """
         return np.full(self.num_components, self.initial_value)
+
+    def to_torch_dict(self, values: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Convert parameter values to a dictionary of torch tensors.
+
+        Parameters
+        ----------
+        values : torch.Tensor
+            Values of the parameter.
+
+        Returns
+        -------
+        dict[str, torch.Tensor]
+            Dictionary of parameter values as torch tensors.
+        """
+        return {self.name: values}
 
     @abstractmethod
     def get_bounds(self) -> np.ndarray:
@@ -404,6 +448,110 @@ class FidelityParameter(DiscreteParameter):
         return cls(name, float(config.get('initial', 1.0)), values, prior, cost, cost_model)
 
 
+class LatentParameter(RealParameter, ABC):
+    """Base class for optimisation in latent spaces.
+    
+    This class of parameters use a set of optimisable latent parameters to generate the actual
+    parameter values. For compatibility with composition, we must support gradients between 
+    the latent parameters and the generated parameter values.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        param_lbound: float,
+        param_ubound: float,
+        param_prior: Distribution,
+        latent_initial: float,
+        latent_lbound: float,
+        latent_ubound: float,
+        latent_prior: Distribution,
+        num_param_components: int,
+        num_latent_components: int,
+    ) -> None:
+        # Store a fake parameter with correct output dimensions
+        initial = param_prior.icdf(torch.tensor([latent_initial]))
+        self.field_param = RealParameter(
+            name,
+            torch.clamp(initial, param_lbound, param_ubound).item(),
+            param_lbound,
+            param_ubound,
+            param_prior,
+            num_components=num_param_components,
+        )
+
+        # Initialise the latent parameter
+        super().__init__(
+            f"{name}_latent",
+            latent_initial,
+            latent_lbound,
+            latent_ubound,
+            latent_prior,
+            num_components=num_latent_components,
+        )
+
+    def get_scalar_names(self) -> list[str]:
+        """Get the names of the parameters in a scalar form.
+
+        Returns
+        -------
+        list[str]
+            Names of the scalar parameters.
+        """
+        return super().get_scalar_names() + self.field_param.get_scalar_names()
+
+    def get_values(self, values: np.ndarray) -> ParameterValues:
+        """Get the value of the parameter.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Array of parameter values.
+
+        Returns
+        -------
+        ParameterValues
+            Values of the parameter.
+        """
+        field_values = self.transform(torch.from_numpy(values)).numpy()
+        return ParameterValues.join(
+            super().get_values(values), self.field_param.get_values(field_values)
+        )
+
+    def to_torch_dict(self, values: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Convert parameter values to a dictionary of torch tensors.
+
+        Parameters
+        ----------
+        values : torch.Tensor
+            Values of the parameter.
+
+        Returns
+        -------
+        dict[str, torch.Tensor]
+            Dictionary of parameter values as torch tensors.
+        """
+        return {
+            self.name: values,
+            self.field_param.name: self.transform(values),
+        }
+
+    @abstractmethod
+    def transform(self, values: torch.Tensor) -> torch.Tensor:
+        """Transform the parameters from the latent space to the output space.
+
+        Parameters
+        ----------
+        values : torch.Tensor
+            Tensor of shape `(batch_shape) x order` with the latent values.
+
+        Returns
+        -------
+        torch.Tensor
+            Transformed parameters.
+        """
+
+
 class ComputedParameter(Parameter):
     """Class for computed parameters.
 
@@ -420,11 +568,16 @@ class ComputedParameter(Parameter):
         self, name: str, expression: str, optim_params: list[OptimisableParameter]
     ) -> None:
         # Compile the compute expression
+        self.name = name
         self.expression = expression
         self.code = compile(expression, "<string>", "eval")
         # Determine the number of components by evaluating the expression with the initial values
-        values = {p.name: p.get_initial_value() for p in optim_params}
-        evaluated = self.compute(values)
+        values = {
+            n: v
+            for p in optim_params
+            for n, v in p.get_values(p.get_initial_vector()).vector_values.items()
+        }
+        evaluated = self.__raw_compute(values)
         if isinstance(evaluated, np.ndarray):
             if len(evaluated.shape) != 1:
                 raise RuntimeError(
@@ -441,8 +594,23 @@ class ComputedParameter(Parameter):
             )
         super().__init__(name, optimisable=False, num_components=num_components)
 
-    def compute(self, values: dict[str, np.ndarray]) -> np.ndarray:
-        """Compute the value of the parameter based on other parameters.
+    def get_values(self, values: np.ndarray) -> ParameterValues:
+        """Get the value of the parameter.
+
+        Parameters
+        ----------
+        values : np.ndarray
+            Array of parameter values.
+
+        Returns
+        -------
+        ParameterValues
+            Values of the parameter.
+        """
+        raise NotImplementedError("get_values() is not supported for computed parameters.")
+
+    def __raw_compute(self, values: dict[str, np.ndarray]) -> np.ndarray:
+        """Compute the raw values of the parameter based on other parameters.
 
         Parameters
         ----------
@@ -452,7 +620,7 @@ class ComputedParameter(Parameter):
         Returns
         -------
         np.ndarray
-            Computed value of the parameter.
+            Raw computed values of the parameter.
         """
         # Use a globals with only numpy functions
         allowed_globals = {
@@ -463,16 +631,30 @@ class ComputedParameter(Parameter):
         except Exception as e:
             raise RuntimeError(f"Error computing parameter {self.name}: {e}")
 
-        # Sanitise return type
+        # Sanitise result type
         if isinstance(result, (int, float)):
-            return np.array([result])
-        elif isinstance(result, np.ndarray):
-            return result
-        else:
+            result = np.array([result])
+        elif not isinstance(result, np.ndarray):
             raise RuntimeError(
                 f"Computed value {result} of parameter {self.name} "
                 f"has unsupported type {type(result)}."
             )
+        return result
+
+    def compute(self, values: dict[str, np.ndarray]) -> ParameterValues:
+        """Compute the value of the parameter based on other parameters.
+
+        Parameters
+        ----------
+        values : dict[str, np.ndarray]
+            Dictionary of parameter values.
+
+        Returns
+        -------
+        ParameterValues
+            Computed values of the parameter.
+        """
+        return super().get_values(self.__raw_compute(values))
 
     @classmethod
     def read(
@@ -501,14 +683,6 @@ class ComputedParameter(Parameter):
             raise ValueError(f"Missing 'expression' in configuration for parameter {name}.")
         expression = str(config["expression"])
         return cls(name, expression, optim_params)
-
-
-@dataclass
-class ParameterValues:
-    """Container for a set of parameter values for objective evaluation."""
-    scalar_values: dict[str, float]
-    vector_values: dict[str, np.ndarray]
-    param_hash: str
 
 
 class ParameterSet:
@@ -726,25 +900,19 @@ class ParameterSet:
         ParameterValues
             Parameter values.
         """
-        # Evaluate optimisable vector parameters
-        vector_params: dict[str, np.ndarray] = {
-            p.name: values[self.indices[i]:self.indices[i + 1]]
+        raw_optim_values = [
+            p.get_values(values[self.indices[i]:self.indices[i + 1]])
             for i, p in enumerate(self.optim_parameters)
-        }
+        ]
+        optim_values = ParameterValues.join(*raw_optim_values)
 
-        # Add computed vector parameters
-        for param in self.computed_parameters:
-            vector_params[param.name] = param.compute(vector_params)
+        # Evaluate optimisable vector parameters
+        raw_computed_values = [
+            p.compute(optim_values.vector_values) for p in self.computed_parameters
+        ]
 
-        # Build scalar values: concatenate all vector components
-        scalar_values = [float(scalar) for vector in vector_params.values() for scalar in vector]
-        scalar_params = dict(zip(self.get_scalar_names(), scalar_values))
-
-        return ParameterValues(
-            scalar_values=scalar_params,
-            vector_values=vector_params,
-            param_hash=self.__hash(values),
-        )
+        # Join sets of parameter values
+        return ParameterValues.join(optim_values, *raw_computed_values)
 
     def to_torch_dict(self, values: torch.Tensor) -> dict[str, torch.Tensor]:
         """Build a dict with name-value pairs given a list of values (with tensors).
@@ -762,8 +930,9 @@ class ParameterSet:
             Name-value pair for each parameter with shape `(batch_shape) x n_components`.
         """
         return {
-            p.name: values[..., self.indices[i]:self.indices[i + 1]]
+            k: v
             for i, p in enumerate(self.optim_parameters)
+            for k, v in p.to_torch_dict(values[..., self.indices[i]:self.indices[i + 1]]).items()
         }
 
     def log_prob(self, values: torch.Tensor) -> torch.Tensor:
@@ -784,26 +953,6 @@ class ParameterSet:
             for i, p in enumerate(self.optim_parameters)
         ]
         return torch.sum(torch.concatenate(log_probs, dim=-1), dim=-1)
-
-    @staticmethod
-    def __hash(values: np.ndarray) -> str:
-        """Build the hash for the current parameter values.
-
-        Parameters
-        ----------
-        values : np.ndarray
-            Parameters to hash.
-
-        Returns
-        -------
-        str
-            Hex digest of the hash.
-        """
-        hasher = sha256()
-        values = np.array(values)
-        for value in values:
-            hasher.update(value)
-        return hasher.hexdigest()
 
 
 def legacy_converter(name: str, param_spec: Any) -> dict[str, Any]:
