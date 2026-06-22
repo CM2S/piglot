@@ -6,7 +6,6 @@ from piglot.settings import Settings
 from piglot.objective import (
     Objective,
     Scalarisation,
-    ObjectiveResult,
     IndividualObjective,
     IndividualObjectiveResult,
 )

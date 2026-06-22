@@ -1,9 +1,7 @@
 """Module for script-based objectives."""
 from abc import abstractmethod
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 import numpy as np
-# import pandas as pd
-import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 import torch
 from piglot.objective import IndividualObjectiveResult
