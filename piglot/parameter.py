@@ -8,12 +8,8 @@ from itertools import product
 import numpy as np
 import torch
 from torch.distributions import Distribution, Normal
-from piglot.utils.assorted import read_grid
 from piglot.utils.distributions import (
     read_real_distribution, get_discrete_distribution, ClosedUniform
-)
-from piglot.utils.kernels import (
-    read_kernel, Kernel, KarhunenLoeveExpansion, GridRandomFourierFeatures
 )
 
 
