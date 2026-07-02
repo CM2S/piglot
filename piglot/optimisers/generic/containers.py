@@ -34,6 +34,7 @@ class MultiObjectiveStateData:
     pareto_yvar: torch.Tensor = None
     partitioning: FastNondominatedPartitioning = None
     hypervolume: float = None
+    ref_point: torch.Tensor = None
 
     @staticmethod
     def adjust_ref_point(y_points: torch.Tensor, nadir_scale: float) -> torch.Tensor:
@@ -76,11 +77,11 @@ class MultiObjectiveStateData:
             Multi-objective state data instance.
         """
         # Extract objective values and variances
-        x_points = torch.tensor([obs.params for obs in dataset.data])
-        y_points = torch.tensor([obs.result.obj_values for obs in dataset.data])
+        x_points = torch.tensor(np.array([obs.params for obs in dataset.data]))
+        y_points = -torch.tensor(np.array([obs.result.obj_values for obs in dataset.data]))
         yvar_points = None
         if dataset.objective.has_variance():
-            yvar_points = torch.tensor([obs.result.obj_variances for obs in dataset.data])
+            yvar_points = torch.tensor(np.array([obs.result.obj_variances for obs in dataset.data]))
 
         # Check if we need to update the reference point
         if optim_settings.ref_point is None:
@@ -106,10 +107,11 @@ class MultiObjectiveStateData:
         # Return the multi-objective state data instance
         return cls(
             pareto_x=pareto_x,
-            pareto_y=pareto_y,
+            pareto_y=-pareto_y,
             pareto_yvar=pareto_yvar,
             partitioning=partitioning,
             hypervolume=hypervolume,
+            ref_point=-ref_point,
         )
 
     def dump(self, output_file: str, parameters: ParameterSet) -> None:

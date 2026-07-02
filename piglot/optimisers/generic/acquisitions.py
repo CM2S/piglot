@@ -267,14 +267,9 @@ def get_acquisition(
     if pending is not None and not settings.prior_guided:
         acq_options['X_pending'] = pending
 
-    # Check if we need to convert the model
-    gp = model.gp
-    if settings.name in MULTI_OBJECTIVE_ACQUISITIONS:
-        gp = batched_to_model_list(gp)
-
     # Build the acquisition function
     cls = AVAILABLE_ACQUISITIONS[settings.name]
-    acq = cls(model=gp, **acq_options)
+    acq = cls(model=model.gp, **acq_options)
 
     # Wrap the acquisition function if prior-guided
     if settings.prior_guided:

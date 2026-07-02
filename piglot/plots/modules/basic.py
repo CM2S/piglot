@@ -157,8 +157,17 @@ class ParetoPlot(PlottingModuleConfigFile):
             raise ValueError("No multi-objective state data available for Pareto plotting.")
     
         fig, ax = plt.subplots(layout='constrained')
+        ax.plot(
+            mo_state.pareto_y.cpu()[:, 0],
+            mo_state.pareto_y.cpu()[:, 1],
+            label='Pareto front',
+            ls='--',
+        )
         ax.scatter(
-            mo_state.pareto_y.cpu()[:, 0], mo_state.pareto_y.cpu()[:, 1], label='Pareto front'
+            mo_state.ref_point.cpu()[0],
+            mo_state.ref_point.cpu()[1],
+            label='Reference point',
+            marker='x',
         )
         if args.all:
             ax.scatter(evaluations[:, 0], evaluations[:, 1], label='Dominated points')
