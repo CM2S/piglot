@@ -131,7 +131,7 @@ class MultiObjectiveStateData:
             file.write('\t' + '\t'.join([f'{param.name:>15}' for param in parameters]) + '\n')
             # Write each point
             for i in range(self.pareto_y.shape[0]):
-                file.write('\t'.join([f'{-x.item():>15.8f}' for x in self.pareto_y[i, :]]) + '\t')
+                file.write('\t'.join([f'{x.item():>15.8f}' for x in self.pareto_y[i, :]]) + '\t')
                 file.write('\t'.join([f'{x.item():>15.8f}' for x in self.pareto_x[i, :]]) + '\n')
 
 
