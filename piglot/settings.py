@@ -2,6 +2,7 @@
 from typing import Any, TypeVar, Optional
 from dataclasses import dataclass, Field, _MISSING_TYPE as MISSING_TYPE
 import numpy as np
+import torch
 from piglot.parameter import ParameterSet, read_parameters
 from piglot.utils.readable import ReadableModel
 
@@ -81,6 +82,12 @@ class Settings:
 
     # Skip last run
     skip_last_run: bool = False
+
+    def thread_initialiser(self) -> None:
+        """Initialiser for spawned threads."""
+        # The default device for PyTorch is local to each thread, so we need to set it explicitly
+        # for each thread that we spawn.
+        torch.set_default_device(self.device)
 
 
 def read_settings(config: dict[str, Any]) -> Settings:

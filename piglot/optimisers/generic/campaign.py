@@ -338,7 +338,9 @@ class CandidatePolicy(ABC):
             return self._run_sequential(campaign, round_callback, eval_callback)
 
         # Otherwise, run with parallelism using a thread pool
-        with futures.ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+        with futures.ThreadPoolExecutor(
+            max_workers=self.num_workers, initializer=campaign.settings.thread_initialiser
+        ) as executor:
             for round_num in range(self.rounds):
                 # Generate the next batch of candidates and submit them for evaluation
                 candidates = self.get_next_candidates(
@@ -397,7 +399,9 @@ class CandidatePolicy(ABC):
         if self.num_workers <= 1:
             return self._run_sequential(campaign, round_callback, eval_callback)
 
-        with futures.ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+        with futures.ThreadPoolExecutor(
+            max_workers=self.num_workers, initializer=campaign.settings.thread_initialiser
+        ) as executor:
             # Generate and submit the initial batch of candidates to start the campaign
             num_evals = 0
             num_init = min(self.num_workers, self.rounds)

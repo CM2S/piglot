@@ -1,4 +1,5 @@
 """Driver script for piglot."""
+import time
 from typing import Any, Optional
 import os
 import os.path
@@ -33,7 +34,7 @@ def parse_args():
     parser.add_argument(
         '--device',
         type=str,
-        default='cpu',
+        default=None,
         help='Default device to use with PyTorch',
     )
     parser.add_argument(
@@ -75,7 +76,7 @@ def run_config(config: dict[str, Any], config_path: Optional[str] = None, *args,
 
 
 def main(
-    config_path: Optional[str] = None, device: str = 'cpu', torch_num_threads: int = 1
+    config_path: Optional[str] = None, device: Optional[str] = None, torch_num_threads: int = 1
 ) -> None:
     """Entry point for piglot.
 
@@ -83,8 +84,8 @@ def main(
     ----------
     config_path : Optional[str], optional
         Path to the configuration file, by default None. If not provided, use command line arguments
-    device : str, optional
-        Device to use for PyTorch, by default 'cpu'
+    device : Optional[str], optional
+        Device to use for PyTorch.
     torch_num_threads : int, optional
         Number of threads to use for PyTorch, by default 1
     """
@@ -103,6 +104,10 @@ def main(
     optimiser = problem.optimiser
     objective = problem.objective
 
+    # Inject device into the problem
+    if device is not None:
+        problem.settings.device = device
+
     # Prepare output directory (cleanup if needed)
     if os.path.isdir(output_dir):
         shutil.rmtree(output_dir)
@@ -112,7 +117,7 @@ def main(
     dump_yaml(config, os.path.join(output_dir, "config"))
 
     # Set up PyTorch
-    torch.set_default_device(device)
+    problem.settings.thread_initialiser()
     torch.set_num_threads(torch_num_threads)
 
     # Run the optimisation
