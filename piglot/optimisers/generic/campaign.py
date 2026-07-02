@@ -1,4 +1,5 @@
 """Module for managing data-driven optimisation campaigns."""
+import os
 from typing import Any, Callable, Literal, Optional, TypeVar
 import warnings
 from threading import Lock
@@ -74,6 +75,13 @@ class OptimisationCampaign:
         with self.lock:
             self.pending.remove(params.tolist())
             self.update_state()
+
+            # In multi-objective runs, update the Pareto front file
+            if self.objective.is_multi_objective():
+                self.state.mo_state.dump(
+                    os.path.join(self.settings.output_dir, "pareto_front"), self.settings.parameters
+                )
+
         return result
 
     def get_model(self) -> ObjectiveModel:
