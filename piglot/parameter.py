@@ -240,7 +240,7 @@ class RealParameter(OptimisableParameter):
         Union[float, np.ndarray]
             Random value for the parameter.
         """
-        samples = self.prior.sample().to(torch.float64).numpy()
+        samples = self.prior.sample().to(torch.float64).cpu().numpy()
         return np.clip(samples, self.lbound, self.ubound)
 
     def log_prob(self, values: torch.Tensor) -> torch.Tensor:

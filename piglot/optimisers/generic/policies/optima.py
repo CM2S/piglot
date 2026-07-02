@@ -48,4 +48,4 @@ class OptimaCandidatePolicy(CandidatePolicy):
             List of parameters for the next candidates to evaluate.
         """
         params, _ = get_best_posterior_mean(model, dataset.settings.parameters, state)
-        return [params.squeeze(0).detach().numpy()] * num_candidates
+        return [params.squeeze(0).detach().cpu().numpy()] * num_candidates

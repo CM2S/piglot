@@ -115,7 +115,9 @@ class ResponseSingleObjective(IndividualObjective, ABC):
         time, data = self.latent_transformer.inverse_transform(latent)
         time = time.flatten(end_dim=-2)
         data = data.flatten(end_dim=-2)
-        return [OutputResult(time.numpy(), data.numpy()) for time, data in zip(time, data)]
+        return [
+            OutputResult(time.cpu().numpy(), data.cpu().numpy()) for time, data in zip(time, data)
+        ]
 
     def evaluate(
         self, params: ParameterValues, raw_results: dict[str, OutputResult]

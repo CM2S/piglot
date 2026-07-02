@@ -158,9 +158,9 @@ class OptimisationState:
                 value=self.mo_state.hypervolume,
                 params=None,
                 conf_interval=None,
-                pareto_params=self.mo_state.pareto_x.numpy(),
-                pareto_values=self.mo_state.pareto_y.numpy(),
-                ref_point=self.mo_state.partitioning.ref_point.numpy(),
+                pareto_params=self.mo_state.pareto_x.cpu().numpy(),
+                pareto_values=self.mo_state.pareto_y.cpu().numpy(),
+                ref_point=self.mo_state.partitioning.ref_point.cpu().numpy(),
             )
 
         # Single-objective results
