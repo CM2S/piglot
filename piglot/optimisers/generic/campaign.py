@@ -37,7 +37,6 @@ class OptimisationCampaign:
         self.dataset = ObjectiveDataset(settings, objective)
         self.pending: list[list[float]] = []
         self.state = OptimisationState(num_evaluations=0)
-        self.lock = Lock()
         self.__model: ObjectiveModel = None
 
     def is_stochastic(self) -> bool:
@@ -64,7 +63,7 @@ class OptimisationCampaign:
             The result of the objective evaluation.
         """
         # Register the pending evaluation
-        with self.lock:
+        with self.dataset.lock:
             concurrent = len(self.pending) > 0
             self.pending.append(params.tolist())
 
@@ -72,7 +71,7 @@ class OptimisationCampaign:
         result = self.dataset.evaluate(params, concurrent=concurrent)
 
         # Update the state after evaluation
-        with self.lock:
+        with self.dataset.lock:
             self.pending.remove(params.tolist())
             self.update_state()
 
