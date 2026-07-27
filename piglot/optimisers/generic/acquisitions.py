@@ -28,7 +28,6 @@ from botorch.acquisition.multi_objective.logei import (
     qLogNoisyExpectedHypervolumeImprovement,
 )
 from botorch.acquisition.multi_objective.objective import GenericMCMultiOutputObjective
-from botorch.models.converter import batched_to_model_list
 from botorch.optim import optimize_acqf, optimize_acqf_mixed, optimize_acqf_discrete
 from botorch.sampling import SobolQMCNormalSampler
 from piglot.data.surrogate import ObjectiveModel

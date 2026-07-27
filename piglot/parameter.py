@@ -623,9 +623,9 @@ class ComputedParameter(Parameter):
             k: getattr(np, k) for k in dir(np) if not k.startswith("_") and not k.endswith("_")
         }
         try:
-            result = eval(self.code, allowed_globals, values)
+            result = eval(self.code, allowed_globals, values)  # pylint: disable=eval-used
         except Exception as e:
-            raise RuntimeError(f"Error computing parameter {self.name}: {e}")
+            raise RuntimeError(f"Error computing parameter {self.name}: {e}") from e
 
         # Sanitise result type
         if isinstance(result, (int, float)):
