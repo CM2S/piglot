@@ -2,7 +2,7 @@
 import os
 from typing import Callable, Optional
 from dataclasses import dataclass
-from threading import Lock
+from threading import RLock
 import time
 import pickle
 import numpy as np
@@ -46,7 +46,7 @@ class ObjectiveDataset:
         self.objective = objective
         self.num_evaluations: int = 0
         self.data: list[Observation] = []
-        self.lock = Lock()
+        self.lock = RLock()
 
     def evaluate(self, params: np.ndarray, *args, **kwargs) -> ObjectiveResult:
         """Evaluate the objective for the given parameters and store the observation.

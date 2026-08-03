@@ -2,7 +2,6 @@
 import os
 from typing import Any, Callable, Literal, Optional, TypeVar
 import warnings
-from threading import Lock
 from abc import ABC, abstractmethod
 from concurrent import futures
 import numpy as np
