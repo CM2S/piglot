@@ -76,6 +76,7 @@ class Settings:
     max_timeout: float = None
     max_func_calls: int = None
     max_iters_no_improv: int = None
+    max_high_fidelity_func_calls: int = None
 
     # Expected result
     expected: Optional[ExpectedResult] = None

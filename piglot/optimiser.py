@@ -315,6 +315,10 @@ class Optimiser(ABC):
         if self.settings.max_func_calls is not None:
             if self.objective.num_calls > self.settings.max_func_calls:
                 return True
+        # High-fidelity function calls
+        if self.settings.max_high_fidelity_func_calls is not None:
+            if self.objective.num_high_fidelity_calls > self.settings.max_high_fidelity_func_calls:
+                return True
         # Improvement
         if self.settings.max_iters_no_improv is not None:
             if self.state.iters_without_improvement > self.settings.max_iters_no_improv:

@@ -490,6 +490,7 @@ class Objective(ABC):
         self.scalarisation = scalarisation
         self.composite = composite or any(obj.is_composite() for obj in objectives)
         self.num_calls = 0
+        self.num_high_fidelity_calls = 0
         self.begin_time = time.perf_counter()
         self.mutex = Lock()
 
@@ -747,6 +748,10 @@ class Objective(ABC):
                 self.func_calls_file.write(
                     begin_time - self.begin_time, end_time - begin_time, result, param_values
                 )
+            if self.settings.parameters.is_multi_fidelity():
+                fidelity = params[self.settings.parameters.get_scalar_fidelity_index()]
+                if fidelity == max(self.settings.parameters.get_fidelities()):
+                    self.num_high_fidelity_calls += 1
         return result
 
     def read_func_calls(self) -> FunctionCallsData:
