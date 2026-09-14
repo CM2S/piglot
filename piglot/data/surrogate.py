@@ -394,6 +394,7 @@ class GPModel:
                 tol_var=settings.hetero_tol_var,
             )
         else:
+            optimizer_kwargs = None
             if settings.model == 'single_task':
                 model_cls = (
                     SingleTaskGPWithNoise if settings.noise_model == 'homoscedastic'
@@ -425,9 +426,10 @@ class GPModel:
                     ),
                     outcome_transform=None,
                 )
+                optimizer_kwargs = {'options': {"maxcor": 100, "maxiter": 100, "ftol": 1e-3}}
             mll = ExactMarginalLogLikelihood(self.gp.likelihood, self.gp)
             try:
-                fit_gpytorch_mll(mll)
+                fit_gpytorch_mll(mll, optimizer_kwargs=optimizer_kwargs)
             except ModelFittingError:
                 warnings.warn('Optimisation of the MLL failed, falling back to PyTorch optimiser')
                 fit_mll_pytorch_loop(mll)
