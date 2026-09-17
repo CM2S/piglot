@@ -3,7 +3,7 @@ name = "piglot"
 dynamic = ["version"]
 description = "A package for the optimisation of numerical responses"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {file = "LICENSE.txt"}
 keywords = ["optimisation", "parameter identification", "constitutive modelling"]
 authors = [
@@ -32,7 +32,7 @@ dependencies = [
     "sympy",
     "scipy>=1.7", # For scipy.stats.qmc
     "torch",
-    "botorch<=0.13", # To allow using deprecated model converters
+    "botorch==0.16.1",
     "Pillow",
     "matplotlib>=3.7.2", # https://github.com/matplotlib/matplotlib/pull/25565
     "PyYAML",
