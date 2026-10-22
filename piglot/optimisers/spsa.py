@@ -27,6 +27,7 @@ class SPSA(SimpleOptimiser):
         lr: float = 0.01,
         A: Optional[float] = None,
         a: Optional[float] = None,
+        seed: Optional[int] = None,
         num_workers: int = 1,
     ) -> None:
         super().__init__(settings, objective, normalise_params=True)
@@ -36,6 +37,7 @@ class SPSA(SimpleOptimiser):
         self.A = A
         self.a = a
         self.c = c
+        self.seed = seed or settings.seed
         self.num_workers = num_workers
         if num_workers > 2:
             warnings.warn(
@@ -98,7 +100,7 @@ class SPSA(SimpleOptimiser):
             c_k = self.c / (i + 1) ** self.gamma
 
             # Search direction using a [-1,1] Bernoulli distribution
-            seed = i + (0 if self.settings.seed is None else self.settings.seed)
+            seed = i + (0 if self.seed is None else self.seed)
             delta = 2 * bernoulli.rvs(0.5, size=n_dim, random_state=seed) - 1
 
             # Estimate gradient
