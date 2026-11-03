@@ -375,7 +375,7 @@ class CompositeGPPlot(PlottingModuleConfigFile):
             A list of generated figures.
         """
         num_objectives = (
-            problem.objective.num_problem.objectives()
+            problem.objective.num_objectives()
             if problem.objective.is_multi_objective() else 1
         )
         figures = []
@@ -511,7 +511,7 @@ class CompositeGPPlot(PlottingModuleConfigFile):
                     noisy_samples[..., i],
                     r'$\mathbb{E}[f(\theta, p(\theta))]$',
                     obs_x=obs_x_vals,
-                    obs_y=obs_y_vals,
+                    obs_y=obs_y_vals[..., i],
                     obs_ysamples=obs_y_samples[..., i],
                 )
                 # Objective of the mean
