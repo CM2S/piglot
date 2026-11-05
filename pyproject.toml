@@ -66,3 +66,6 @@ omit = [
     # Ignore solvers, as there is no standard way of testing them
     "piglot/solver/*/*",
 ]
+
+[tool.ruff.lint]
+typing-extensions = false
