@@ -16,6 +16,50 @@ T = TypeVar('T', bound='OutputField')
 V = TypeVar('V', bound='InputFileCase')
 
 
+class ParameterWriter:
+    """Class for managing cached parameter substitution writes."""
+
+    def __init__(
+        self,
+        source_file: str,
+        regex: Callable[[str], str] = lambda param: r'\<' + param + r'\>',
+    ) -> None:
+        self.source_file = source_file
+        self.regex = regex
+
+        # Read the source file once
+        with open(self.source_file, 'r', encoding='utf8') as fin:
+            self.lines = fin.readlines()
+
+        # Iterate over the source file to determine the parameters and associated line numbers
+        self.param_lines: dict[str, list[int]] = {}
+        for i, line in enumerate(self.lines):
+            for parameter in re.findall(r'\<(\w+)\>', line):
+                if parameter not in self.param_lines:
+                    self.param_lines[parameter] = []
+                self.param_lines[parameter].append(i)
+
+    def write(self, param_value: dict[str, float], dest: str) -> None:
+        """Write the set of parameters to the destination file.
+
+        Parameters
+        ----------
+        param_value : dict[str, float]
+            Collection of parameters and their values.
+        dest : str
+            Destination input file.
+        """
+        # Replace file in memory
+        new_lines = self.lines.copy()
+        for parameter, value in param_value.items():
+            if parameter in self.param_lines:
+                for i in self.param_lines[parameter]:
+                    new_lines[i] = re.sub(self.regex(parameter), str(value), new_lines[i])
+
+        # Dump lines at once
+        with open(dest, 'w', encoding='utf8') as fout:
+            fout.writelines(new_lines)
+
 def write_parameters(
     param_value: Dict[str, float],
     source: str,
@@ -88,6 +132,12 @@ class DefaultInputDataGenerator(InputDataGenerator):
         self.substitution_dependencies = substitution_dependencies or []
         self.copy_dependencies = copy_dependencies or []
 
+        # Cached writers
+        self.input_file_writer = ParameterWriter(self.input_file)
+        self.substitution_dependency_writers = {
+            dep: ParameterWriter(dep) for dep in self.substitution_dependencies
+        }
+
     def generate(self, values: ParameterValues, tmp_dir: str) -> InputData:
         """Generate the input data for the given set of parameters.
 
@@ -105,12 +155,12 @@ class DefaultInputDataGenerator(InputDataGenerator):
         """
         # Replace parameters in the input file
         gen_input_file = os.path.join(tmp_dir, self.input_file)
-        write_parameters(values.scalar_values, self.input_file, gen_input_file)
+        self.input_file_writer.write(values.scalar_values, gen_input_file)
         # Replace parameters in the dependencies
         dependencies = []
         for dep in self.substitution_dependencies:
             output_file = os.path.join(tmp_dir, dep)
-            write_parameters(values.scalar_values, dep, output_file)
+            self.substitution_dependency_writers[dep].write(values.scalar_values, output_file)
             dependencies.append(os.path.basename(output_file))
         # Copy dependencies
         for dep in self.copy_dependencies:
