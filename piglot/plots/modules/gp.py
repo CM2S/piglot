@@ -77,8 +77,8 @@ def gp_plot(
                 obs_x.squeeze(),
                 obs_y.squeeze(),
                 yerr=[
-                    obs_y.squeeze() - obs_lbound.squeeze(),
-                    obs_ubound.squeeze() - obs_y.squeeze(),
+                    torch.clamp_min(obs_y.squeeze() - obs_lbound.squeeze(), 0),
+                    torch.clamp_min(obs_ubound.squeeze() - obs_y.squeeze(), 0),
                 ],
                 fmt='o',
                 color=p.get_color(),
