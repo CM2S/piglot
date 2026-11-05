@@ -419,14 +419,18 @@ class GPModel:
                 self.gp = MultiTaskGP(
                     torch.concatenate([new_inputs, features.unsqueeze(-1)], dim=-1),
                     self.outputs.transpose(0, 1).reshape(-1, 1),
-                    train_Yvar=self.output_variances.transpose(0, 1).reshape(-1, 1),
+                    train_Yvar=(
+                        None
+                        if self.output_variances is None
+                        else self.output_variances.transpose(0, 1).reshape(-1, 1)
+                    ),
                     task_feature=-1,
                     input_transform=Normalize(
                         d=self.inputs.shape[-1] + 1, indices=list(range(self.inputs.shape[-1]))
                     ),
                     outcome_transform=None,
                 )
-                optimizer_kwargs = {'options': {"maxcor": 100, "maxiter": 100, "ftol": 1e-3}}
+                optimizer_kwargs = {'options': {"maxcor": 200, "maxiter": 200, "ftol": 1e-5}}
             mll = ExactMarginalLogLikelihood(self.gp.likelihood, self.gp)
             try:
                 fit_gpytorch_mll(mll, optimizer_kwargs=optimizer_kwargs)
