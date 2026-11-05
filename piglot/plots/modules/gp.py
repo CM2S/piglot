@@ -49,10 +49,9 @@ def gp_plot(
     ubound = samples_y.quantile(0.975, dim=0)
     obs_lbound = None
     obs_ubound = None
-    if obs_yvar is None:
-        if  obs_ysamples is not None:
-            obs_lbound = obs_ysamples.quantile(0.025, dim=0)
-            obs_ubound = obs_ysamples.quantile(0.975, dim=0)
+    if obs_yvar is None and obs_ysamples is not None:
+        obs_lbound = obs_ysamples.quantile(0.025, dim=0)
+        obs_ubound = obs_ysamples.quantile(0.975, dim=0)
     if obs_yvar is not None:
         if obs_ysamples is not None:
             raise ValueError("Only one of obs_yvar or obs_ysamples can be provided.")
